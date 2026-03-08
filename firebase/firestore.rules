@@ -1,23 +1,61 @@
 
 rules_version = '2';
 service cloud.firestore {
- match /databases/{database}/documents {
+  match /databases/{database}/documents {
 
- function isSignedIn() {
-   return request.auth != null;
- }
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
- match /students/{id} {
-   allow read: if isSignedIn() && request.auth.uid == id;
- }
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
 
- match /assignments/{id} {
-   allow read,write: if isSignedIn();
- }
+    function isTutor() {
+      return isSignedIn() && userRole() == "tutor";
+    }
 
- match /classrooms/{id} {
-   allow read,write: if isSignedIn();
- }
+    function isStudent() {
+      return isSignedIn() && userRole() == "student";
+    }
 
- }
+    function isParent() {
+      return isSignedIn() && userRole() == "parent";
+    }
+
+    match /users/{uid} {
+      allow read, write: if request.auth.uid == uid;
+    }
+
+    match /students/{studentId} {
+      allow read: if isTutor() ||
+                   (isStudent() && request.auth.uid == studentId) ||
+                   (isParent() && resource.data.parentId == request.auth.uid);
+      allow write: if isTutor();
+    }
+
+    match /classrooms/{classId} {
+      allow read: if isTutor() || isStudent();
+      allow write: if isTutor();
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if isTutor() ||
+                   (isStudent() && resource.data.studentId == request.auth.uid);
+      allow write: if isTutor();
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isTutor() ||
+                   (isStudent() && resource.data.studentId == request.auth.uid);
+      allow write: if isStudent() || isTutor();
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if isTutor() ||
+                   (isStudent() && resource.data.studentId == request.auth.uid) ||
+                   (isParent() && resource.data.parentId == request.auth.uid);
+      allow write: if isTutor();
+    }
+  }
 }
