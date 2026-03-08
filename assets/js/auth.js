@@ -1,56 +1,6 @@
-window.Auth = {
-  async ensureConfig() {
-    if (window.__supabaseConfigMissing || !window.sb) {
-      UI.toast('Add your Supabase URL and anon key in assets/js/config.js', 'error');
-      throw new Error('Supabase config missing');
-    }
-  },
-  async currentUser() {
-    await this.ensureConfig();
-    const { data, error } = await sb.auth.getUser();
-    if (error) throw error;
-    return data.user;
-  },
-  async currentProfile() {
-    const user = await this.currentUser();
-    if (!user) return null;
-    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
-    if (error) throw error;
-    return { user, profile: data };
-  },
-  async requireAuth(role) {
-    const bundle = await this.currentProfile();
-    if (!bundle?.user) {
-      window.location.href = '/login.html';
-      return null;
-    }
-    if (role && bundle.profile.role !== role) {
-      const map = { parent:'/parent/dashboard.html', tutor:'/tutor/dashboard.html', student:'/student/dashboard.html' };
-      window.location.href = map[bundle.profile.role] || '/login.html';
-      return null;
-    }
-    return bundle;
-  },
-  async signIn(email, password) {
-    await this.ensureConfig();
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data;
-  },
-  async signUp({ name, email, password, role }) {
-    await this.ensureConfig();
-    const redirectTo = window.location.origin + '/login.html';
-    const { data, error } = await sb.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name, role }, emailRedirectTo: redirectTo }
-    });
-    if (error) throw error;
-    return data;
-  },
-  async signOut() {
-    await this.ensureConfig();
-    await sb.auth.signOut();
-    window.location.href = '/login.html';
-  }
-};
+import './app.js';
+const { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, setDoc, doc, serverTimestamp, routeProfile, updateProfile } = window.AppUtil;
+const loginForm=document.getElementById('loginForm'); const registerForm=document.getElementById('registerForm'); const forgotForm=document.getElementById('forgotForm'); const notice=document.getElementById('notice'); const show=(msg,err=false)=>{if(notice){notice.textContent=msg; notice.style.color=err?'#b91c1c':'#1d4ed8';}};
+if(loginForm){loginForm.addEventListener('submit',async e=>{e.preventDefault(); try{const res=await signInWithEmailAndPassword(auth,loginForm.email.value.trim(),loginForm.password.value.trim()); await routeProfile(res.user);}catch(err){show(err.message,true);}});} 
+if(registerForm){registerForm.addEventListener('submit',async e=>{e.preventDefault(); const fullName=registerForm.fullName.value.trim(); const email=registerForm.email.value.trim(); const password=registerForm.password.value.trim(); const role=registerForm.role.value; const phone=registerForm.phone.value.trim(); const accessCode=registerForm.accessCode.value.trim(); if(role==='tutor' && accessCode!=='TUTOR2026'){return show('Tutor access code is invalid. Default code in demo is TUTOR2026.',true);} try{ const res=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(res.user,{displayName:fullName}); await setDoc(doc(window.FB.db,'users',res.user.uid),{uid:res.user.uid,name:fullName,email,phone,role,accessCodeUsed:accessCode||null,createdAt:serverTimestamp()}); show('Account created successfully. Redirecting...'); await routeProfile(res.user);}catch(err){show(err.message,true);}});} 
+if(forgotForm){forgotForm.addEventListener('submit',async e=>{e.preventDefault(); try{ await sendPasswordResetEmail(auth,forgotForm.email.value.trim()); show('Password reset email sent. Check your inbox.'); }catch(err){ show(err.message,true); }});}
