@@ -1,0 +1,23 @@
+
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+
+ function isSignedIn() {
+   return request.auth != null;
+ }
+
+ match /students/{id} {
+   allow read: if isSignedIn() && request.auth.uid == id;
+ }
+
+ match /assignments/{id} {
+   allow read,write: if isSignedIn();
+ }
+
+ match /classrooms/{id} {
+   allow read,write: if isSignedIn();
+ }
+
+ }
+}
