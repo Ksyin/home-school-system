@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Register</title><link rel="stylesheet" href="assets/css/styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="assets/js/config.js"></script><script src="assets/js/supabase-client.js"></script><script src="assets/js/ui.js"></script><script src="assets/js/auth.js"></script></head>
+<body>
+<div class="auth-shell"><div class="auth-hero"><div><div class="badge info" style="margin-bottom:16px;background:rgba(255,255,255,.14);color:#fff">Flexible onboarding</div><h1 style="font-size:58px;line-height:1.02;margin:0 0 16px;font-family:Georgia,ui-serif,serif">Create a role-based account.</h1><p style="max-width:700px;font-size:18px;line-height:1.7;color:#d9e3ff">Use one signup page for parents, tutors, and students. Profiles are created automatically in Supabase.</p></div></div><div class="auth-card"><div class="auth-box"><h2>Create account</h2><p>Pick the role and complete the profile.</p><form id="registerForm"><div class="field"><label>Full name</label><input name="name" required></div><div class="field"><label>Email</label><input type="email" name="email" required></div><div class="field"><label>Password</label><input type="password" name="password" required minlength="6"></div><div class="field"><label>Role</label><select name="role"><option value="parent">Parent</option><option value="tutor">Tutor</option><option value="student">Student</option></select></div><div class="auth-actions"><button class="btn" type="submit">Create account</button></div></form><div class="footer-note">Already have an account? <a class="auth-link" href="login.html">Login</a></div></div></div></div>
+<script>
+document.getElementById('registerForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const btn = this.querySelector('button');
+  try {
+    UI.setLoading(btn, true);
+    const fd = new FormData(this);
+    await Auth.signUp({ name: fd.get('name'), email: fd.get('email'), password: fd.get('password'), role: fd.get('role') });
+    UI.toast('Account created. Check your email if confirmation is enabled, then login.', 'success');
+    setTimeout(()=> location.href='login.html', 1500);
+  } catch(err){ UI.toast(err.message, 'error'); }
+  finally{ UI.setLoading(btn, false); }
+});
+</script>
+</body></html>
