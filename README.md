@@ -79,16 +79,3 @@ This version keeps setup simpler while still using real Firebase services.
 
 No build process is needed.  
 Just deploy the folder as a static site.
-
-
-## New collections used in this version
-- `activityLogs` for daily tutor notes, highs, lows, behaviour, character growth, and support steps
-- `classrooms` and `classroomMembers` for learner grouping
-- `submissions` with review fields: `status`, `grade`, `feedback`, `reviewNotes`, `reviewedAt`, `reviewedBy`
-
-## Tutor review workflow
-1. Tutor opens **Review Work**
-2. Selects a learner submission
-3. Adds grade, feedback, and review notes
-4. Marks it as **Reviewed** or **Needs Revision**
-5. Student can see the updated status, grade, and feedback immediately from their portal
