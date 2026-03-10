@@ -1,11 +1,4 @@
-(function(){
-  const cfg = window.APP_CONFIG || {};
-  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || cfg.SUPABASE_URL.includes('YOUR-PROJECT')) {
-    window.__supabaseConfigMissing = true;
-    console.warn('Supabase config missing. Update assets/js/config.js');
-    return;
-  }
-  window.sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-  });
-})();
+// assets/js/supabase-client.js
+
+console.warn("supabase-client.js is no longer used. This project now runs on Firebase only.");
+window.sb = null;
