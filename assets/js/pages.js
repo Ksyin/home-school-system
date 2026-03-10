@@ -1,18 +1,568 @@
-import './app.js';
-const U=window.AppUtil; const page=document.body.dataset.page; const role=document.body.dataset.role; const el=id=>document.getElementById(id);
-async function dashboard(role,profile){const content=el('page-content'); if(role==='parent'){const studentDocs=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); const assignments=await U.listCollection('assignments'); const assessments=await U.listCollection('assessments'); const filteredAssignments=assignments.filter(a=>studentDocs.some(s=>s.uid===a.studentUid)); const filteredAssessments=assessments.filter(a=>studentDocs.some(s=>s.uid===a.studentUid)); content.innerHTML=`<div class="grid grid-4">${U.statCard('Children',studentDocs.length,'Profiles under your account')}${U.statCard('Assignments',filteredAssignments.length,'Active and completed')}${U.statCard('Assessments',filteredAssessments.length,'Formative and summative')}${U.statCard('Average Attendance',filteredAssignments.length?'Good':'—','Based on attendance records')}</div><div class="grid grid-2" style="margin-top:18px"><div class="card panel"><div class="toolbar"><h3>Recent children</h3><a class="btn secondary" href="/parent/children.html">Manage</a></div><div class="list">${studentDocs.map(s=>`<div class="list-item"><strong>${s.name}</strong><div class="muted">${s.level||'CBC level not set'}</div></div>`).join('')||'<div class="empty">No child profiles yet.</div>'}</div></div><div class="card panel"><div class="toolbar"><h3>Upcoming assignments</h3><a class="btn secondary" href="/parent/assignments.html">View all</a></div><div class="list">${filteredAssignments.slice(0,6).map(a=>`<div class="list-item"><div class="row"><strong>${a.title}</strong><span class="right">${U.statusBadge(a.status||'Pending')}</span></div><div class="muted">${a.subject||''} • Due ${U.fmtDate(a.dueDate)}</div></div>`).join('')||'<div class="empty">No assignments yet.</div>'}</div></div></div>`;} if(role==='tutor'){const learners=await U.listCollection('students',[U.where('tutorUid','==',profile.uid)]); const assignments=await U.listCollection('assignments',[U.where('tutorUid','==',profile.uid)]); const resources=await U.listCollection('resources',[U.where('tutorUid','==',profile.uid)]); const lessonPlans=await U.listCollection('lessonPlans',[U.where('tutorUid','==',profile.uid)]); content.innerHTML=`<div class="grid grid-4">${U.statCard('Learners',learners.length,'Students assigned to you')}${U.statCard('Assignments',assignments.length,'Tasks created by you')}${U.statCard('Resources',resources.length,'Materials uploaded')}${U.statCard('Lesson Plans',lessonPlans.length,'Plans published')}</div><div class="grid grid-2" style="margin-top:18px"><div class="card panel"><div class="toolbar"><h3>Quick actions</h3></div><div class="row"><a class="btn" href="/tutor/assignments.html">Create assignment</a><a class="btn secondary" href="/tutor/resources.html">Upload resource</a><a class="btn secondary" href="/tutor/lesson-plans.html">Add lesson plan</a></div></div><div class="card panel"><div class="toolbar"><h3>Recent learners</h3></div><div class="list">${learners.slice(0,6).map(s=>`<div class="list-item"><strong>${s.name}</strong><div class="muted">${s.level||''}</div></div>`).join('')||'<div class="empty">No learners assigned yet.</div>'}</div></div></div>`;} if(role==='student'){const assignments=await U.listCollection('assignments',[U.where('studentUid','==',profile.uid)]); const resources=await U.listCollection('resources'); const assessments=await U.listCollection('assessments',[U.where('studentUid','==',profile.uid)]); content.innerHTML=`<div class="grid grid-4">${U.statCard('My Assignments',assignments.length,'Tasks assigned to you')}${U.statCard('Assessments',assessments.length,'Your tests and reviews')}${U.statCard('Resources',resources.length,'Available learning materials')}${U.statCard('Progress',assignments.filter(a=>a.status==='Completed').length+'/'+assignments.length,'Completed tasks')}</div><div class="grid grid-2" style="margin-top:18px"><div class="card panel"><div class="toolbar"><h3>Pending work</h3><a class="btn secondary" href="/student/assignments.html">Open</a></div><div class="list">${assignments.filter(a=>a.status!=='Completed').slice(0,6).map(a=>`<div class="list-item"><strong>${a.title}</strong><div class="muted">${a.subject||''} • Due ${U.fmtDate(a.dueDate)}</div></div>`).join('')||'<div class="empty">No pending work.</div>'}</div></div><div class="card panel"><div class="toolbar"><h3>Latest resources</h3><a class="btn secondary" href="/student/resources.html">See all</a></div><div class="list">${resources.slice(0,6).map(r=>`<div class="list-item"><strong>${r.title}</strong><div class="muted">${r.subject||''}</div></div>`).join('')||'<div class="empty">No resources yet.</div>'}</div></div></div>`;}}
-async function children(profile){const students=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); el('page-content').innerHTML=`<div class="card panel"><div class="toolbar"><h3>Add child profile</h3></div><form id="childForm" class="form-grid two"><div><label>Child full name</label><input name="name" required></div><div><label>CBC level / grade</label><input name="level" placeholder="Grade 4"></div><div><label>Date of birth</label><input name="dob" type="date"></div><div><label>Tutor UID</label><input name="tutorUid" placeholder="Optional tutor Firebase UID"></div><div style="grid-column:1/-1"><label>Learning goals</label><textarea name="goals"></textarea></div><div><button type="submit">Save child</button></div></form></div><div style="margin-top:18px">${U.simpleTable(['Name','Level','Tutor UID','Goals'],students.map(s=>`<tr><td>${s.name}</td><td>${s.level||'—'}</td><td><small>${s.tutorUid||'—'}</small></td><td>${s.goals||'—'}</td></tr>`).join(''))}</div>`; el('childForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('students',{name:f.name.value,level:f.level.value,dob:f.dob.value,goals:f.goals.value,tutorUid:f.tutorUid.value||null,parentUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}
-async function tutorLearners(profile){const learners=await U.listCollection('students',[U.where('tutorUid','==',profile.uid)]); el('page-content').innerHTML=`<div class="card panel"><div class="toolbar"><h3>Assign or add learner record</h3></div><form id="learnerForm" class="form-grid two"><div><label>Learner full name</label><input name="name" required></div><div><label>Learner user UID</label><input name="uid" placeholder="Student auth UID if already registered"></div><div><label>Level</label><input name="level"></div><div><label>Parent UID</label><input name="parentUid" placeholder="Optional"></div><div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"></textarea></div><div><button type="submit">Save learner</button></div></form></div><div style="margin-top:18px">${U.simpleTable(['Name','Level','Student UID','Parent UID','Notes'],learners.map(s=>`<tr><td>${s.name}</td><td>${s.level||'—'}</td><td><small>${s.uid||'—'}</small></td><td><small>${s.parentUid||'—'}</small></td><td>${s.notes||'—'}</td></tr>`).join(''))}</div>`; el('learnerForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('students',{uid:f.uid.value||null,name:f.name.value,level:f.level.value,parentUid:f.parentUid.value||null,tutorUid:profile.uid,notes:f.notes.value,createdAt:U.serverTimestamp()}); location.reload();};}
-async function assignments(role,profile){let filters=[]; if(role==='tutor') filters=[U.where('tutorUid','==',profile.uid)]; if(role==='student') filters=[U.where('studentUid','==',profile.uid)]; let data=await U.listCollection('assignments',filters); if(role==='parent'){const students=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); data=(await U.listCollection('assignments')).filter(a=>students.some(s=>(s.uid&&s.uid===a.studentUid)||s.id===a.studentProfileId));} const formHtml=role==='tutor'?`<div class="card panel"><div class="toolbar"><h3>Create assignment</h3></div><form id="assignmentForm" class="form-grid two"><div><label>Title</label><input name="title" required></div><div><label>Subject</label><input name="subject" required></div><div><label>Student UID</label><input name="studentUid" required placeholder="Firebase UID of learner"></div><div><label>Due date</label><input type="date" name="dueDate"></div><div style="grid-column:1/-1"><label>Description</label><textarea name="description"></textarea></div><div><label>Attach worksheet/file</label><input type="file" name="file"></div><div class="row" style="align-items:end"><button type="submit">Publish assignment</button></div></form></div>`:''; el('page-content').innerHTML=`${formHtml}<div style="margin-top:18px">${U.simpleTable(['Title','Subject','Student UID','Due Date','Status','File'],data.map(a=>`<tr><td>${a.title}</td><td>${a.subject||''}</td><td><small>${a.studentUid||'—'}</small></td><td>${U.fmtDate(a.dueDate)}</td><td>${U.statusBadge(a.status||'Pending')}</td><td>${a.fileUrl?`<a class="btn secondary" target="_blank" href="${a.fileUrl}">Open</a>`:'—'}</td></tr>`).join(''))}</div>`; if(role==='tutor'){el('assignmentForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; const fileUrl=await U.uploadFile(f.file.files[0],'assignments'); await U.saveDoc('assignments',{title:f.title.value,subject:f.subject.value,studentUid:f.studentUid.value,dueDate:f.dueDate.value,description:f.description.value,fileUrl,tutorUid:profile.uid,status:'Pending',createdAt:U.serverTimestamp()}); location.reload();};}}
-async function assessments(role,profile){let items=[]; if(role==='tutor') items=await U.listCollection('assessments',[U.where('tutorUid','==',profile.uid)]); else if(role==='student') items=await U.listCollection('assessments',[U.where('studentUid','==',profile.uid)]); else {const kids=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); items=(await U.listCollection('assessments')).filter(a=>kids.some(s=>s.uid===a.studentUid));} const formHtml=role==='tutor'?`<div class="card panel"><div class="toolbar"><h3>Create assessment</h3></div><form id="assessmentForm" class="form-grid two"><div><label>Assessment title</label><input name="title" required></div><div><label>Type</label><select name="type"><option>Formative</option><option>Summative</option></select></div><div><label>Student UID</label><input name="studentUid" required></div><div><label>Score</label><input name="score" type="number" min="0" max="100"></div><div><label>Subject</label><input name="subject" required></div><div><label>Date</label><input type="date" name="date"></div><div style="grid-column:1/-1"><label>Feedback</label><textarea name="feedback"></textarea></div><div><button type="submit">Save assessment</button></div></form></div>`:''; el('page-content').innerHTML=`${formHtml}<div style="margin-top:18px">${U.simpleTable(['Title','Type','Subject','Student UID','Score','Date','Feedback'],items.map(a=>`<tr><td>${a.title}</td><td>${a.type}</td><td>${a.subject}</td><td><small>${a.studentUid||'—'}</small></td><td>${a.score??'—'}</td><td>${U.fmtDate(a.date)}</td><td>${a.feedback||'—'}</td></tr>`).join(''))}</div>`; if(role==='tutor'){el('assessmentForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('assessments',{title:f.title.value,type:f.type.value,studentUid:f.studentUid.value,score:Number(f.score.value||0),subject:f.subject.value,date:f.date.value,feedback:f.feedback.value,tutorUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}}
-async function portfolio(role,profile){let items=[]; if(role==='student') items=await U.listCollection('portfolios',[U.where('studentUid','==',profile.uid)]); else if(role==='tutor') items=await U.listCollection('portfolios'); else {const kids=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); items=(await U.listCollection('portfolios')).filter(p=>kids.some(s=>s.uid===p.studentUid));} const canUpload=role==='student'||role==='tutor'; el('page-content').innerHTML=`${canUpload?`<div class="card panel"><div class="toolbar"><h3>${role==='student'?'Upload your work':'Add portfolio evidence'}</h3></div><form id="portfolioForm" class="form-grid two"><div><label>Title</label><input name="title" required></div><div><label>Student UID</label><input name="studentUid" ${role==='student'?`value="${profile.uid}" readonly`:'required'}></div><div><label>Subject</label><input name="subject"></div><div><label>Evidence file</label><input type="file" name="file"></div><div style="grid-column:1/-1"><label>Reflection / notes</label><textarea name="reflection"></textarea></div><div><button type="submit">Save portfolio item</button></div></form></div>`:''}<div style="margin-top:18px">${U.simpleTable(['Title','Subject','Student UID','Reflection','Evidence'],items.map(p=>`<tr><td>${p.title}</td><td>${p.subject||'—'}</td><td><small>${p.studentUid||'—'}</small></td><td>${p.reflection||'—'}</td><td>${p.fileUrl?`<a class="btn secondary" href="${p.fileUrl}" target="_blank">Open</a>`:'—'}</td></tr>`).join(''))}</div>`; if(canUpload){el('portfolioForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; const fileUrl=await U.uploadFile(f.file.files[0],'portfolios'); await U.saveDoc('portfolios',{title:f.title.value,subject:f.subject.value,studentUid:f.studentUid.value,reflection:f.reflection.value,fileUrl,ownerUid:profile.uid,ownerRole:role,createdAt:U.serverTimestamp()}); location.reload();};}}
-async function attendance(role,profile){let items=[]; if(role==='tutor') items=await U.listCollection('attendance',[U.where('tutorUid','==',profile.uid)]); else if(role==='student') items=await U.listCollection('attendance',[U.where('studentUid','==',profile.uid)]); else {const kids=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); items=(await U.listCollection('attendance')).filter(a=>kids.some(s=>s.uid===a.studentUid));} el('page-content').innerHTML=`${role==='tutor'?`<div class="card panel"><div class="toolbar"><h3>Mark attendance</h3></div><form id="attendanceForm" class="form-grid two"><div><label>Student UID</label><input name="studentUid" required></div><div><label>Date</label><input type="date" name="date" required></div><div><label>Status</label><select name="status"><option>Present</option><option>Absent</option><option>Late</option></select></div><div><label>Session</label><input name="session" placeholder="Morning"></div><div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"></textarea></div><div><button type="submit">Save attendance</button></div></form></div>`:''}<div style="margin-top:18px">${U.simpleTable(['Student UID','Date','Status','Session','Notes'],items.map(a=>`<tr><td><small>${a.studentUid}</small></td><td>${U.fmtDate(a.date)}</td><td>${U.statusBadge(a.status)}</td><td>${a.session||'—'}</td><td>${a.notes||'—'}</td></tr>`).join(''))}</div>`; if(role==='tutor'){el('attendanceForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('attendance',{studentUid:f.studentUid.value,date:f.date.value,status:f.status.value,session:f.session.value,notes:f.notes.value,tutorUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}}
-async function reports(role,profile){let items=[]; if(role==='tutor') items=await U.listCollection('reports',[U.where('tutorUid','==',profile.uid)]); else if(role==='student') items=await U.listCollection('reports',[U.where('studentUid','==',profile.uid)]); else {const kids=await U.listCollection('students',[U.where('parentUid','==',profile.uid)]); items=(await U.listCollection('reports')).filter(r=>kids.some(s=>s.uid===r.studentUid));} el('page-content').innerHTML=`${role==='tutor'?`<div class="card panel"><div class="toolbar"><h3>Create report card / term report</h3></div><form id="reportForm" class="form-grid two"><div><label>Student UID</label><input name="studentUid" required></div><div><label>Term</label><input name="term" placeholder="Term 1 - 2026"></div><div><label>Average score</label><input name="average" type="number" min="0" max="100"></div><div><label>Performance</label><select name="performance"><option>Excellent</option><option>Good</option><option>Improving</option></select></div><div style="grid-column:1/-1"><label>Teacher remarks</label><textarea name="remarks"></textarea></div><div><button type="submit">Save report</button></div></form></div>`:''}<div style="margin-top:18px">${U.simpleTable(['Student UID','Term','Average','Performance','Remarks'],items.map(r=>`<tr><td><small>${r.studentUid}</small></td><td>${r.term||'—'}</td><td>${r.average ?? '—'}</td><td>${r.performance||'—'}</td><td>${r.remarks||'—'}</td></tr>`).join(''))}</div>`; if(role==='tutor'){el('reportForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('reports',{studentUid:f.studentUid.value,term:f.term.value,average:Number(f.average.value||0),performance:f.performance.value,remarks:f.remarks.value,tutorUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}}
-async function resources(role,profile){let items=[]; if(role==='tutor') items=await U.listCollection('resources',[U.where('tutorUid','==',profile.uid)]); else items=await U.listCollection('resources'); el('page-content').innerHTML=`${role==='tutor'?`<div class="card panel"><div class="toolbar"><h3>Upload learning material</h3><span class="badge success">Tutor is responsible for learning materials</span></div><form id="resourceForm" class="form-grid two"><div><label>Resource title</label><input name="title" required></div><div><label>Subject</label><input name="subject"></div><div><label>Audience</label><select name="audience"><option>All</option><option>Specific Student</option></select></div><div><label>Student UID (optional)</label><input name="studentUid"></div><div style="grid-column:1/-1"><label>Description</label><textarea name="description"></textarea></div><div><label>Upload file</label><input type="file" name="file" required></div><div class="row" style="align-items:end"><button type="submit">Save resource</button></div></form></div>`:`<div class="card panel"><div class="notice">Learning materials are uploaded and managed by the tutor. Students and parents can view and download what has been shared.</div></div>`}<div style="margin-top:18px">${U.simpleTable(['Title','Subject','Audience','Description','File'],items.filter(i=>role!=='student'||!i.studentUid||i.studentUid===profile.uid).map(r=>`<tr><td>${r.title}</td><td>${r.subject||'—'}</td><td>${r.studentUid||r.audience||'All'}</td><td>${r.description||'—'}</td><td>${r.fileUrl?`<a class="btn secondary" href="${r.fileUrl}" target="_blank">Download</a>`:'—'}</td></tr>`).join(''))}</div>`; if(role==='tutor'){el('resourceForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; const fileUrl=await U.uploadFile(f.file.files[0],'resources'); await U.saveDoc('resources',{title:f.title.value,subject:f.subject.value,audience:f.audience.value,studentUid:f.studentUid.value||'',description:f.description.value,fileUrl,tutorUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}}
-async function lessonPlans(profile){const items=await U.listCollection('lessonPlans',[U.where('tutorUid','==',profile.uid)]); el('page-content').innerHTML=`<div class="card panel"><div class="toolbar"><h3>Create lesson plan</h3></div><form id="planForm" class="form-grid two"><div><label>Title</label><input name="title" required></div><div><label>Subject</label><input name="subject"></div><div><label>Date</label><input type="date" name="date"></div><div><label>Class / student UID</label><input name="target"></div><div style="grid-column:1/-1"><label>Objectives</label><textarea name="objectives"></textarea></div><div style="grid-column:1/-1"><label>Activities</label><textarea name="activities"></textarea></div><div><button type="submit">Save lesson plan</button></div></form></div><div style="margin-top:18px">${U.simpleTable(['Title','Subject','Date','Target','Objectives'],items.map(p=>`<tr><td>${p.title}</td><td>${p.subject||'—'}</td><td>${U.fmtDate(p.date)}</td><td>${p.target||'—'}</td><td>${p.objectives||'—'}</td></tr>`).join(''))}</div>`; el('planForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('lessonPlans',{title:f.title.value,subject:f.subject.value,date:f.date.value,target:f.target.value,objectives:f.objectives.value,activities:f.activities.value,tutorUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}
-async function classrooms(profile){const items=await U.listCollection('classrooms',[U.where('tutorUid','==',profile.uid)]); el('page-content').innerHTML=`<div class="card panel"><div class="toolbar"><h3>Create classroom / group</h3></div><form id="classroomForm" class="form-grid two"><div><label>Classroom name</label><input name="name" required></div><div><label>Level</label><input name="level"></div><div style="grid-column:1/-1"><label>Description</label><textarea name="description"></textarea></div><div><button type="submit">Save classroom</button></div></form></div><div style="margin-top:18px">${U.simpleTable(['Name','Level','Description'],items.map(c=>`<tr><td>${c.name}</td><td>${c.level||'—'}</td><td>${c.description||'—'}</td></tr>`).join(''))}</div>`; el('classroomForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('classrooms',{name:f.name.value,level:f.level.value,description:f.description.value,tutorUid:profile.uid,createdAt:U.serverTimestamp()}); location.reload();};}
-async function submitWork(profile){const assignments=await U.listCollection('assignments',[U.where('studentUid','==',profile.uid)]); const submissions=await U.listCollection('submissions',[U.where('studentUid','==',profile.uid)]); el('page-content').innerHTML=`<div class="card panel"><div class="toolbar"><h3>Submit completed work</h3></div><form id="submitForm" class="form-grid two"><div><label>Select assignment</label><select name="assignmentId">${assignments.map(a=>`<option value="${a.id}">${a.title} - ${a.subject||''}</option>`).join('')}</select></div><div><label>Upload file</label><input type="file" name="file" required></div><div style="grid-column:1/-1"><label>Notes to tutor</label><textarea name="notes"></textarea></div><div><button type="submit">Submit work</button></div></form></div><div style="margin-top:18px">${U.simpleTable(['Assignment','Notes','Submitted file','Status'],submissions.map(s=>`<tr><td>${s.assignmentTitle||s.assignmentId}</td><td>${s.notes||'—'}</td><td>${s.fileUrl?`<a class="btn secondary" href="${s.fileUrl}" target="_blank">Open</a>`:'—'}</td><td>${U.statusBadge(s.status || 'Submitted')}</td></tr>`).join(''))}</div>`; el('submitForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; const assignment=assignments.find(a=>a.id===f.assignmentId.value); const fileUrl=await U.uploadFile(f.file.files[0],'submissions'); await U.saveDoc('submissions',{assignmentId:assignment.id,assignmentTitle:assignment.title,studentUid:profile.uid,tutorUid:assignment.tutorUid||'',notes:f.notes.value,fileUrl,status:'Submitted',createdAt:U.serverTimestamp()}); await U.saveDoc('assignments',{status:'Submitted'},assignment.id); location.reload();};}
-async function messages(role,profile){let items; if(role==='parent') items=await U.listCollection('messages',[U.where('toUid','==',profile.uid)]); else items=await U.listCollection('messages',[U.where('fromUid','==',profile.uid)]); el('page-content').innerHTML=`<div class="card panel"><div class="toolbar"><h3>New message</h3></div><form id="messageForm" class="form-grid two"><div><label>To UID</label><input name="toUid" required></div><div><label>Subject</label><input name="subject" required></div><div style="grid-column:1/-1"><label>Message</label><textarea name="body"></textarea></div><div><button type="submit">Send</button></div></form></div><div style="margin-top:18px" class="list">${items.map(m=>`<div class="list-item"><div class="row"><strong>${m.subject}</strong><span class="right"><small>${m.toUid===profile.uid?'Received':'Sent'}</small></span></div><div class="muted">${m.body||''}</div><small>From ${m.fromUid||'—'} to ${m.toUid||'—'}</small></div>`).join('') || '<div class="empty card panel">No messages yet.</div>'}</div>`; el('messageForm').onsubmit=async e=>{e.preventDefault(); const f=e.target; await U.saveDoc('messages',{toUid:f.toUid.value,fromUid:profile.uid,subject:f.subject.value,body:f.body.value,createdAt:U.serverTimestamp()}); location.reload();};}
-async function settings(role,profile){el('page-content').innerHTML=`<div class="grid grid-2"><div class="card panel"><h3>Profile information</h3><div class="stack"><div class="kv"><strong>Name</strong><span>${profile.name||'—'}</span></div><div class="kv"><strong>Email</strong><span>${profile.email||'—'}</span></div><div class="kv"><strong>Role</strong><span>${profile.role||'—'}</span></div><div class="kv"><strong>UID</strong><span><small>${profile.uid||'—'}</small></span></div></div></div><div class="card panel"><h3>System notes</h3><div class="list"><div class="list-item">Authentication uses Firebase Authentication.</div><div class="list-item">Live data uses Cloud Firestore.</div><div class="list-item">Files use Firebase Storage.</div><div class="list-item">Netlify hosts the front end only.</div></div></div></div>`;}
-async function unauthorized(){document.body.innerHTML=`<div class="auth-wrap"><div class="card panel center" style="max-width:680px;padding:32px"><h1>Access not allowed</h1><p class="muted">Your account role does not match this page, or your user profile document is missing in Firestore.</p><a class="btn" href="/login.html">Back to login</a></div></div>`;}
-(async()=>{if(document.body.dataset.authPage==='public') return; if(page==='unauthorized'){unauthorized(); return;} const {profile}=await U.requireAuth(); if(page==='dashboard') return dashboard(role,profile); if(page==='children') return children(profile); if(page==='learners') return tutorLearners(profile); if(page==='assignments') return assignments(role,profile); if(page==='assessments') return assessments(role,profile); if(page==='portfolio'||page==='portfolios') return portfolio(role,profile); if(page==='attendance') return attendance(role,profile); if(page==='reports') return reports(role,profile); if(page==='resources') return resources(role,profile); if(page==='lesson-plans') return lessonPlans(profile); if(page==='classrooms') return classrooms(profile); if(page==='submit-work') return submitWork(profile); if(page==='messages') return messages(role,profile); if(page==='settings') return settings(role,profile);})();
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut,
+  updateProfile
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  serverTimestamp,
+  updateDoc,
+  orderBy,
+  limit,
+  writeBatch
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+
+import { firebaseConfig } from './firebase-config.js';
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+window.FB = { app, auth, db, storage };
+
+const pageRole = document.body.dataset.role || '';
+const pageKey = document.body.dataset.page || '';
+const pageTitle = document.body.dataset.title || 'HomeSchool';
+const pageDescription = document.body.dataset.description || '';
+
+const navMap = {
+  parent: [
+    ['Dashboard', '/parent/dashboard.html', '🏠'],
+    ['Children', '/parent/children.html', '👧'],
+    ['Assignments', '/parent/assignments.html', '📝'],
+    ['Assessments', '/parent/assessments.html', '📊'],
+    ['Portfolio', '/parent/portfolio.html', '🗂️'],
+    ['Attendance', '/parent/attendance.html', '📅'],
+    ['Reports', '/parent/reports.html', '📄'],
+    ['Resources', '/parent/resources.html', '📚'],
+    ['Messages', '/parent/messages.html', '💬'],
+    ['Settings', '/parent/settings.html', '⚙️']
+  ],
+  tutor: [
+    ['Dashboard', '/tutor/dashboard.html', '🏠'],
+    ['Learners', '/tutor/learners.html', '👦'],
+    ['Classrooms', '/tutor/classrooms.html', '🏫'],
+    ['Assignments', '/tutor/assignments.html', '📝'],
+    ['Assessments', '/tutor/assessments.html', '📊'],
+    ['Portfolios', '/tutor/portfolios.html', '🗂️'],
+    ['Attendance', '/tutor/attendance.html', '📅'],
+    ['Report Cards', '/tutor/reports.html', '📄'],
+    ['Lesson Plans', '/tutor/lesson-plans.html', '🗓️'],
+    ['Resources', '/tutor/resources.html', '📚'],
+    ['Messages', '/tutor/messages.html', '💬'],
+    ['Settings', '/tutor/settings.html', '⚙️']
+  ],
+  student: [
+    ['Dashboard', '/student/dashboard.html', '🏠'],
+    ['My Assignments', '/student/assignments.html', '📝'],
+    ['Submit Work', '/student/submit-work.html', '📤'],
+    ['Assessments', '/student/assessments.html', '📊'],
+    ['Portfolio', '/student/portfolio.html', '🗂️'],
+    ['Attendance', '/student/attendance.html', '📅'],
+    ['Reports', '/student/reports.html', '📄'],
+    ['Resources', '/student/resources.html', '📚'],
+    ['Messages', '/student/messages.html', '💬'],
+    ['Settings', '/student/settings.html', '⚙️']
+  ]
+};
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function uiHeader(profile) {
+  return `
+    <div class="topbar">
+      <div>
+        <h2>${escapeHtml(pageTitle)}</h2>
+        <p>${escapeHtml(pageDescription)}</p>
+      </div>
+      <div class="top-actions">
+        <span class="badge">${escapeHtml(profile?.role || 'guest')}</span>
+        <span class="badge success">${escapeHtml(profile?.name || profile?.full_name || profile?.email || '')}</span>
+        <button class="btn" id="logoutBtn" type="button">Logout</button>
+      </div>
+    </div>
+  `;
+}
+
+function sidebar(profile) {
+  const items = navMap[pageRole] || [];
+  const links = items.map(([label, href, icon]) => `
+    <a class="${href.endsWith(pageKey + '.html') ? 'active' : ''}" href="${href}">
+      <span class="icon">${icon}</span>
+      <span>${escapeHtml(label)}</span>
+    </a>
+  `).join('');
+
+  return `
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-badge">H</div>
+        <div>
+          <h1>HomeSchool</h1>
+          <p>Management System</p>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-title">${escapeHtml(pageRole)} portal</div>
+        <nav class="nav">${links}</nav>
+      </div>
+
+      <div class="sidebar-footer">
+        <div>${escapeHtml(profile?.name || profile?.full_name || '')}</div>
+        <small>${escapeHtml(profile?.email || '')}</small>
+        <small>Role: ${escapeHtml(profile?.role || pageRole)}</small>
+      </div>
+    </aside>
+  `;
+}
+
+function fmtDate(value) {
+  if (!value) return '—';
+  if (typeof value === 'string') return value;
+  if (value?.toDate) return value.toDate().toLocaleString();
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return '—';
+  }
+}
+
+function statusBadge(status = 'Pending') {
+  const map = {
+    Completed: 'success',
+    Submitted: 'success',
+    Pending: 'warn',
+    Late: 'danger',
+    Draft: '',
+    Published: 'success',
+    Present: 'success',
+    Absent: 'danger'
+  };
+  return `<span class="badge ${map[status] || ''}">${escapeHtml(status)}</span>`;
+}
+
+function simpleTable(headers, rowsHtml) {
+  return `
+    <div class="card panel table-wrap">
+      <table>
+        <thead>
+          <tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || `<tr><td colspan="${headers.length}"><div class="empty">No records yet.</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function getUserProfile(uid) {
+  const userDoc = await getDoc(doc(db, 'users', uid));
+  if (!userDoc.exists()) return null;
+  return userDoc.data();
+}
+
+async function requireAuth() {
+  return new Promise((resolve) => {
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        location.href = '/login.html';
+        return;
+      }
+
+      const profile = await getUserProfile(user.uid);
+      if (!profile) {
+        location.href = '/unauthorized.html';
+        return;
+      }
+
+      if (pageRole && profile.role !== pageRole) {
+        location.href = '/unauthorized.html';
+        return;
+      }
+
+      document.getElementById('app-shell').innerHTML = `
+        ${sidebar({ ...profile, email: user.email })}
+        <main class="content">
+          ${uiHeader({ ...profile, email: user.email })}
+          <div id="page-content"></div>
+          <footer class="page-foot">HomeSchool student system</footer>
+        </main>
+      `;
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.onclick = async () => {
+          await signOut(auth);
+          location.href = '/login.html';
+        };
+      }
+
+      resolve({ user, profile });
+    });
+  });
+}
+
+async function uploadFile(file, folder = 'uploads') {
+  if (!file) return { url: '', path: '', name: '' };
+
+  const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+  const filePath = `${folder}/${Date.now()}-${safeName}`;
+  const storageRef = ref(storage, filePath);
+
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+
+  return {
+    url,
+    path: filePath,
+    name: file.name
+  };
+}
+
+function getStudentDisplayName(profile, user) {
+  return profile?.full_name || profile?.name || user?.displayName || user?.email || 'Student';
+}
+
+function normalizeAssignment(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    ...data
+  };
+}
+
+function assignmentVisibleToStudent(assignment, studentUid) {
+  if (!assignment) return false;
+
+  if (assignment.studentId && assignment.studentId === studentUid) return true;
+
+  if (Array.isArray(assignment.studentIds) && assignment.studentIds.includes(studentUid)) return true;
+
+  if (Array.isArray(assignment.assignedTo) && assignment.assignedTo.includes(studentUid)) return true;
+
+  if (assignment.targetType === 'all_students') return true;
+  if (assignment.published === true && !assignment.studentId && !assignment.studentIds && !assignment.assignedTo) return true;
+
+  return false;
+}
+
+async function loadStudentAssignments(studentUid) {
+  const snap = await getDocs(collection(db, 'assignments'));
+  const allAssignments = snap.docs.map(normalizeAssignment);
+
+  return allAssignments
+    .filter(item => assignmentVisibleToStudent(item, studentUid))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+}
+
+async function loadStudentSubmissions(studentUid) {
+  const submissionsQuery = query(
+    collection(db, 'submissions'),
+    where('studentId', '==', studentUid)
+  );
+
+  const snap = await getDocs(submissionsQuery);
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  })).sort((a, b) => {
+    const aTime = a.submittedAt?.seconds || 0;
+    const bTime = b.submittedAt?.seconds || 0;
+    return bTime - aTime;
+  });
+}
+
+function renderSubmitWorkPage(profile, user, assignments, submissions) {
+  const studentName = getStudentDisplayName(profile, user);
+
+  const options = assignments.map(item => `
+    <option value="${escapeHtml(item.id)}">
+      ${escapeHtml(item.title || 'Untitled Assignment')} ${item.subject ? `- ${escapeHtml(item.subject)}` : ''}
+    </option>
+  `).join('');
+
+  const submissionRows = submissions.map(item => `
+    <tr>
+      <td>${escapeHtml(item.assignmentTitle || 'Assignment')}</td>
+      <td>${escapeHtml(item.subject || '—')}</td>
+      <td>${statusBadge(item.status || 'Submitted')}</td>
+      <td>${fmtDate(item.submittedAt)}</td>
+      <td>${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">View File</a>` : '—'}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>Submit Assignment</h3>
+      <p>Welcome, ${escapeHtml(studentName)}. Choose an assignment, attach your work, and submit it.</p>
+
+      <form id="submissionForm" class="stack-form">
+        <div class="form-row">
+          <label for="assignmentId">Assignment</label>
+          <select id="assignmentId" name="assignmentId" required>
+            <option value="">Select assignment</option>
+            ${options}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="submissionNote">Message / Notes</label>
+          <textarea id="submissionNote" name="submissionNote" rows="5" placeholder="Add notes about this work"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="submissionFile">Attach file</label>
+          <input id="submissionFile" name="submissionFile" type="file">
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="submitWorkBtn">Submit Work</button>
+          <span id="submitWorkMsg"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>My Previous Submissions</h3>
+      ${simpleTable(
+        ['Assignment', 'Subject', 'Status', 'Submitted', 'Attachment'],
+        submissionRows
+      )}
+    </section>
+  `;
+}
+
+async function submitStudentWork({ user, profile }) {
+  const form = document.getElementById('submissionForm');
+  const msg = document.getElementById('submitWorkMsg');
+  const submitBtn = document.getElementById('submitWorkBtn');
+
+  if (!form || !msg || !submitBtn) return;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const assignmentId = form.assignmentId.value.trim();
+    const note = form.submissionNote.value.trim();
+    const file = form.submissionFile.files?.[0] || null;
+
+    if (!assignmentId) {
+      msg.textContent = 'Please select an assignment.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    msg.textContent = 'Submitting...';
+
+    try {
+      const assignmentRef = doc(db, 'assignments', assignmentId);
+      const assignmentSnap = await getDoc(assignmentRef);
+
+      if (!assignmentSnap.exists()) {
+        throw new Error('Selected assignment was not found.');
+      }
+
+      const assignment = assignmentSnap.data();
+      const upload = await uploadFile(file, `submissions/${user.uid}`);
+
+      const studentName = getStudentDisplayName(profile, user);
+      const submissionRef = doc(collection(db, 'submissions'));
+
+      const submissionPayload = {
+        assignmentId,
+        assignmentTitle: assignment.title || 'Untitled Assignment',
+        subject: assignment.subject || '',
+        tutorId: assignment.tutorId || assignment.createdBy || '',
+        classroomId: assignment.classroomId || '',
+        studentId: user.uid,
+        studentName,
+        studentEmail: user.email || '',
+        note,
+        fileUrl: upload.url || '',
+        filePath: upload.path || '',
+        fileName: upload.name || '',
+        status: 'Submitted',
+        grade: assignment.grade || '',
+        feedback: '',
+        submittedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const batch = writeBatch(db);
+
+      batch.set(submissionRef, submissionPayload);
+
+      batch.set(
+        doc(db, 'assignments', assignmentId, 'submissions', user.uid),
+        {
+          submissionId: submissionRef.id,
+          assignmentId,
+          studentId: user.uid,
+          studentName,
+          studentEmail: user.email || '',
+          note,
+          fileUrl: upload.url || '',
+          filePath: upload.path || '',
+          fileName: upload.name || '',
+          status: 'Submitted',
+          submittedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(db, 'students', user.uid, 'submissions', submissionRef.id),
+        {
+          submissionId: submissionRef.id,
+          assignmentId,
+          assignmentTitle: assignment.title || 'Untitled Assignment',
+          subject: assignment.subject || '',
+          tutorId: assignment.tutorId || assignment.createdBy || '',
+          note,
+          fileUrl: upload.url || '',
+          filePath: upload.path || '',
+          fileName: upload.name || '',
+          status: 'Submitted',
+          submittedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(db, 'students', user.uid),
+        {
+          uid: user.uid,
+          name: studentName,
+          email: user.email || '',
+          role: 'student',
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(db, 'users', user.uid),
+        {
+          uid: user.uid,
+          name: studentName,
+          full_name: studentName,
+          email: user.email || '',
+          role: 'student',
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      await batch.commit();
+
+      msg.textContent = 'Work submitted successfully.';
+      form.reset();
+
+      const latestAssignments = await loadStudentAssignments(user.uid);
+      const latestSubmissions = await loadStudentSubmissions(user.uid);
+
+      document.getElementById('page-content').innerHTML = renderSubmitWorkPage(
+        profile,
+        user,
+        latestAssignments,
+        latestSubmissions
+      );
+
+      await submitStudentWork({ user, profile });
+    } catch (error) {
+      console.error('Submission error:', error);
+      msg.textContent = error.message || 'Submission failed.';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+async function bootSubmitWorkPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const assignments = await loadStudentAssignments(user.uid);
+  const submissions = await loadStudentSubmissions(user.uid);
+
+  pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
+  await submitStudentWork({ user, profile });
+}
+
+function bootDefaultPage() {
+  requireAuth().then(() => {
+    const pageContent = document.getElementById('page-content');
+    if (pageContent) {
+      pageContent.innerHTML = `
+        <section class="card panel">
+          <h3>${escapeHtml(pageTitle)}</h3>
+          <p>This page is connected successfully.</p>
+        </section>
+      `;
+    }
+  });
+}
+
+window.AppUtil = {
+  auth,
+  db,
+  storage,
+  requireAuth,
+  getUserProfile,
+  uploadFile,
+  fmtDate,
+  statusBadge,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile
+};
+
+if (pageKey === 'submit-work') {
+  bootSubmitWorkPage();
+} else {
+  bootDefaultPage();
+}

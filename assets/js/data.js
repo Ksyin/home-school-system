@@ -1,7 +1,27 @@
 /* =====================================================
    DATA API
-   Central data access layer for the LMS
+   Firebase Data Access Layer for the LMS
    ===================================================== */
+
+import {
+  getAuth
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  updateDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const auth = getAuth();
+const db = getFirestore();
 
 window.DataAPI = {
 
@@ -10,19 +30,15 @@ window.DataAPI = {
   --------------------------------------------- */
   async getCurrentProfile() {
 
-    const user = await sb.auth.getUser()
+    const user = auth.currentUser;
 
-    if (!user.data.user) return null
+    if (!user) return null;
 
-    const { data, error } = await sb
-      .from("profiles")
-      .select("*")
-      .eq("id", user.data.user.id)
-      .single()
+    const snap = await getDoc(doc(db, "users", user.uid));
 
-    if (error) throw error
+    if (!snap.exists()) return null;
 
-    return data
+    return { id: user.uid, ...snap.data() };
   },
 
 
@@ -32,21 +48,18 @@ window.DataAPI = {
   --------------------------------------------- */
   async getAllStudents() {
 
-    const { data, error } = await sb
-      .from("profiles")
-      .select(`
-        id,
-        full_name,
-        email,
-        grade_level,
-        created_at
-      `)
-      .eq("role", "student")
-      .order("full_name", { ascending: true })
+    const q = query(
+      collection(db, "users"),
+      where("role", "==", "student"),
+      orderBy("name")
+    );
 
-    if (error) throw error
+    const snap = await getDocs(q);
 
-    return data || []
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
   },
 
 
@@ -56,26 +69,18 @@ window.DataAPI = {
   --------------------------------------------- */
   async getStudentHistory(studentId) {
 
-    const { data, error } = await sb
-      .from("submissions")
-      .select(`
-        id,
-        submitted_at,
-        grade,
-        feedback,
-        assignments(
-          id,
-          title,
-          subject,
-          due_date
-        )
-      `)
-      .eq("student_id", studentId)
-      .order("submitted_at", { ascending: false })
+    const q = query(
+      collection(db, "submissions"),
+      where("studentId", "==", studentId),
+      orderBy("submittedAt", "desc")
+    );
 
-    if (error) throw error
+    const snap = await getDocs(q);
 
-    return data || []
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
   },
 
 
@@ -84,22 +89,42 @@ window.DataAPI = {
   --------------------------------------------- */
   async getStudentAssignments(studentId) {
 
-    const { data, error } = await sb
-      .from("assignments")
-      .select(`
-        id,
-        title,
-        subject,
-        description,
-        due_date,
-        created_at
-      `)
-      .eq("student_id", studentId)
-      .order("due_date", { ascending: true })
+    const assignmentsSnap = await getDocs(collection(db, "assignments"));
 
-    if (error) throw error
+    const assignments = [];
 
-    return data || []
+    assignmentsSnap.forEach(docSnap => {
+
+      const data = docSnap.data();
+
+      /* Assignment visible if:
+         - directly assigned to student
+         - studentId matches
+         - assignedTo array contains student
+         - published to all students
+      */
+
+      if (
+        data.studentId === studentId ||
+        data.targetType === "all_students" ||
+        (Array.isArray(data.assignedTo) && data.assignedTo.includes(studentId))
+      ) {
+        assignments.push({
+          id: docSnap.id,
+          ...data
+        });
+      }
+
+    });
+
+    return assignments.sort((a,b)=>{
+
+      const aTime = a.due_date?.seconds || 0;
+      const bTime = b.due_date?.seconds || 0;
+
+      return aTime - bTime;
+
+    });
   },
 
 
@@ -108,22 +133,33 @@ window.DataAPI = {
   --------------------------------------------- */
   async getParentChildren(parentId) {
 
-    const { data, error } = await sb
-      .from("student_parent_links")
-      .select(`
-        student_id,
-        profiles!student_parent_links_student_id_fkey(
-          id,
-          full_name,
-          email,
-          grade_level
-        )
-      `)
-      .eq("parent_id", parentId)
+    const q = query(
+      collection(db, "student_parent_links"),
+      where("parentId", "==", parentId)
+    );
 
-    if (error) throw error
+    const snap = await getDocs(q);
 
-    return data || []
+    const children = [];
+
+    for (const linkDoc of snap.docs) {
+
+      const studentId = linkDoc.data().studentId;
+
+      const studentSnap = await getDoc(doc(db, "users", studentId));
+
+      if (studentSnap.exists()) {
+
+        children.push({
+          student_id: studentId,
+          ...studentSnap.data()
+        });
+
+      }
+
+    }
+
+    return children;
   },
 
 
@@ -133,27 +169,24 @@ window.DataAPI = {
   --------------------------------------------- */
   async getParentReport(parentId) {
 
-    const children = await this.getParentChildren(parentId)
+    const children = await this.getParentChildren(parentId);
 
-    const studentIds = children.map(c => c.student_id)
+    const studentIds = children.map(c => c.student_id);
 
-    if (!studentIds.length) return []
+    if (!studentIds.length) return [];
 
-    const { data, error } = await sb
-      .from("submissions")
-      .select(`
-        submitted_at,
-        grade,
-        feedback,
-        assignments(title),
-        profiles!submissions_student_id_fkey(full_name)
-      `)
-      .in("student_id", studentIds)
-      .order("submitted_at", { ascending: false })
+    const q = query(
+      collection(db, "submissions"),
+      where("studentId", "in", studentIds),
+      orderBy("submittedAt", "desc")
+    );
 
-    if (error) throw error
+    const snap = await getDocs(q);
 
-    return data || []
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
   },
 
 
@@ -162,19 +195,19 @@ window.DataAPI = {
   --------------------------------------------- */
   async reviewSubmission(submissionId, grade, feedback, tutorId) {
 
-    const { error } = await sb
-      .from("submissions")
-      .update({
-        grade: grade,
-        feedback: feedback,
-        reviewed_by: tutorId,
-        reviewed_at: new Date()
-      })
-      .eq("id", submissionId)
+    const submissionRef = doc(db, "submissions", submissionId);
 
-    if (error) throw error
+    await updateDoc(submissionRef, {
 
-    return true
+      grade: grade,
+      feedback: feedback,
+      reviewedBy: tutorId,
+      reviewedAt: serverTimestamp(),
+      status: "Reviewed"
+
+    });
+
+    return true;
   }
 
-}
+};
