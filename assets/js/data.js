@@ -1,115 +1,213 @@
+/* =====================================================
+   DATA API
+   Firebase Data Access Layer for the LMS
+   ===================================================== */
+
+import {
+  getAuth
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  updateDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const auth = getAuth();
+const db = getFirestore();
+
 window.DataAPI = {
+
+  /* ---------------------------------------------
+     GET CURRENT USER PROFILE
+  --------------------------------------------- */
+  async getCurrentProfile() {
+
+    const user = auth.currentUser;
+
+    if (!user) return null;
+
+    const snap = await getDoc(doc(db, "users", user.uid));
+
+    if (!snap.exists()) return null;
+
+    return { id: user.uid, ...snap.data() };
+  },
+
+
+  /* ---------------------------------------------
+     GET ALL STUDENTS
+     Tutors automatically see every student
+  --------------------------------------------- */
+  async getAllStudents() {
+
+    const q = query(
+      collection(db, "users"),
+      where("role", "==", "student"),
+      orderBy("name")
+    );
+
+    const snap = await getDocs(q);
+
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  },
+
+
+  /* ---------------------------------------------
+     GET STUDENT HISTORY
+     Students + tutors view past activities
+  --------------------------------------------- */
+  async getStudentHistory(studentId) {
+
+    const q = query(
+      collection(db, "submissions"),
+      where("studentId", "==", studentId),
+      orderBy("submittedAt", "desc")
+    );
+
+    const snap = await getDocs(q);
+
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  },
+
+
+  /* ---------------------------------------------
+     GET STUDENT ASSIGNMENTS
+  --------------------------------------------- */
+  async getStudentAssignments(studentId) {
+
+    const assignmentsSnap = await getDocs(collection(db, "assignments"));
+
+    const assignments = [];
+
+    assignmentsSnap.forEach(docSnap => {
+
+      const data = docSnap.data();
+
+      /* Assignment visible if:
+         - directly assigned to student
+         - studentId matches
+         - assignedTo array contains student
+         - published to all students
+      */
+
+      if (
+        data.studentId === studentId ||
+        data.targetType === "all_students" ||
+        (Array.isArray(data.assignedTo) && data.assignedTo.includes(studentId))
+      ) {
+        assignments.push({
+          id: docSnap.id,
+          ...data
+        });
+      }
+
+    });
+
+    return assignments.sort((a,b)=>{
+
+      const aTime = a.due_date?.seconds || 0;
+      const bTime = b.due_date?.seconds || 0;
+
+      return aTime - bTime;
+
+    });
+  },
+
+
+  /* ---------------------------------------------
+     PARENT -> CHILDREN
+  --------------------------------------------- */
   async getParentChildren(parentId) {
-    const { data, error } = await sb
-      .from('student_parent_links')
-      .select('student_id, profiles!student_parent_links_student_id_fkey(id, full_name, email, grade_level)')
-      .eq('parent_id', parentId);
-    if (error) throw error;
-    return data || [];
+
+    const q = query(
+      collection(db, "student_parent_links"),
+      where("parentId", "==", parentId)
+    );
+
+    const snap = await getDocs(q);
+
+    const children = [];
+
+    for (const linkDoc of snap.docs) {
+
+      const studentId = linkDoc.data().studentId;
+
+      const studentSnap = await getDoc(doc(db, "users", studentId));
+
+      if (studentSnap.exists()) {
+
+        children.push({
+          student_id: studentId,
+          ...studentSnap.data()
+        });
+
+      }
+
+    }
+
+    return children;
   },
-  async getTutorStudents(tutorId) {
-    const { data, error } = await sb
-      .from('classroom_members')
-      .select('classroom_id, student_id, profiles!classroom_members_student_id_fkey(id, full_name, email, grade_level), classrooms(title)')
-      .eq('tutor_id', tutorId);
-    if (error) throw error;
-    return data || [];
+
+
+  /* ---------------------------------------------
+     PARENT REPORT
+     Parents see children performance
+  --------------------------------------------- */
+  async getParentReport(parentId) {
+
+    const children = await this.getParentChildren(parentId);
+
+    const studentIds = children.map(c => c.student_id);
+
+    if (!studentIds.length) return [];
+
+    const q = query(
+      collection(db, "submissions"),
+      where("studentId", "in", studentIds),
+      orderBy("submittedAt", "desc")
+    );
+
+    const snap = await getDocs(q);
+
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
   },
-  async getAssignmentsForRole(role, profileId) {
-    if (role === 'student') {
-      const { data, error } = await sb.from('assignments').select('*, profiles!assignments_created_by_fkey(full_name), classrooms(title)').or(`student_id.eq.${profileId},student_id.is.null`).order('due_date',{ascending:true});
-      if (error) throw error; return data || [];
-    }
-    if (role === 'tutor') {
-      const { data, error } = await sb.from('assignments').select('*, profiles!assignments_student_id_fkey(full_name), classrooms(title)').eq('created_by', profileId).order('created_at',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    const childIds = (await this.getParentChildren(profileId)).map(r=>r.student_id);
-    if (!childIds.length) return [];
-    const { data, error } = await sb.from('assignments').select('*, profiles!assignments_student_id_fkey(full_name), classrooms(title)').in('student_id', childIds).order('due_date',{ascending:true});
-    if (error) throw error; return data || [];
-  },
-  async getAssessmentsForRole(role, profileId) {
-    if (role === 'student') {
-      const { data, error } = await sb.from('assessments').select('*, subjects(name), profiles!assessments_created_by_fkey(full_name)').eq('student_id', profileId).order('assessment_date',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    if (role === 'tutor') {
-      const { data, error } = await sb.from('assessments').select('*, subjects(name), profiles!assessments_student_id_fkey(full_name)').eq('created_by', profileId).order('assessment_date',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    const childIds = (await this.getParentChildren(profileId)).map(r=>r.student_id);
-    if (!childIds.length) return [];
-    const { data, error } = await sb.from('assessments').select('*, subjects(name), profiles!assessments_student_id_fkey(full_name)').in('student_id', childIds).order('assessment_date',{ascending:false});
-    if (error) throw error; return data || [];
-  },
-  async getPortfolioForRole(role, profileId) {
-    if (role === 'student') {
-      const { data, error } = await sb.from('portfolio_entries').select('*, subjects(name), profiles!portfolio_entries_created_by_fkey(full_name)').eq('student_id', profileId).order('entry_date',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    if (role === 'tutor') {
-      const { data, error } = await sb.from('portfolio_entries').select('*, subjects(name), profiles!portfolio_entries_student_id_fkey(full_name)').eq('created_by', profileId).order('entry_date',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    const childIds = (await this.getParentChildren(profileId)).map(r=>r.student_id);
-    if (!childIds.length) return [];
-    const { data, error } = await sb.from('portfolio_entries').select('*, subjects(name), profiles!portfolio_entries_student_id_fkey(full_name)').in('student_id', childIds).order('entry_date',{ascending:false});
-    if (error) throw error; return data || [];
-  },
-  async getAttendanceForRole(role, profileId) {
-    if (role === 'student') {
-      const { data, error } = await sb.from('attendance_records').select('*, classrooms(title)').eq('student_id', profileId).order('record_date',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    if (role === 'tutor') {
-      const { data, error } = await sb.from('attendance_records').select('*, profiles!attendance_records_student_id_fkey(full_name), classrooms(title)').eq('created_by', profileId).order('record_date',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    const childIds = (await this.getParentChildren(profileId)).map(r=>r.student_id);
-    if (!childIds.length) return [];
-    const { data, error } = await sb.from('attendance_records').select('*, profiles!attendance_records_student_id_fkey(full_name), classrooms(title)').in('student_id', childIds).order('record_date',{ascending:false});
-    if (error) throw error; return data || [];
-  },
-  async getReportCardsForRole(role, profileId) {
-    if (role === 'student') {
-      const { data, error } = await sb.from('report_cards').select('*, profiles!report_cards_created_by_fkey(full_name)').eq('student_id', profileId).order('term_end',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    if (role === 'tutor') {
-      const { data, error } = await sb.from('report_cards').select('*, profiles!report_cards_student_id_fkey(full_name)').eq('created_by', profileId).order('term_end',{ascending:false});
-      if (error) throw error; return data || [];
-    }
-    const childIds = (await this.getParentChildren(profileId)).map(r=>r.student_id);
-    if (!childIds.length) return [];
-    const { data, error } = await sb.from('report_cards').select('*, profiles!report_cards_student_id_fkey(full_name)').in('student_id', childIds).order('term_end',{ascending:false});
-    if (error) throw error; return data || [];
-  },
-  async getResources(role, profileId) {
-    let query = sb.from('resources').select('*, subjects(name), classrooms(title), profiles!resources_created_by_fkey(full_name)').order('created_at',{ascending:false});
-    if (role==='tutor') query = query.eq('created_by', profileId);
-    const { data, error } = await query; if (error) throw error; return data || [];
-  },
-  async getMessages(role, profileId) {
-    const { data, error } = await sb.from('messages').select('*, sender:profiles!messages_sender_id_fkey(full_name), recipient:profiles!messages_recipient_id_fkey(full_name)').or(`sender_id.eq.${profileId},recipient_id.eq.${profileId}`).order('created_at',{ascending:false});
-    if (error) throw error; return data || [];
-  },
-  async dashboardSummary(role, profileId) {
-    const [assignments, assessments, attendance, portfolios] = await Promise.all([
-      this.getAssignmentsForRole(role, profileId),
-      this.getAssessmentsForRole(role, profileId),
-      this.getAttendanceForRole(role, profileId),
-      this.getPortfolioForRole(role, profileId)
-    ]);
-    return {
-      assignments,
-      assessments,
-      attendance,
-      portfolios,
-      pendingAssignments: assignments.filter(a => !a.status || a.status !== 'completed').length,
-      averageScore: assessments.length ? Math.round(assessments.reduce((s,a)=>s+(Number(a.score)||0),0)/assessments.length) : 0,
-      presentDays: attendance.filter(a => a.status === 'present').length,
-      portfolioCount: portfolios.length
-    };
+
+
+  /* ---------------------------------------------
+     TUTOR REVIEW SUBMISSION
+  --------------------------------------------- */
+  async reviewSubmission(submissionId, grade, feedback, tutorId) {
+
+    const submissionRef = doc(db, "submissions", submissionId);
+
+    await updateDoc(submissionRef, {
+
+      grade: grade,
+      feedback: feedback,
+      reviewedBy: tutorId,
+      reviewedAt: serverTimestamp(),
+      status: "Reviewed"
+
+    });
+
+    return true;
   }
+
 };
