@@ -213,7 +213,13 @@ async function requireAuth() {
         return;
       }
 
-      document.getElementById('app-shell').innerHTML = `
+      const shell = document.getElementById('app-shell');
+      if (!shell) {
+        console.error('Missing #app-shell in page HTML');
+        return;
+      }
+
+      shell.innerHTML = `
         ${sidebar({ ...profile, email: user.email })}
         <main class="content">
           ${uiHeader({ ...profile, email: user.email })}
@@ -308,6 +314,45 @@ async function loadStudentSubmissions(studentUid) {
 }
 
 /* =========================
+   STUDENT AUTO MIRROR
+========================= */
+
+async function ensureStudentMirror(user, profile) {
+  if (!user) return;
+
+  const studentName = getStudentDisplayName(profile, user);
+  const batch = writeBatch(db);
+
+  batch.set(
+    doc(db, 'users', user.uid),
+    {
+      uid: user.uid,
+      name: studentName,
+      full_name: studentName,
+      email: user.email || '',
+      role: 'student',
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    doc(db, 'students', user.uid),
+    {
+      uid: user.uid,
+      name: studentName,
+      full_name: studentName,
+      email: user.email || '',
+      role: 'student',
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+}
+
+/* =========================
    LESSON PLANS
 ========================= */
 
@@ -323,6 +368,7 @@ function normalizeLessonPlan(docSnap) {
     materials: data.materials || '',
     notes: data.notes || '',
     attachmentUrl: data.attachmentUrl || '',
+    attachmentPath: data.attachmentPath || '',
     attachmentName: data.attachmentName || '',
     tutorId: data.tutorId || '',
     tutorName: data.tutorName || '',
@@ -353,6 +399,99 @@ async function loadTutorLessonPlans(tutorUid) {
       return bCreated - aCreated;
     });
 }
+
+/* =========================
+   LEARNERS / CLASSROOMS / RESOURCES / MESSAGES
+========================= */
+
+async function loadAllStudents() {
+  const snap = await getDocs(
+    query(collection(db, 'users'), where('role', '==', 'student'))
+  );
+
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => {
+      const aName = (a.full_name || a.name || a.email || '').toLowerCase();
+      const bName = (b.full_name || b.name || b.email || '').toLowerCase();
+      return aName.localeCompare(bName);
+    });
+}
+
+async function loadLearnerNotes(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'student-notes'), where('tutorId', '==', tutorUid))
+  );
+
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+}
+
+async function loadClassrooms(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'classrooms'), where('tutorId', '==', tutorUid))
+  );
+
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+}
+
+async function loadResources(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'resources'), where('tutorId', '==', tutorUid))
+  );
+
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+}
+
+async function loadMessagesForTutor(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'messages'), where('tutorId', '==', tutorUid))
+  );
+
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+}
+
+/* =========================
+   RENDER: STUDENT SUBMIT WORK
+========================= */
 
 function renderSubmitWorkPage(profile, user, assignments, submissions) {
   const studentName = getStudentDisplayName(profile, user);
@@ -413,6 +552,10 @@ function renderSubmitWorkPage(profile, user, assignments, submissions) {
     </section>
   `;
 }
+
+/* =========================
+   RENDER: LESSON PLANS
+========================= */
 
 function renderLessonPlanForm(editingPlan = null) {
   return `
@@ -575,6 +718,256 @@ function renderLessonPlansPage(profile, lessonPlans, editingPlan = null) {
   `;
 }
 
+/* =========================
+   RENDER: LEARNERS
+========================= */
+
+function renderLearnersPage(students, notes) {
+  const rows = students.map((student) => {
+    const studentNotes = notes.filter(n => n.studentId === student.id);
+    const latestNote = studentNotes[0]?.comment || 'No tutor comment yet';
+
+    return `
+      <tr>
+        <td>${escapeHtml(student.full_name || student.name || 'Student')}</td>
+        <td>${escapeHtml(student.email || '—')}</td>
+        <td>${escapeHtml(student.classroomName || 'Not assigned')}</td>
+        <td>${escapeHtml(latestNote)}</td>
+        <td>
+          <button
+            class="btn add-note-btn"
+            type="button"
+            data-id="${escapeHtml(student.id)}"
+            data-name="${escapeHtml(student.full_name || student.name || 'Student')}"
+          >
+            Add Comment
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <section class="card panel">
+      <h3>All Students</h3>
+      <p>Every signed-in user with role student appears here automatically.</p>
+      ${simpleTable(['Name', 'Email', 'Classroom', 'Latest Comment', 'Action'], rows)}
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>Add Tutor Comment</h3>
+      <form id="learnerNoteForm" class="stack-form">
+        <div class="form-row">
+          <label for="noteStudentId">Student</label>
+          <select id="noteStudentId" required>
+            <option value="">Select student</option>
+            ${students.map(student => `
+              <option value="${escapeHtml(student.id)}">${escapeHtml(student.full_name || student.name || student.email || 'Student')}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="noteComment">Comment / Observation</label>
+          <textarea id="noteComment" rows="5" placeholder="Enter learner note or progress comment"></textarea>
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="saveLearnerNoteBtn">Save Comment</button>
+          <span id="learnerNoteMsg"></span>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+/* =========================
+   RENDER: CLASSROOMS
+========================= */
+
+function renderClassroomsPage(classrooms, students) {
+  const classroomRows = classrooms.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.name || 'Untitled')}</td>
+      <td>${escapeHtml(item.subject || '—')}</td>
+      <td>${escapeHtml(item.description || '—')}</td>
+      <td>${Array.isArray(item.studentIds) ? item.studentIds.length : 0}</td>
+      <td>${fmtDate(item.createdAt)}</td>
+      <td>
+        <button class="btn classroom-delete-btn" type="button" data-id="${escapeHtml(item.id)}">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>Create Classroom</h3>
+      <form id="classroomForm" class="stack-form">
+        <div class="form-row">
+          <label for="classroomName">Classroom Name</label>
+          <input id="classroomName" type="text" required placeholder="e.g. Grade 8 Mathematics">
+        </div>
+
+        <div class="form-row">
+          <label for="classroomSubject">Subject</label>
+          <input id="classroomSubject" type="text" required placeholder="e.g. Mathematics">
+        </div>
+
+        <div class="form-row">
+          <label for="classroomDescription">Description</label>
+          <textarea id="classroomDescription" rows="4" placeholder="Describe this classroom"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="classroomStudents">Select Students</label>
+          <select id="classroomStudents" multiple size="8">
+            ${students.map(student => `
+              <option value="${escapeHtml(student.id)}">${escapeHtml(student.full_name || student.name || student.email || 'Student')}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="saveClassroomBtn">Save Classroom</button>
+          <span id="classroomMsg"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>My Classrooms</h3>
+      ${simpleTable(['Name', 'Subject', 'Description', 'Students', 'Created', 'Action'], classroomRows)}
+    </section>
+  `;
+}
+
+/* =========================
+   RENDER: RESOURCES
+========================= */
+
+function renderResourcesPage(resources, classrooms, students) {
+  const rows = resources.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.title || 'Untitled')}</td>
+      <td>${escapeHtml(item.type || 'File')}</td>
+      <td>${escapeHtml(item.classroomName || '—')}</td>
+      <td>${escapeHtml(item.studentName || '—')}</td>
+      <td>${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+      <td>${fmtDate(item.createdAt)}</td>
+      <td><button class="btn resource-delete-btn" type="button" data-id="${escapeHtml(item.id)}">Delete</button></td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>Upload Resource</h3>
+      <form id="resourceForm" class="stack-form">
+        <div class="form-row">
+          <label for="resourceTitle">Title</label>
+          <input id="resourceTitle" type="text" required placeholder="Worksheet 1">
+        </div>
+
+        <div class="form-row">
+          <label for="resourceType">Type</label>
+          <input id="resourceType" type="text" placeholder="PDF, Video, Notes, Worksheet">
+        </div>
+
+        <div class="form-row">
+          <label for="resourceClassroomId">Classroom</label>
+          <select id="resourceClassroomId">
+            <option value="">None</option>
+            ${classrooms.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || 'Classroom')}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="resourceStudentId">Student</label>
+          <select id="resourceStudentId">
+            <option value="">None</option>
+            ${students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.full_name || s.name || s.email || 'Student')}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="resourceFile">File</label>
+          <input id="resourceFile" type="file">
+        </div>
+
+        <div class="form-row">
+          <label for="resourceNote">Description</label>
+          <textarea id="resourceNote" rows="4" placeholder="Describe this resource"></textarea>
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="saveResourceBtn">Save Resource</button>
+          <span id="resourceMsg"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>My Resources</h3>
+      ${simpleTable(['Title', 'Type', 'Classroom', 'Student', 'File', 'Created', 'Action'], rows)}
+    </section>
+  `;
+}
+
+/* =========================
+   RENDER: MESSAGES
+========================= */
+
+function renderMessagesPage(messages, students) {
+  const rows = messages.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.studentName || 'Student')}</td>
+      <td>${escapeHtml(item.subject || 'No subject')}</td>
+      <td>${escapeHtml(item.message || '—')}</td>
+      <td>${fmtDate(item.createdAt)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>Send Message</h3>
+      <form id="messageForm" class="stack-form">
+        <div class="form-row">
+          <label for="messageStudentId">Student</label>
+          <select id="messageStudentId" required>
+            <option value="">Select student</option>
+            ${students.map(student => `
+              <option value="${escapeHtml(student.id)}">${escapeHtml(student.full_name || student.name || student.email || 'Student')}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="messageSubject">Subject</label>
+          <input id="messageSubject" type="text" placeholder="Message subject">
+        </div>
+
+        <div class="form-row">
+          <label for="messageBody">Message</label>
+          <textarea id="messageBody" rows="5" placeholder="Write your message"></textarea>
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="sendMessageBtn">Send Message</button>
+          <span id="messageMsg"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>Sent Messages</h3>
+      ${simpleTable(['Student', 'Subject', 'Message', 'Created'], rows)}
+    </section>
+  `;
+}
+
+/* =========================
+   ACTIONS: STUDENT SUBMIT WORK
+========================= */
+
 async function submitStudentWork({ user, profile }) {
   const form = document.getElementById('submissionForm');
   const msg = document.getElementById('submitWorkMsg');
@@ -723,6 +1116,10 @@ async function submitStudentWork({ user, profile }) {
     }
   });
 }
+
+/* =========================
+   ACTIONS: LESSON PLANS
+========================= */
 
 async function saveLessonPlan({ user, profile, existingPlan = null }) {
   const form = document.getElementById('lessonPlanForm');
@@ -874,9 +1271,274 @@ async function refreshLessonPlansPage({ user, profile, editingPlanId = null }) {
   await bindLessonPlanActions({ user, profile, lessonPlans });
 }
 
+/* =========================
+   ACTIONS: LEARNERS
+========================= */
+
+async function refreshLearnersPage(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const students = await loadAllStudents();
+  const notes = await loadLearnerNotes(user.uid);
+
+  pageContent.innerHTML = renderLearnersPage(students, notes);
+
+  const form = document.getElementById('learnerNoteForm');
+  const msg = document.getElementById('learnerNoteMsg');
+  const studentSelect = document.getElementById('noteStudentId');
+  const noteComment = document.getElementById('noteComment');
+
+  document.querySelectorAll('.add-note-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      studentSelect.value = btn.dataset.id;
+      noteComment.focus();
+    });
+  });
+
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const studentId = studentSelect.value;
+    const comment = noteComment.value.trim();
+
+    if (!studentId || !comment) {
+      msg.textContent = 'Select a student and enter a comment.';
+      return;
+    }
+
+    const student = students.find(s => s.id === studentId);
+    const noteRef = doc(collection(db, 'student-notes'));
+
+    await setDoc(noteRef, {
+      tutorId: user.uid,
+      studentId,
+      studentName: student?.full_name || student?.name || student?.email || 'Student',
+      comment,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    msg.textContent = 'Comment saved.';
+    await refreshLearnersPage(bundle);
+  });
+}
+
+/* =========================
+   ACTIONS: CLASSROOMS
+========================= */
+
+async function refreshClassroomsPage(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const classrooms = await loadClassrooms(user.uid);
+  const students = await loadAllStudents();
+
+  pageContent.innerHTML = renderClassroomsPage(classrooms, students);
+
+  const form = document.getElementById('classroomForm');
+  const msg = document.getElementById('classroomMsg');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('classroomName').value.trim();
+      const subject = document.getElementById('classroomSubject').value.trim();
+      const description = document.getElementById('classroomDescription').value.trim();
+      const selectedOptions = [...document.getElementById('classroomStudents').selectedOptions];
+      const studentIds = selectedOptions.map(opt => opt.value);
+
+      if (!name || !subject) {
+        msg.textContent = 'Enter classroom name and subject.';
+        return;
+      }
+
+      const classroomRef = doc(collection(db, 'classrooms'));
+
+      await setDoc(classroomRef, {
+        tutorId: user.uid,
+        name,
+        subject,
+        description,
+        studentIds,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      const batch = writeBatch(db);
+
+      studentIds.forEach((studentId) => {
+        batch.set(
+          doc(db, 'users', studentId),
+          {
+            classroomId: classroomRef.id,
+            classroomName: name,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+
+        batch.set(
+          doc(db, 'students', studentId),
+          {
+            classroomId: classroomRef.id,
+            classroomName: name,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      });
+
+      await batch.commit();
+
+      msg.textContent = 'Classroom saved.';
+      await refreshClassroomsPage(bundle);
+    });
+  }
+
+  document.querySelectorAll('.classroom-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await deleteDoc(doc(db, 'classrooms', btn.dataset.id));
+      await refreshClassroomsPage(bundle);
+    });
+  });
+}
+
+/* =========================
+   ACTIONS: RESOURCES
+========================= */
+
+async function refreshResourcesPage(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const resources = await loadResources(user.uid);
+  const classrooms = await loadClassrooms(user.uid);
+  const students = await loadAllStudents();
+
+  pageContent.innerHTML = renderResourcesPage(resources, classrooms, students);
+
+  const form = document.getElementById('resourceForm');
+  const msg = document.getElementById('resourceMsg');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('resourceTitle').value.trim();
+      const type = document.getElementById('resourceType').value.trim();
+      const classroomId = document.getElementById('resourceClassroomId').value;
+      const studentId = document.getElementById('resourceStudentId').value;
+      const note = document.getElementById('resourceNote').value.trim();
+      const file = document.getElementById('resourceFile').files?.[0] || null;
+
+      if (!title) {
+        msg.textContent = 'Enter resource title.';
+        return;
+      }
+
+      const classroom = classrooms.find(c => c.id === classroomId);
+      const student = students.find(s => s.id === studentId);
+      const upload = await uploadFile(file, `resources/${user.uid}`);
+
+      const resourceRef = doc(collection(db, 'resources'));
+
+      await setDoc(resourceRef, {
+        tutorId: user.uid,
+        title,
+        type,
+        note,
+        classroomId: classroomId || '',
+        classroomName: classroom?.name || '',
+        studentId: studentId || '',
+        studentName: student?.full_name || student?.name || student?.email || '',
+        fileUrl: upload.url || '',
+        filePath: upload.path || '',
+        fileName: upload.name || '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      msg.textContent = 'Resource saved.';
+      await refreshResourcesPage(bundle);
+    });
+  }
+
+  document.querySelectorAll('.resource-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await deleteDoc(doc(db, 'resources', btn.dataset.id));
+      await refreshResourcesPage(bundle);
+    });
+  });
+}
+
+/* =========================
+   ACTIONS: MESSAGES
+========================= */
+
+async function refreshMessagesPage(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const messages = await loadMessagesForTutor(user.uid);
+  const students = await loadAllStudents();
+
+  pageContent.innerHTML = renderMessagesPage(messages, students);
+
+  const form = document.getElementById('messageForm');
+  const msg = document.getElementById('messageMsg');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const studentId = document.getElementById('messageStudentId').value;
+      const subject = document.getElementById('messageSubject').value.trim();
+      const messageBody = document.getElementById('messageBody').value.trim();
+
+      if (!studentId || !messageBody) {
+        msg.textContent = 'Select student and enter a message.';
+        return;
+      }
+
+      const student = students.find(s => s.id === studentId);
+      const msgRef = doc(collection(db, 'messages'));
+
+      await setDoc(msgRef, {
+        tutorId: user.uid,
+        studentId,
+        studentName: student?.full_name || student?.name || student?.email || 'Student',
+        subject,
+        message: messageBody,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      msg.textContent = 'Message sent.';
+      await refreshMessagesPage(bundle);
+    });
+  }
+}
+
+/* =========================
+   BOOT PAGES
+========================= */
+
 async function bootSubmitWorkPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
+
+  if (bundle.profile?.role === 'student') {
+    await ensureStudentMirror(bundle.user, bundle.profile);
+  }
 
   const { user, profile } = bundle;
   const pageContent = document.getElementById('page-content');
@@ -892,24 +1554,55 @@ async function bootSubmitWorkPage() {
 async function bootLessonPlansPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
-
-  const { user, profile } = bundle;
-  await refreshLessonPlansPage({ user, profile, editingPlanId: null });
+  await refreshLessonPlansPage(bundle);
 }
 
-function bootDefaultPage() {
-  requireAuth().then(() => {
-    const pageContent = document.getElementById('page-content');
-    if (pageContent) {
-      pageContent.innerHTML = `
-        <section class="card panel">
-          <h3>${escapeHtml(pageTitle)}</h3>
-          <p>This page is connected successfully.</p>
-        </section>
-      `;
-    }
-  });
+async function bootLearnersPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  await refreshLearnersPage(bundle);
 }
+
+async function bootClassroomsPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  await refreshClassroomsPage(bundle);
+}
+
+async function bootResourcesPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  await refreshResourcesPage(bundle);
+}
+
+async function bootMessagesPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  await refreshMessagesPage(bundle);
+}
+
+async function bootDefaultPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  if (bundle.profile?.role === 'student') {
+    await ensureStudentMirror(bundle.user, bundle.profile);
+  }
+
+  const pageContent = document.getElementById('page-content');
+  if (pageContent) {
+    pageContent.innerHTML = `
+      <section class="card panel">
+        <h3>${escapeHtml(pageTitle)}</h3>
+        <p>This page is connected successfully.</p>
+      </section>
+    `;
+  }
+}
+
+/* =========================
+   GLOBALS
+========================= */
 
 window.AppUtil = {
   auth,
@@ -926,10 +1619,22 @@ window.AppUtil = {
   updateProfile
 };
 
+/* =========================
+   ROUTER
+========================= */
+
 if (pageKey === 'submit-work') {
   bootSubmitWorkPage();
 } else if (pageKey === 'lesson-plans') {
   bootLessonPlansPage();
+} else if (pageKey === 'learners') {
+  bootLearnersPage();
+} else if (pageKey === 'classrooms') {
+  bootClassroomsPage();
+} else if (pageKey === 'resources') {
+  bootResourcesPage();
+} else if (pageKey === 'messages') {
+  bootMessagesPage();
 } else {
   bootDefaultPage();
 }
