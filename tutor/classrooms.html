@@ -1,1 +1,49 @@
-<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Classrooms</title><link rel='stylesheet' href='/assets/css/styles.css'></head><body data-role='tutor' data-page='classrooms' data-title='Classrooms' data-description='Create class groups or learning clusters.'><div id='app-shell' class='page-shell'></div><script type='module' src='/assets/js/pages.js'></script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Classrooms</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body
+  data-role="tutor"
+  data-page="classrooms"
+  data-title="Classrooms"
+  data-description="Create classrooms, assign students, and manage tutor groups."
+>
+  <div id="app-shell" class="page-shell">
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h2>Classrooms</h2>
+          <p>Create classrooms, assign students, and manage tutor groups.</p>
+        </div>
+      </div>
+
+      <div id="page-content">
+        <section class="card panel">
+          <h3>Create Classroom</h3>
+          <form id="classroomForm" class="stack-form">
+            <div class="form-row">
+              <label for="classroomName">Classroom Name</label>
+              <input id="classroomName" type="text" placeholder="e.g. Grade 6 Science">
+            </div>
+            <div class="form-row">
+              <label for="classroomSubject">Main Subject</label>
+              <input id="classroomSubject" type="text" placeholder="e.g. Science">
+            </div>
+            <div class="form-row">
+              <label for="classroomDescription">Description</label>
+              <textarea id="classroomDescription" rows="4" placeholder="Enter classroom description"></textarea>
+            </div>
+            <button type="submit" class="btn">Save Classroom</button>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/assets/js/pages.js"></script>
+</body>
+</html>
