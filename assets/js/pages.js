@@ -89,7 +89,7 @@ const navMap = {
 };
 
 function escapeHtml(value = '') {
-  return String(value ?? '')
+  return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -149,9 +149,9 @@ function sidebar(profile) {
 function fmtDate(value) {
   if (!value) return '—';
   if (typeof value === 'string') return value;
-  if (value?.toDate) return value.toDate().toLocaleDateString('en-GB', { dateStyle: 'medium' });
+  if (value?.toDate) return value.toDate().toLocaleString();
   try {
-    return new Date(value).toLocaleDateString('en-GB', { dateStyle: 'medium' });
+    return new Date(value).toLocaleString();
   } catch {
     return '—';
   }
@@ -163,7 +163,7 @@ function statusBadge(status = 'Pending') {
     Submitted: 'success',
     Pending: 'warn',
     Late: 'danger',
-    Draft: 'muted',
+    Draft: '',
     Published: 'success',
     Present: 'success',
     Absent: 'danger'
@@ -179,7 +179,7 @@ function simpleTable(headers, rowsHtml) {
           <tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>
         </thead>
         <tbody>
-          ${rowsHtml || `<tr><td colspan="${headers.length}"><div class="empty">No records found.</div></td></tr>`}
+          ${rowsHtml || `<tr><td colspan="${headers.length}"><div class="empty">No records yet.</div></td></tr>`}
         </tbody>
       </table>
     </div>
@@ -188,7 +188,8 @@ function simpleTable(headers, rowsHtml) {
 
 async function getUserProfile(uid) {
   const userDoc = await getDoc(doc(db, 'users', uid));
-  return userDoc.exists() ? userDoc.data() : null;
+  if (!userDoc.exists()) return null;
+  return userDoc.data();
 }
 
 async function requireAuth() {
@@ -215,14 +216,17 @@ async function requireAuth() {
         <main class="content">
           ${uiHeader({ ...profile, email: user.email })}
           <div id="page-content"></div>
-          <footer class="page-foot">HomeSchool Management System</footer>
+          <footer class="page-foot">HomeSchool student system</footer>
         </main>
       `;
 
-      document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-        await signOut(auth);
-        location.href = '/login.html';
-      });
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.onclick = async () => {
+          await signOut(auth);
+          location.href = '/login.html';
+        };
+      }
 
       resolve({ user, profile });
     });
@@ -239,67 +243,108 @@ async function uploadFile(file, folder = 'uploads') {
   await uploadBytes(storageRef, file);
   const url = await getDownloadURL(storageRef);
 
-  return { url, path: filePath, name: file.name };
+  return {
+    url,
+    path: filePath,
+    name: file.name
+  };
 }
-
-// ────────────────────────────────────────────────
-// STUDENT SUBMIT WORK (existing functionality)
-// ────────────────────────────────────────────────
 
 function getStudentDisplayName(profile, user) {
   return profile?.full_name || profile?.name || user?.displayName || user?.email || 'Student';
 }
 
 function normalizeAssignment(docSnap) {
-  return { id: docSnap.id, ...docSnap.data() };
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    ...data
+  };
 }
 
 function assignmentVisibleToStudent(assignment, studentUid) {
   if (!assignment) return false;
-  if (assignment.studentId === studentUid) return true;
+
+  if (assignment.studentId && assignment.studentId === studentUid) return true;
+
   if (Array.isArray(assignment.studentIds) && assignment.studentIds.includes(studentUid)) return true;
+
   if (Array.isArray(assignment.assignedTo) && assignment.assignedTo.includes(studentUid)) return true;
+
   if (assignment.targetType === 'all_students') return true;
   if (assignment.published === true && !assignment.studentId && !assignment.studentIds && !assignment.assignedTo) return true;
+
   return false;
 }
 
 async function loadStudentAssignments(studentUid) {
   const snap = await getDocs(collection(db, 'assignments'));
-  const all = snap.docs.map(normalizeAssignment);
-  return all
-    .filter(a => assignmentVisibleToStudent(a, studentUid))
-    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  const allAssignments = snap.docs.map(normalizeAssignment);
+
+  return allAssignments
+    .filter(item => assignmentVisibleToStudent(item, studentUid))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
 }
 
 async function loadStudentSubmissions(studentUid) {
-  const q = query(collection(db, 'submissions'), where('studentId', '==', studentUid));
+  const submissionsQuery = query(
+    collection(db, 'submissions'),
+    where('studentId', '==', studentUid)
+  );
+
+  const snap = await getDocs(submissionsQuery);
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  })).sort((a, b) => {
+    const aTime = a.submittedAt?.seconds || 0;
+    const bTime = b.submittedAt?.seconds || 0;
+    return bTime - aTime;
+  });
+}
+
+// ====================== LESSON PLANS ======================
+async function loadTutorLessonPlans(tutorUid) {
+  const q = query(
+    collection(db, 'lesson-plans'),
+    where('tutorId', '==', tutorUid),
+    orderBy('createdAt', 'desc')
+  );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => (b.submittedAt?.seconds || 0) - (a.submittedAt?.seconds || 0));
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  }));
 }
 
 function renderSubmitWorkPage(profile, user, assignments, submissions) {
-  const name = getStudentDisplayName(profile, user);
+  const studentName = getStudentDisplayName(profile, user);
 
-  const options = assignments.map(a => `
-    <option value="${escapeHtml(a.id)}">${escapeHtml(a.title || 'Untitled')} ${a.subject ? ` - ${escapeHtml(a.subject)}` : ''}</option>
+  const options = assignments.map(item => `
+    <option value="${escapeHtml(item.id)}">
+      ${escapeHtml(item.title || 'Untitled Assignment')} ${item.subject ? `- ${escapeHtml(item.subject)}` : ''}
+    </option>
   `).join('');
 
-  const rows = submissions.map(s => `
+  const submissionRows = submissions.map(item => `
     <tr>
-      <td>${escapeHtml(s.assignmentTitle || '—')}</td>
-      <td>${escapeHtml(s.subject || '—')}</td>
-      <td>${statusBadge(s.status || 'Submitted')}</td>
-      <td>${fmtDate(s.submittedAt)}</td>
-      <td>${s.fileUrl ? `<a href="${s.fileUrl}" target="_blank">View</a>` : '—'}</td>
+      <td>${escapeHtml(item.assignmentTitle || 'Assignment')}</td>
+      <td>${escapeHtml(item.subject || '—')}</td>
+      <td>${statusBadge(item.status || 'Submitted')}</td>
+      <td>${fmtDate(item.submittedAt)}</td>
+      <td>${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">View File</a>` : '—'}</td>
     </tr>
   `).join('');
 
   return `
     <section class="card panel">
       <h3>Submit Assignment</h3>
-      <p>Welcome, ${escapeHtml(name)}. Choose an assignment and submit your work.</p>
+      <p>Welcome, ${escapeHtml(studentName)}. Choose an assignment, attach your work, and submit it.</p>
 
       <form id="submissionForm" class="stack-form">
         <div class="form-row">
@@ -309,109 +354,299 @@ function renderSubmitWorkPage(profile, user, assignments, submissions) {
             ${options}
           </select>
         </div>
+
         <div class="form-row">
-          <label for="submissionNote">Notes</label>
-          <textarea id="submissionNote" name="submissionNote" rows="4" placeholder="Optional notes..."></textarea>
+          <label for="submissionNote">Message / Notes</label>
+          <textarea id="submissionNote" name="submissionNote" rows="5" placeholder="Add notes about this work"></textarea>
         </div>
+
         <div class="form-row">
-          <label for="submissionFile">File</label>
-          <input type="file" id="submissionFile" name="submissionFile">
+          <label for="submissionFile">Attach file</label>
+          <input id="submissionFile" name="submissionFile" type="file">
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="submitWorkBtn">Submit Work</button>
-          <span id="submitWorkMsg" style="margin-left:12px;"></span>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="submitWorkBtn">Submit Work</button>
+          <span id="submitWorkMsg"></span>
         </div>
       </form>
     </section>
 
-    <section class="card panel" style="margin-top:20px;">
-      <h3>Previous Submissions</h3>
-      ${simpleTable(['Assignment', 'Subject', 'Status', 'Submitted', 'File'], rows)}
+    <section class="card panel" style="margin-top:18px">
+      <h3>My Previous Submissions</h3>
+      ${simpleTable(
+        ['Assignment', 'Subject', 'Status', 'Submitted', 'Attachment'],
+        submissionRows
+      )}
+    </section>
+  `;
+}
+
+function renderLessonPlansPage(profile, lessonPlans) {
+  const tutorName = profile?.name || profile?.full_name || 'Tutor';
+
+  const rowsHtml = lessonPlans.map(item => `
+    <tr>
+      <td>${escapeHtml(item.title || 'Untitled')}</td>
+      <td>${escapeHtml(item.subject || '—')}</td>
+      <td>${escapeHtml(item.classroomName || '—')}</td>
+      <td>${fmtDate(item.plannedDate)}</td>
+      <td>${statusBadge(item.status || 'Draft')}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>Create Lesson Plan</h3>
+      <p>Welcome, ${escapeHtml(tutorName)}. Build weekly lesson plans with dates, objectives, and materials.</p>
+
+      <form id="lessonPlanForm" class="stack-form">
+        <div class="form-row">
+          <label for="planTitle">Lesson Title</label>
+          <input id="planTitle" name="planTitle" type="text" required placeholder="e.g. Photosynthesis & Plant Cells">
+        </div>
+        <div class="form-row">
+          <label for="planSubject">Subject</label>
+          <input id="planSubject" name="planSubject" type="text" required>
+        </div>
+        <div class="form-row">
+          <label for="planClassroom">Classroom / Grade</label>
+          <input id="planClassroom" name="planClassroom" type="text" required placeholder="Grade 7 Science">
+        </div>
+        <div class="form-row">
+          <label for="planDate">Planned Date</label>
+          <input id="planDate" name="planDate" type="date" required>
+        </div>
+        <div class="form-row">
+          <label for="planObjectives">Objectives / Goals</label>
+          <textarea id="planObjectives" name="planObjectives" rows="4" placeholder="Students will be able to..."></textarea>
+        </div>
+        <div class="form-row">
+          <label for="planMaterials">Materials / Resources</label>
+          <textarea id="planMaterials" name="planMaterials" rows="3" placeholder="Textbook p.45, worksheet, video link..."></textarea>
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="createPlanBtn">Save Lesson Plan</button>
+          <span id="lessonPlanMsg"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>My Lesson Plans</h3>
+      ${simpleTable(
+        ['Title', 'Subject', 'Classroom', 'Date', 'Status'],
+        rowsHtml
+      )}
     </section>
   `;
 }
 
 async function submitStudentWork({ user, profile }) {
   const form = document.getElementById('submissionForm');
-  if (!form) return;
+  const msg = document.getElementById('submitWorkMsg');
+  const submitBtn = document.getElementById('submitWorkBtn');
 
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
+  if (!form || !msg || !submitBtn) return;
 
-    const msgEl = document.getElementById('submitWorkMsg');
-    const btn = document.getElementById('submitWorkBtn');
-    btn.disabled = true;
-    msgEl.textContent = 'Submitting...';
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const assignmentId = form.assignmentId.value.trim();
+    const note = form.submissionNote.value.trim();
+    const file = form.submissionFile.files?.[0] || null;
+
+    if (!assignmentId) {
+      msg.textContent = 'Please select an assignment.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    msg.textContent = 'Submitting...';
 
     try {
-      const assignmentId = form.assignmentId.value.trim();
-      if (!assignmentId) throw new Error('Please select an assignment');
+      const assignmentRef = doc(db, 'assignments', assignmentId);
+      const assignmentSnap = await getDoc(assignmentRef);
 
-      const assignmentSnap = await getDoc(doc(db, 'assignments', assignmentId));
-      if (!assignmentSnap.exists()) throw new Error('Assignment not found');
+      if (!assignmentSnap.exists()) {
+        throw new Error('Selected assignment was not found.');
+      }
 
       const assignment = assignmentSnap.data();
-      const file = form.submissionFile.files[0];
       const upload = await uploadFile(file, `submissions/${user.uid}`);
 
       const studentName = getStudentDisplayName(profile, user);
       const submissionRef = doc(collection(db, 'submissions'));
 
-      const batch = writeBatch(db);
-
-      const payload = {
+      const submissionPayload = {
         assignmentId,
-        assignmentTitle: assignment.title || 'Untitled',
+        assignmentTitle: assignment.title || 'Untitled Assignment',
         subject: assignment.subject || '',
         tutorId: assignment.tutorId || assignment.createdBy || '',
         classroomId: assignment.classroomId || '',
         studentId: user.uid,
         studentName,
         studentEmail: user.email || '',
-        note: form.submissionNote.value.trim(),
-        fileUrl: upload.url,
-        filePath: upload.path,
-        fileName: upload.name,
+        note,
+        fileUrl: upload.url || '',
+        filePath: upload.path || '',
+        fileName: upload.name || '',
         status: 'Submitted',
+        grade: assignment.grade || '',
+        feedback: '',
         submittedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
-      batch.set(submissionRef, payload);
+      const batch = writeBatch(db);
 
-      batch.set(doc(db, 'assignments', assignmentId, 'submissions', user.uid), {
-        submissionId: submissionRef.id,
-        ...payload
-      }, { merge: true });
+      batch.set(submissionRef, submissionPayload);
 
-      batch.set(doc(db, 'students', user.uid, 'submissions', submissionRef.id), {
-        submissionId: submissionRef.id,
-        assignmentId,
-        assignmentTitle: assignment.title || 'Untitled',
-        subject: assignment.subject || '',
-        tutorId: assignment.tutorId || '',
-        note: payload.note,
-        fileUrl: upload.url,
-        filePath: upload.path,
-        fileName: upload.name,
-        status: 'Submitted',
-        submittedAt: serverTimestamp()
-      }, { merge: true });
+      batch.set(
+        doc(db, 'assignments', assignmentId, 'submissions', user.uid),
+        {
+          submissionId: submissionRef.id,
+          assignmentId,
+          studentId: user.uid,
+          studentName,
+          studentEmail: user.email || '',
+          note,
+          fileUrl: upload.url || '',
+          filePath: upload.path || '',
+          fileName: upload.name || '',
+          status: 'Submitted',
+          submittedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(db, 'students', user.uid, 'submissions', submissionRef.id),
+        {
+          submissionId: submissionRef.id,
+          assignmentId,
+          assignmentTitle: assignment.title || 'Untitled Assignment',
+          subject: assignment.subject || '',
+          tutorId: assignment.tutorId || assignment.createdBy || '',
+          note,
+          fileUrl: upload.url || '',
+          filePath: upload.path || '',
+          fileName: upload.name || '',
+          status: 'Submitted',
+          submittedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(db, 'students', user.uid),
+        {
+          uid: user.uid,
+          name: studentName,
+          email: user.email || '',
+          role: 'student',
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(db, 'users', user.uid),
+        {
+          uid: user.uid,
+          name: studentName,
+          full_name: studentName,
+          email: user.email || '',
+          role: 'student',
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
 
       await batch.commit();
 
-      msgEl.textContent = 'Submitted successfully!';
+      msg.textContent = 'Work submitted successfully.';
       form.reset();
 
-      // Refresh content
-      const assignments = await loadStudentAssignments(user.uid);
-      const submissions = await loadStudentSubmissions(user.uid);
-      document.getElementById('page-content').innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
-      await submitStudentWork({ user, profile }); // re-attach listener
+      const latestAssignments = await loadStudentAssignments(user.uid);
+      const latestSubmissions = await loadStudentSubmissions(user.uid);
+
+      document.getElementById('page-content').innerHTML = renderSubmitWorkPage(
+        profile,
+        user,
+        latestAssignments,
+        latestSubmissions
+      );
+
+      await submitStudentWork({ user, profile });
+    } catch (error) {
+      console.error('Submission error:', error);
+      msg.textContent = error.message || 'Submission failed.';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+async function createLessonPlan({ user, profile }) {
+  const form = document.getElementById('lessonPlanForm');
+  const msg = document.getElementById('lessonPlanMsg');
+  const btn = document.getElementById('createPlanBtn');
+
+  if (!form || !msg || !btn) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const title = form.planTitle.value.trim();
+    const subject = form.planSubject.value.trim();
+    const classroomName = form.planClassroom.value.trim();
+    const plannedDate = form.planDate.value;
+    const objectives = form.planObjectives.value.trim();
+    const materials = form.planMaterials.value.trim();
+
+    if (!title || !subject || !classroomName || !plannedDate) {
+      msg.textContent = 'Please fill all required fields.';
+      return;
+    }
+
+    btn.disabled = true;
+    msg.textContent = 'Saving...';
+
+    try {
+      const planRef = doc(collection(db, 'lesson-plans'));
+
+      const payload = {
+        title,
+        subject,
+        classroomName,
+        plannedDate,
+        objectives,
+        materials,
+        tutorId: user.uid,
+        tutorName: profile?.name || profile?.full_name || '',
+        status: 'Draft',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      await setDoc(planRef, payload);
+
+      msg.textContent = 'Lesson plan saved successfully!';
+
+      // Refresh the page content
+      const latestPlans = await loadTutorLessonPlans(user.uid);
+      document.getElementById('page-content').innerHTML = renderLessonPlansPage(profile, latestPlans);
+      await createLessonPlan({ user, profile }); // re-attach listener
+
+      form.reset();
     } catch (err) {
       console.error(err);
-      msgEl.textContent = err.message || 'Failed to submit';
+      msg.textContent = err.message || 'Failed to save.';
     } finally {
       btn.disabled = false;
     }
@@ -419,183 +654,62 @@ async function submitStudentWork({ user, profile }) {
 }
 
 async function bootSubmitWorkPage() {
-  const { user, profile } = await requireAuth();
-  const content = document.getElementById('page-content');
-  if (!content) return;
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
 
   const assignments = await loadStudentAssignments(user.uid);
   const submissions = await loadStudentSubmissions(user.uid);
 
-  content.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
+  pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
   await submitStudentWork({ user, profile });
 }
 
-// ────────────────────────────────────────────────
-// TUTOR LESSON PLANS
-// ────────────────────────────────────────────────
-
-function normalizeLessonPlan(docSnap) {
-  const data = docSnap.data() || {};
-  return {
-    id: docSnap.id,
-    ...data,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt
-  };
-}
-
-async function loadTutorLessonPlans(tutorUid) {
-  const classroomsSnap = await getDocs(
-    query(collection(db, 'classrooms'), where('tutorId', '==', tutorUid))
-  );
-
-  const plans = [];
-
-  for (const cDoc of classroomsSnap.docs) {
-    const classroomId = cDoc.id;
-    const classroomName = cDoc.data()?.name || 'Unnamed';
-
-    const plansSnap = await getDocs(
-      collection(db, 'classrooms', classroomId, 'lessonPlans')
-    );
-
-    plansSnap.forEach(pDoc => {
-      const plan = normalizeLessonPlan(pDoc);
-      plan.classroomId = classroomId;
-      plan.classroomName = classroomName;
-      plans.push(plan);
-    });
-  }
-
-  return plans.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
-}
-
-function renderLessonPlansPage(lessonPlans = []) {
-  const rows = lessonPlans.map(p => `
-    <tr>
-      <td>${escapeHtml(p.title || 'Untitled')}</td>
-      <td>${escapeHtml(p.subject || '—')}</td>
-      <td>${escapeHtml(p.classroomName || '—')}</td>
-      <td>${p.week ? `Week ${p.week}` : fmtDate(p.startDate || p.createdAt)}</td>
-      <td>${statusBadge(p.status || 'Draft')}</td>
-      <td>
-        <button class="btn small view-plan" data-id="${p.id}" data-classroom="${p.classroomId}">View</button>
-      </td>
-    </tr>
-  `).join('');
-
-  return `
-    <section class="card panel">
-      <div class="flex-between" style="margin-bottom:1rem;">
-        <h3>Lesson Plans</h3>
-        <button class="btn primary" id="btnNewLessonPlan">+ New Lesson Plan</button>
-      </div>
-
-      ${simpleTable(
-        ['Title', 'Subject', 'Classroom', 'Week / Date', 'Status', 'Actions'],
-        rows
-      )}
-    </section>
-
-    <div id="lessonPlanStatus" style="margin-top:1rem; min-height:1.5rem;"></div>
-  `;
-}
-
-// Temporary MVP creation using prompts
-// → Replace this function with proper modal/form later
-async function createLessonPlanMVP({ user, profile }) {
-  const title = prompt("Lesson title:", "Week X - ")?.trim();
-  if (!title) return;
-
-  const subject = prompt("Subject:", "Mathematics")?.trim() || "General";
-
-  const classroomsSnap = await getDocs(
-    query(collection(db, 'classrooms'), where('tutorId', '==', user.uid), limit(1))
-  );
-
-  if (classroomsSnap.empty) {
-    alert("No classrooms found. Create a classroom first.");
-    return;
-  }
-
-  const classroomId = classroomsSnap.docs[0].id;
-
-  const statusEl = document.getElementById('lessonPlanStatus');
-  statusEl.textContent = 'Creating...';
-
-  try {
-    const ref = doc(collection(db, 'classrooms', classroomId, 'lessonPlans'));
-
-    await setDoc(ref, {
-      title,
-      subject,
-      tutorId: user.uid,
-      tutorName: profile.name || profile.full_name || user.email || 'Tutor',
-      status: 'Draft',
-      week: null,
-      objectives: [],
-      materials: [],
-      activities: [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    statusEl.textContent = 'Lesson plan created!';
-    setTimeout(() => location.reload(), 1200);
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = 'Error: ' + (err.message || 'failed');
-  }
-}
-
 async function bootLessonPlansPage() {
-  const { user, profile } = await requireAuth();
-  const content = document.getElementById('page-content');
-  if (!content) return;
+  const bundle = await requireAuth();
+  if (!bundle) return;
 
-  try {
-    const plans = await loadTutorLessonPlans(user.uid);
-    content.innerHTML = renderLessonPlansPage(plans);
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
 
-    document.getElementById('btnNewLessonPlan')?.addEventListener('click', () =>
-      createLessonPlanMVP({ user, profile })
-    );
+  const lessonPlans = await loadTutorLessonPlans(user.uid);
 
-    // Placeholder for view/edit
-    document.querySelectorAll('.view-plan').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const cid = btn.dataset.classroom;
-        alert(`View lesson plan:\nID: ${id}\nClassroom: ${cid}\n\n(Implement detail view / edit here)`);
-      });
-    });
-  } catch (err) {
-    console.error(err);
-    content.innerHTML = `<div class="card error">Failed to load lesson plans: ${err.message}</div>`;
-  }
+  pageContent.innerHTML = renderLessonPlansPage(profile, lessonPlans);
+  await createLessonPlan({ user, profile });
 }
-
-// ────────────────────────────────────────────────
-// DEFAULT / FALLBACK PAGE
-// ────────────────────────────────────────────────
 
 function bootDefaultPage() {
-  requireAuth().then(({ profile }) => {
-    const content = document.getElementById('page-content');
-    if (content) {
-      content.innerHTML = `
+  requireAuth().then(() => {
+    const pageContent = document.getElementById('page-content');
+    if (pageContent) {
+      pageContent.innerHTML = `
         <section class="card panel">
           <h3>${escapeHtml(pageTitle)}</h3>
-          <p>Page loaded successfully.</p>
+          <p>This page is connected successfully.</p>
         </section>
       `;
     }
   });
 }
 
-// ────────────────────────────────────────────────
-// PAGE ROUTER
-// ────────────────────────────────────────────────
+window.AppUtil = {
+  auth,
+  db,
+  storage,
+  requireAuth,
+  getUserProfile,
+  uploadFile,
+  fmtDate,
+  statusBadge,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile
+};
 
 if (pageKey === 'submit-work') {
   bootSubmitWorkPage();
