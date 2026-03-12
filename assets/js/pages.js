@@ -14,15 +14,13 @@ import {
   doc,
   setDoc,
   getDoc,
-  addDoc,
+  deleteDoc,
   collection,
   getDocs,
   query,
   where,
   serverTimestamp,
   updateDoc,
-  orderBy,
-  limit,
   writeBatch
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -148,7 +146,10 @@ function sidebar(profile) {
 
 function fmtDate(value) {
   if (!value) return '—';
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
+  }
   if (value?.toDate) return value.toDate().toLocaleString();
   try {
     return new Date(value).toLocaleString();
@@ -166,7 +167,8 @@ function statusBadge(status = 'Pending') {
     Draft: '',
     Published: 'success',
     Present: 'success',
-    Absent: 'danger'
+    Absent: 'danger',
+    Archived: 'warn'
   };
   return `<span class="badge ${map[status] || ''}">${escapeHtml(status)}</span>`;
 }
@@ -266,11 +268,8 @@ function assignmentVisibleToStudent(assignment, studentUid) {
   if (!assignment) return false;
 
   if (assignment.studentId && assignment.studentId === studentUid) return true;
-
   if (Array.isArray(assignment.studentIds) && assignment.studentIds.includes(studentUid)) return true;
-
   if (Array.isArray(assignment.assignedTo) && assignment.assignedTo.includes(studentUid)) return true;
-
   if (assignment.targetType === 'all_students') return true;
   if (assignment.published === true && !assignment.studentId && !assignment.studentIds && !assignment.assignedTo) return true;
 
@@ -308,18 +307,51 @@ async function loadStudentSubmissions(studentUid) {
   });
 }
 
-// ====================== LESSON PLANS ======================
+/* =========================
+   LESSON PLANS
+========================= */
+
+function normalizeLessonPlan(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    title: data.title || '',
+    subject: data.subject || '',
+    classroomName: data.classroomName || '',
+    plannedDate: data.plannedDate || '',
+    objectives: data.objectives || '',
+    materials: data.materials || '',
+    notes: data.notes || '',
+    attachmentUrl: data.attachmentUrl || '',
+    attachmentName: data.attachmentName || '',
+    tutorId: data.tutorId || '',
+    tutorName: data.tutorName || '',
+    status: data.status || 'Draft',
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null
+  };
+}
+
 async function loadTutorLessonPlans(tutorUid) {
   const q = query(
     collection(db, 'lesson-plans'),
-    where('tutorId', '==', tutorUid),
-    orderBy('createdAt', 'desc')
+    where('tutorId', '==', tutorUid)
   );
+
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...d.data()
-  }));
+
+  return snap.docs
+    .map(normalizeLessonPlan)
+    .sort((a, b) => {
+      const aDate = a.plannedDate ? new Date(a.plannedDate).getTime() : 0;
+      const bDate = b.plannedDate ? new Date(b.plannedDate).getTime() : 0;
+
+      if (bDate !== aDate) return bDate - aDate;
+
+      const aCreated = a.createdAt?.seconds || 0;
+      const bCreated = b.createdAt?.seconds || 0;
+      return bCreated - aCreated;
+    });
 }
 
 function renderSubmitWorkPage(profile, user, assignments, submissions) {
@@ -382,64 +414,164 @@ function renderSubmitWorkPage(profile, user, assignments, submissions) {
   `;
 }
 
-function renderLessonPlansPage(profile, lessonPlans) {
-  const tutorName = profile?.name || profile?.full_name || 'Tutor';
+function renderLessonPlanForm(editingPlan = null) {
+  return `
+    <section class="card panel">
+      <h3>${editingPlan ? 'Edit Lesson Plan' : 'Create Lesson Plan'}</h3>
+      <p>Build real lesson plans that save to Firebase and appear instantly below.</p>
 
-  const rowsHtml = lessonPlans.map(item => `
+      <form id="lessonPlanForm" class="stack-form">
+        <input type="hidden" id="planId" value="${escapeHtml(editingPlan?.id || '')}">
+
+        <div class="form-row">
+          <label for="planTitle">Lesson Title</label>
+          <input
+            id="planTitle"
+            name="planTitle"
+            type="text"
+            required
+            placeholder="e.g. Photosynthesis and Plant Cells"
+            value="${escapeHtml(editingPlan?.title || '')}"
+          >
+        </div>
+
+        <div class="form-row">
+          <label for="planSubject">Subject</label>
+          <input
+            id="planSubject"
+            name="planSubject"
+            type="text"
+            required
+            placeholder="Science"
+            value="${escapeHtml(editingPlan?.subject || '')}"
+          >
+        </div>
+
+        <div class="form-row">
+          <label for="planClassroom">Classroom / Grade</label>
+          <input
+            id="planClassroom"
+            name="planClassroom"
+            type="text"
+            required
+            placeholder="Grade 7 Science"
+            value="${escapeHtml(editingPlan?.classroomName || '')}"
+          >
+        </div>
+
+        <div class="form-row">
+          <label for="planDate">Planned Date</label>
+          <input
+            id="planDate"
+            name="planDate"
+            type="date"
+            required
+            value="${escapeHtml(editingPlan?.plannedDate || '')}"
+          >
+        </div>
+
+        <div class="form-row">
+          <label for="planObjectives">Objectives / Goals</label>
+          <textarea
+            id="planObjectives"
+            name="planObjectives"
+            rows="4"
+            placeholder="Students will be able to..."
+          >${escapeHtml(editingPlan?.objectives || '')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="planMaterials">Materials / Resources</label>
+          <textarea
+            id="planMaterials"
+            name="planMaterials"
+            rows="3"
+            placeholder="Book pages, links, worksheets, lab tools..."
+          >${escapeHtml(editingPlan?.materials || '')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="planNotes">Lesson Notes / Activities</label>
+          <textarea
+            id="planNotes"
+            name="planNotes"
+            rows="5"
+            placeholder="Warm-up, main activity, discussion, homework..."
+          >${escapeHtml(editingPlan?.notes || '')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="planAttachment">Attachment (optional)</label>
+          <input id="planAttachment" name="planAttachment" type="file">
+          ${
+            editingPlan?.attachmentUrl
+              ? `<small>Current file: <a href="${editingPlan.attachmentUrl}" target="_blank" rel="noopener">${escapeHtml(editingPlan.attachmentName || 'Open attachment')}</a></small>`
+              : ''
+          }
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button type="submit" class="btn" id="createPlanBtn">${editingPlan ? 'Update Lesson Plan' : 'Save Lesson Plan'}</button>
+          ${editingPlan ? `<button type="button" class="btn" id="cancelEditPlanBtn">Cancel Edit</button>` : ''}
+          <span id="lessonPlanMsg"></span>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function renderLessonPlansTable(plans) {
+  const rowsHtml = plans.map(item => `
     <tr>
       <td>${escapeHtml(item.title || 'Untitled')}</td>
       <td>${escapeHtml(item.subject || '—')}</td>
       <td>${escapeHtml(item.classroomName || '—')}</td>
       <td>${fmtDate(item.plannedDate)}</td>
       <td>${statusBadge(item.status || 'Draft')}</td>
+      <td>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn plan-edit-btn" type="button" data-id="${escapeHtml(item.id)}">Edit</button>
+          <button class="btn plan-status-btn" type="button" data-id="${escapeHtml(item.id)}" data-status="${item.status === 'Published' ? 'Draft' : 'Published'}">
+            ${item.status === 'Published' ? 'Move to Draft' : 'Publish'}
+          </button>
+          <button class="btn plan-delete-btn" type="button" data-id="${escapeHtml(item.id)}">Delete</button>
+          ${item.attachmentUrl ? `<a class="btn" href="${item.attachmentUrl}" target="_blank" rel="noopener">Attachment</a>` : ''}
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="6">
+        <div style="padding:8px 0">
+          <strong>Objectives:</strong> ${escapeHtml(item.objectives || '—')}<br>
+          <strong>Materials:</strong> ${escapeHtml(item.materials || '—')}<br>
+          <strong>Notes:</strong> ${escapeHtml(item.notes || '—')}
+        </div>
+      </td>
     </tr>
   `).join('');
 
   return `
-    <section class="card panel">
-      <h3>Create Lesson Plan</h3>
-      <p>Welcome, ${escapeHtml(tutorName)}. Build weekly lesson plans with dates, objectives, and materials.</p>
-
-      <form id="lessonPlanForm" class="stack-form">
-        <div class="form-row">
-          <label for="planTitle">Lesson Title</label>
-          <input id="planTitle" name="planTitle" type="text" required placeholder="e.g. Photosynthesis & Plant Cells">
-        </div>
-        <div class="form-row">
-          <label for="planSubject">Subject</label>
-          <input id="planSubject" name="planSubject" type="text" required>
-        </div>
-        <div class="form-row">
-          <label for="planClassroom">Classroom / Grade</label>
-          <input id="planClassroom" name="planClassroom" type="text" required placeholder="Grade 7 Science">
-        </div>
-        <div class="form-row">
-          <label for="planDate">Planned Date</label>
-          <input id="planDate" name="planDate" type="date" required>
-        </div>
-        <div class="form-row">
-          <label for="planObjectives">Objectives / Goals</label>
-          <textarea id="planObjectives" name="planObjectives" rows="4" placeholder="Students will be able to..."></textarea>
-        </div>
-        <div class="form-row">
-          <label for="planMaterials">Materials / Resources</label>
-          <textarea id="planMaterials" name="planMaterials" rows="3" placeholder="Textbook p.45, worksheet, video link..."></textarea>
-        </div>
-
-        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button type="submit" class="btn" id="createPlanBtn">Save Lesson Plan</button>
-          <span id="lessonPlanMsg"></span>
-        </div>
-      </form>
-    </section>
-
     <section class="card panel" style="margin-top:18px">
       <h3>My Lesson Plans</h3>
       ${simpleTable(
-        ['Title', 'Subject', 'Classroom', 'Date', 'Status'],
+        ['Title', 'Subject', 'Classroom', 'Date', 'Status', 'Actions'],
         rowsHtml
       )}
     </section>
+  `;
+}
+
+function renderLessonPlansPage(profile, lessonPlans, editingPlan = null) {
+  const tutorName = profile?.name || profile?.full_name || 'Tutor';
+
+  return `
+    <section class="card panel" style="margin-bottom:18px">
+      <h3>${escapeHtml(tutorName)}'s Lesson Planner</h3>
+      <p>Create lesson plans, save them as drafts, publish them, edit them later, and attach supporting files.</p>
+    </section>
+
+    ${renderLessonPlanForm(editingPlan)}
+    ${renderLessonPlansTable(lessonPlans)}
   `;
 }
 
@@ -592,22 +724,32 @@ async function submitStudentWork({ user, profile }) {
   });
 }
 
-async function createLessonPlan({ user, profile }) {
+async function saveLessonPlan({ user, profile, existingPlan = null }) {
   const form = document.getElementById('lessonPlanForm');
   const msg = document.getElementById('lessonPlanMsg');
   const btn = document.getElementById('createPlanBtn');
 
   if (!form || !msg || !btn) return;
 
+  const cancelBtn = document.getElementById('cancelEditPlanBtn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', async () => {
+      await refreshLessonPlansPage({ user, profile, editingPlanId: null });
+    });
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    const planId = form.planId.value.trim();
     const title = form.planTitle.value.trim();
     const subject = form.planSubject.value.trim();
     const classroomName = form.planClassroom.value.trim();
     const plannedDate = form.planDate.value;
     const objectives = form.planObjectives.value.trim();
     const materials = form.planMaterials.value.trim();
+    const notes = form.planNotes.value.trim();
+    const attachmentFile = form.planAttachment.files?.[0] || null;
 
     if (!title || !subject || !classroomName || !plannedDate) {
       msg.textContent = 'Please fill all required fields.';
@@ -615,10 +757,19 @@ async function createLessonPlan({ user, profile }) {
     }
 
     btn.disabled = true;
-    msg.textContent = 'Saving...';
+    msg.textContent = planId ? 'Updating...' : 'Saving...';
 
     try {
-      const planRef = doc(collection(db, 'lesson-plans'));
+      let attachmentUrl = existingPlan?.attachmentUrl || '';
+      let attachmentPath = existingPlan?.attachmentPath || '';
+      let attachmentName = existingPlan?.attachmentName || '';
+
+      if (attachmentFile) {
+        const upload = await uploadFile(attachmentFile, `lesson-plans/${user.uid}`);
+        attachmentUrl = upload.url;
+        attachmentPath = upload.path;
+        attachmentName = upload.name;
+      }
 
       const payload = {
         title,
@@ -627,30 +778,100 @@ async function createLessonPlan({ user, profile }) {
         plannedDate,
         objectives,
         materials,
+        notes,
+        attachmentUrl,
+        attachmentPath,
+        attachmentName,
         tutorId: user.uid,
-        tutorName: profile?.name || profile?.full_name || '',
-        status: 'Draft',
-        createdAt: serverTimestamp(),
+        tutorName: profile?.name || profile?.full_name || user.email || '',
+        status: existingPlan?.status || 'Draft',
         updatedAt: serverTimestamp()
       };
 
-      await setDoc(planRef, payload);
+      if (planId) {
+        await updateDoc(doc(db, 'lesson-plans', planId), payload);
+        msg.textContent = 'Lesson plan updated successfully.';
+      } else {
+        const planRef = doc(collection(db, 'lesson-plans'));
+        await setDoc(planRef, {
+          ...payload,
+          status: 'Draft',
+          createdAt: serverTimestamp()
+        });
+        msg.textContent = 'Lesson plan saved successfully.';
+      }
 
-      msg.textContent = 'Lesson plan saved successfully!';
-
-      // Refresh the page content
-      const latestPlans = await loadTutorLessonPlans(user.uid);
-      document.getElementById('page-content').innerHTML = renderLessonPlansPage(profile, latestPlans);
-      await createLessonPlan({ user, profile }); // re-attach listener
-
-      form.reset();
+      await refreshLessonPlansPage({ user, profile, editingPlanId: null });
     } catch (err) {
-      console.error(err);
-      msg.textContent = err.message || 'Failed to save.';
+      console.error('Lesson plan save error:', err);
+      msg.textContent = err.message || 'Failed to save lesson plan.';
     } finally {
       btn.disabled = false;
     }
   });
+}
+
+async function bindLessonPlanActions({ user, profile, lessonPlans }) {
+  const editButtons = [...document.querySelectorAll('.plan-edit-btn')];
+  const statusButtons = [...document.querySelectorAll('.plan-status-btn')];
+  const deleteButtons = [...document.querySelectorAll('.plan-delete-btn')];
+
+  editButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const planId = button.dataset.id;
+      await refreshLessonPlansPage({ user, profile, editingPlanId: planId });
+    });
+  });
+
+  statusButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const planId = button.dataset.id;
+      const nextStatus = button.dataset.status || 'Published';
+
+      try {
+        await updateDoc(doc(db, 'lesson-plans', planId), {
+          status: nextStatus,
+          updatedAt: serverTimestamp()
+        });
+        await refreshLessonPlansPage({ user, profile, editingPlanId: null });
+      } catch (err) {
+        console.error('Lesson plan publish error:', err);
+        alert(err.message || 'Failed to update lesson plan status.');
+      }
+    });
+  });
+
+  deleteButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const planId = button.dataset.id;
+      const found = lessonPlans.find(item => item.id === planId);
+      const ok = window.confirm(`Delete lesson plan "${found?.title || 'this plan'}"?`);
+
+      if (!ok) return;
+
+      try {
+        await deleteDoc(doc(db, 'lesson-plans', planId));
+        await refreshLessonPlansPage({ user, profile, editingPlanId: null });
+      } catch (err) {
+        console.error('Lesson plan delete error:', err);
+        alert(err.message || 'Failed to delete lesson plan.');
+      }
+    });
+  });
+}
+
+async function refreshLessonPlansPage({ user, profile, editingPlanId = null }) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const lessonPlans = await loadTutorLessonPlans(user.uid);
+  const editingPlan = editingPlanId
+    ? lessonPlans.find(item => item.id === editingPlanId) || null
+    : null;
+
+  pageContent.innerHTML = renderLessonPlansPage(profile, lessonPlans, editingPlan);
+  await saveLessonPlan({ user, profile, existingPlan: editingPlan });
+  await bindLessonPlanActions({ user, profile, lessonPlans });
 }
 
 async function bootSubmitWorkPage() {
@@ -673,13 +894,7 @@ async function bootLessonPlansPage() {
   if (!bundle) return;
 
   const { user, profile } = bundle;
-  const pageContent = document.getElementById('page-content');
-  if (!pageContent) return;
-
-  const lessonPlans = await loadTutorLessonPlans(user.uid);
-
-  pageContent.innerHTML = renderLessonPlansPage(profile, lessonPlans);
-  await createLessonPlan({ user, profile });
+  await refreshLessonPlansPage({ user, profile, editingPlanId: null });
 }
 
 function bootDefaultPage() {
