@@ -1638,3 +1638,223 @@ if (pageKey === 'submit-work') {
 } else {
   bootDefaultPage();
 }
+/* =====================================================
+   NEW: PORTFOLIO + ANALYTICS + REPORT SYSTEM
+   (APPENDED - DOES NOT REMOVE ANY OLD CODE)
+===================================================== */
+
+/* =========================
+   PORTFOLIO (STUDENT)
+========================= */
+
+async function loadStudentPortfolio(studentId) {
+  const snap = await getDocs(
+    query(collection(db, 'portfolio'), where('studentId', '==', studentId))
+  );
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  })).sort((a, b) => {
+    const aTime = a.createdAt?.seconds || 0;
+    const bTime = b.createdAt?.seconds || 0;
+    return bTime - aTime;
+  });
+}
+
+function renderStudentPortfolio(items) {
+  const rows = items.map(i => `
+    <div class="card panel" style="margin-bottom:12px">
+      <p><strong>Note:</strong> ${escapeHtml(i.note || '')}</p>
+      <p><strong>Type:</strong> ${escapeHtml(i.type || 'file')}</p>
+      <p><strong>Tag:</strong> ${escapeHtml(i.tag || 'general')}</p>
+      ${i.fileUrl ? `<a href="${i.fileUrl}" target="_blank">View File</a>` : ''}
+      <small>${fmtDate(i.createdAt)}</small>
+    </div>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>My Portfolio</h3>
+      ${rows || '<p>No portfolio items yet</p>'}
+    </section>
+
+    <section class="card panel" style="margin-top:18px">
+      <h3>Add Portfolio Item</h3>
+
+      <form id="portfolioForm" class="stack-form">
+        <div class="form-row">
+          <label>Note</label>
+          <textarea id="portfolioNote"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Tag</label>
+          <select id="portfolioTag">
+            <option value="high">High</option>
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>File</label>
+          <input id="portfolioFile" type="file">
+        </div>
+
+        <button class="btn">Upload</button>
+      </form>
+    </section>
+  `;
+}
+
+async function bootStudentPortfolio() {
+  const { user, profile } = await requireAuth();
+
+  const items = await loadStudentPortfolio(user.uid);
+
+  document.getElementById('page-content').innerHTML =
+    renderStudentPortfolio(items);
+
+  document.getElementById('portfolioForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const note = document.getElementById('portfolioNote').value;
+    const tag = document.getElementById('portfolioTag').value;
+    const file = document.getElementById('portfolioFile').files[0];
+
+    const upload = await uploadFile(file, `portfolio/${user.uid}`);
+
+    await setDoc(doc(collection(db, 'portfolio')), {
+      studentId: user.uid,
+      note,
+      tag,
+      fileUrl: upload.url,
+      filePath: upload.path,
+      createdAt: serverTimestamp()
+    });
+
+    bootStudentPortfolio();
+  });
+}
+
+
+/* =========================
+   TUTOR PORTFOLIO (FULL LIFE VIEW)
+========================= */
+
+async function bootTutorPortfolios() {
+  const { user } = await requireAuth();
+
+  const students = await loadAllStudents();
+
+  let html = `<section class="card panel"><h3>Student Life Overview</h3>`;
+
+  for (const s of students) {
+    const portfolio = await loadStudentPortfolio(s.id);
+    const assessments = await getDocs(query(collection(db,'assessments'), where('studentId','==',s.id)));
+    const attendance = await getDocs(query(collection(db,'attendance'), where('studentId','==',s.id)));
+
+    const highs = portfolio.filter(p => p.tag === 'high').length;
+    const lows = portfolio.filter(p => p.tag === 'low').length;
+
+    html += `
+      <div class="card panel" style="margin-top:12px">
+        <h4>${escapeHtml(s.full_name || s.name)}</h4>
+        <p>Portfolio Items: ${portfolio.length}</p>
+        <p>Highs: ${highs} | Lows: ${lows}</p>
+        <p>Assessments: ${assessments.size}</p>
+        <p>Attendance Records: ${attendance.size}</p>
+      </div>
+    `;
+  }
+
+  html += `</section>`;
+
+  document.getElementById('page-content').innerHTML = html;
+}
+
+
+/* =========================
+   REPORT SYSTEM
+========================= */
+
+async function bootReportsPage() {
+  const { user } = await requireAuth();
+
+  const students = await loadAllStudents();
+
+  const rows = students.map(s => `
+    <option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>
+  `).join('');
+
+  document.getElementById('page-content').innerHTML = `
+    <section class="card panel">
+      <h3>Create Report</h3>
+
+      <form id="reportForm" class="stack-form">
+        <select id="reportStudent">${rows}</select>
+
+        <textarea id="reportStrengths" placeholder="Strengths"></textarea>
+        <textarea id="reportLows" placeholder="Lows"></textarea>
+        <textarea id="reportSummary" placeholder="Summary"></textarea>
+
+        <button class="btn">Save</button>
+      </form>
+    </section>
+  `;
+
+  document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    await setDoc(doc(collection(db,'reports')), {
+      studentId: reportStudent.value,
+      strengths: reportStrengths.value,
+      lows: reportLows.value,
+      summary: reportSummary.value,
+      createdAt: serverTimestamp()
+    });
+
+    alert("Report saved");
+  });
+}
+
+
+/* =========================
+   DASHBOARD (REAL ANALYTICS)
+========================= */
+
+async function bootDashboard() {
+  const { user } = await requireAuth();
+
+  const students = await loadAllStudents();
+  const assignments = await getDocs(collection(db,'assignments'));
+  const submissions = await getDocs(collection(db,'submissions'));
+
+  document.getElementById('page-content').innerHTML = `
+    <section class="card panel">
+      <h3>Dashboard</h3>
+      <p>Students: ${students.length}</p>
+      <p>Assignments: ${assignments.size}</p>
+      <p>Submissions: ${submissions.size}</p>
+    </section>
+  `;
+}
+
+
+/* =========================
+   ROUTER EXTENSION (DO NOT REMOVE OLD ONE)
+========================= */
+
+if (pageKey === 'portfolio') {
+  bootStudentPortfolio();
+}
+else if (pageKey === 'portfolios') {
+  bootTutorPortfolios();
+}
+else if (pageKey === 'reports') {
+  bootReportsPage();
+}
+else if (pageKey === 'dashboard') {
+  bootDashboard();
+}

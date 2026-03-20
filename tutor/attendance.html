@@ -6,69 +6,30 @@
   <title>Attendance</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
 </head>
-
 <body
   data-role="tutor"
   data-page="attendance"
   data-title="Attendance"
-  data-description="Daily attendance and punctuality records."
+  data-description="Daily attendance, punctuality, and learner note tracking."
 >
   <div id="app-shell" class="page-shell">
     <main class="content">
       <div class="topbar">
         <div>
           <h2>Attendance</h2>
-          <p>Daily attendance and punctuality records.</p>
+          <p>Daily attendance, punctuality, and learner note tracking.</p>
         </div>
       </div>
 
       <div id="page-content">
         <section class="card panel">
-          <h3>Record Attendance</h3>
-
-          <form id="attendanceForm" class="stack-form">
-            <div class="form-row">
-              <label for="attendanceDate">Date</label>
-              <input id="attendanceDate" type="date">
-            </div>
-
-            <div class="form-row">
-              <label for="attendanceClassroomId">Classroom</label>
-              <select id="attendanceClassroomId">
-                <option value="">Optional classroom</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label for="attendanceStudentId">Student</label>
-              <select id="attendanceStudentId">
-                <option value="">Select student</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label for="attendanceStatus">Status</label>
-              <select id="attendanceStatus">
-                <option value="Present">Present</option>
-                <option value="Absent">Absent</option>
-                <option value="Late">Late</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label for="attendanceNote">Note</label>
-              <textarea id="attendanceNote" rows="4" placeholder="Optional note"></textarea>
-            </div>
-
-            <div class="form-actions" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-              <button type="submit" class="btn" id="saveAttendanceBtn">Save Attendance</button>
-              <span id="attendanceMsg"></span>
-            </div>
-          </form>
+          <h3>Attendance Register</h3>
+          <p>Loading the live attendance register and attendance history table.</p>
         </section>
       </div>
     </main>
   </div>
+
   <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

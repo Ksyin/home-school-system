@@ -1,33 +1,42 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Portfolio</title>
-  <link rel="stylesheet" href="/assets/css/styles.css">
-</head>
-<body
-  data-role="student"
-  data-page="portfolio"
-  data-title="Portfolio"
-  data-description="Learning evidence, reflections, and work samples."
->
-  <div id="app-shell" class="page-shell">
-    <main class="content">
-      <div class="topbar">
-        <div>
-          <h2>Portfolio</h2>
-          <p>Upload your work, reflections, PDFs, images, and evidence.</p>
-        </div>
+<div id="page-content">
+
+  <!-- UPLOAD -->
+  <section class="card panel">
+    <h3>Upload to Portfolio</h3>
+
+    <form id="portfolioForm" class="stack-form">
+
+      <div class="form-row">
+        <label>Note / Description</label>
+        <textarea id="portfolioNote" rows="4" placeholder="Explain this work..."></textarea>
       </div>
-      <div id="page-content">
-        <section class="card panel">
-          <h3>My Portfolio</h3>
-          <p>Loading portfolio...</p>
-        </section>
+
+      <div class="form-row">
+        <label>Upload File</label>
+        <input type="file" id="portfolioFile">
       </div>
-    </main>
-  </div>
-  <script type="module" src="/assets/js/pages.js"></script>
-</body>
-</html>
+
+      <div class="form-row">
+        <label>Status (optional)</label>
+        <select id="portfolioStatus">
+          <option value="normal">Normal</option>
+          <option value="high">High Performance</option>
+          <option value="low">Needs Improvement</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn" type="submit">Upload</button>
+        <span id="portfolioMsg"></span>
+      </div>
+
+    </form>
+  </section>
+
+  <!-- LIST -->
+  <section class="card panel" style="margin-top:20px">
+    <h3>My Portfolio Items</h3>
+    <div id="portfolioList"></div>
+  </section>
+
+</div>

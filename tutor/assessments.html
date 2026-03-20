@@ -10,71 +10,21 @@
   data-role="tutor"
   data-page="assessments"
   data-title="Assessments"
-  data-description="Create, grade, and track formative and summative assessments."
+  data-description="Create, record, and review learner assessments and scores."
 >
   <div id="app-shell" class="page-shell">
     <main class="content">
       <div class="topbar">
         <div>
           <h2>Assessments</h2>
-          <p>Create, grade, and track formative and summative assessments.</p>
+          <p>Create, record, and review learner assessments and scores.</p>
         </div>
       </div>
 
       <div id="page-content">
         <section class="card panel">
-          <h3>Create Assessment</h3>
-
-          <form id="assessmentForm" class="stack-form">
-            <div class="form-row">
-              <label for="assessmentTitle">Title</label>
-              <input id="assessmentTitle" type="text" placeholder="Weekly Science Quiz">
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentSubject">Subject</label>
-              <input id="assessmentSubject" type="text" placeholder="Science">
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentClassroomId">Classroom</label>
-              <select id="assessmentClassroomId">
-                <option value="">Select classroom</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentStudentId">Student</label>
-              <select id="assessmentStudentId">
-                <option value="">Optional individual student</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentType">Type</label>
-              <input id="assessmentType" type="text" placeholder="Quiz, Test, CAT, Oral">
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentDate">Assessment Date</label>
-              <input id="assessmentDate" type="date">
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentTotalMarks">Total Marks</label>
-              <input id="assessmentTotalMarks" type="number" min="1" placeholder="100">
-            </div>
-
-            <div class="form-row">
-              <label for="assessmentInstructions">Instructions</label>
-              <textarea id="assessmentInstructions" rows="4" placeholder="Assessment instructions"></textarea>
-            </div>
-
-            <div class="form-actions" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-              <button type="submit" class="btn" id="saveAssessmentBtn">Save Assessment</button>
-              <span id="assessmentMsg"></span>
-            </div>
-          </form>
+          <h3>Assessment Centre</h3>
+          <p>Loading the full assessment form, score recording view, and assessment history.</p>
         </section>
       </div>
     </main>
