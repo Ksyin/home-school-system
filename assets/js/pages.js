@@ -9,6 +9,13 @@ import {
   updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
+
+import {
+  onSnapshot
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+
+
 import {
   getFirestore,
   doc,
@@ -188,6 +195,274 @@ function simpleTable(headers, rowsHtml) {
   `;
 }
 
+async function loadParentChildren(parentUid) {
+
+  const snap = await getDocs(
+    query(collection(db, 'users'), where('role', '==', 'student'))
+  );
+
+  return snap.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+
+}
+async function initParentDashboardRealtime(bundle) {
+
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+
+  if (!pageContent) return;
+
+  pageContent.innerHTML = `
+    <section class="grid cols-4 gap-4" id="parentStats"></section>
+
+    <section class="card panel" style="margin-top:20px">
+      <h3>Live Activity</h3>
+      <div id="liveActivity"></div>
+    </section>
+  `;
+
+  const statsEl = document.getElementById('parentStats');
+  const activityEl = document.getElementById('liveActivity');
+
+  let stats = {
+    assignments: 0,
+    submissions: 0,
+    portfolio: 0,
+    notes: 0
+  };
+
+  function renderStats() {
+    statsEl.innerHTML = `
+      <div class="card stat primary">
+        <h3>${stats.assignments}</h3>
+        <p>Assignments</p>
+      </div>
+
+      <div class="card stat success">
+        <h3>${stats.submissions}</h3>
+        <p>Submissions</p>
+      </div>
+
+      <div class="card stat warn">
+        <h3>${stats.portfolio}</h3>
+        <p>Portfolio</p>
+      </div>
+
+      <div class="card stat danger">
+        <h3>${stats.notes}</h3>
+        <p>Tutor Notes</p>
+      </div>
+    `;
+  }
+
+  /* 🔥 ASSIGNMENTS */
+  onSnapshot(collection(db, 'assignments'), snap => {
+    stats.assignments = snap.size;
+    renderStats();
+  });
+
+  /* 🔥 SUBMISSIONS */
+  onSnapshot(collection(db, 'submissions'), snap => {
+    stats.submissions = snap.size;
+    renderStats();
+
+    activityEl.innerHTML = snap.docs.slice(0, 6).map(doc => {
+      const d = doc.data();
+      return `
+        <div class="card panel">
+          <strong>${d.studentName || 'Student'}</strong><br>
+          submitted <b>${d.assignmentTitle || 'Assignment'}</b><br>
+          <small>${fmtDate(d.submittedAt)}</small>
+        </div>
+      `;
+    }).join('');
+  });
+
+  /* 🔥 PORTFOLIO */
+  onSnapshot(collection(db, 'portfolio'), snap => {
+    stats.portfolio = snap.size;
+    renderStats();
+  });
+
+  /* 🔥 NOTES */
+  onSnapshot(collection(db, 'student-notes'), snap => {
+    stats.notes = snap.size;
+    renderStats();
+  });
+
+}
+async function initParentChildrenRealtime(bundle) {
+
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>Children</h3>
+      <div id="childrenList"></div>
+    </section>
+  `;
+
+  const list = document.getElementById('childrenList');
+
+  onSnapshot(collection(db, 'users'), (snap) => {
+
+    const students = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(u => u.role === 'student');
+
+    list.innerHTML = students.map(s => `
+      <div class="card panel">
+        <strong>${s.full_name || s.email}</strong><br>
+        Classroom: ${s.classroomName || '—'}<br>
+        Joined: ${fmtDate(s.createdAt)}
+      </div>
+    `).join('');
+
+  });
+
+}
+
+async function initParentPortfolioRealtime() {
+
+  const pageContent = document.getElementById('page-content');
+
+  if (!pageContent) return;
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>Student Portfolio</h3>
+      <div id="portfolioList"></div>
+    </section>
+  `;
+
+  const list = document.getElementById('portfolioList');
+
+  onSnapshot(collection(db, 'portfolio'), (snap) => {
+
+    list.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+
+      return `
+        <div class="card panel">
+          <strong>${d.studentName}</strong><br>
+          <small>${fmtDate(d.createdAt)}</small>
+
+          <p style="margin-top:10px">${d.note || ''}</p>
+
+          ${
+            d.fileUrl
+              ? `<a class="btn" href="${d.fileUrl}" target="_blank">View File</a>`
+              : ''
+          }
+        </div>
+      `;
+    }).join('');
+
+  });
+
+}
+
+
+async function initParentAttendanceRealtime() {
+
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>Attendance</h3>
+      <div id="attendanceList"></div>
+    </section>
+  `;
+
+  const list = document.getElementById('attendanceList');
+
+  onSnapshot(collection(db, 'attendance'), (snap) => {
+
+    list.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+
+      return `
+        <div class="card panel">
+          <strong>${d.studentName}</strong><br>
+          ${statusBadge(d.status)}<br>
+          <small>${fmtDate(d.date)}</small>
+        </div>
+      `;
+    }).join('');
+
+  });
+
+}
+
+async function initParentAssignmentsRealtime() {
+
+  const pageContent = document.getElementById('page-content');
+
+  if (!pageContent) return;
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>Assignments</h3>
+      <div id="assignmentsList"></div>
+    </section>
+  `;
+
+  const list = document.getElementById('assignmentsList');
+
+  onSnapshot(collection(db, 'assignments'), (snap) => {
+
+    list.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+
+      return `
+        <div class="card panel">
+          <strong>${d.title}</strong><br>
+          Subject: ${d.subject || '—'}<br>
+          ${d.description || ''}
+        </div>
+      `;
+    }).join('');
+
+  });
+
+}
+
+async function bootParentPages() {
+
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  switch (pageKey) {
+
+    case 'dashboard':
+      await initParentDashboardRealtime(bundle);
+      break;
+
+    case 'children':
+      await initParentChildrenRealtime(bundle);
+      break;
+
+    case 'portfolio':
+      await initParentPortfolioRealtime(bundle);
+      break;
+
+    case 'attendance':
+      await initParentAttendanceRealtime(bundle);
+      break;
+
+    case 'assignments':
+      await initParentAssignmentsRealtime(bundle);
+      break;
+
+    default:
+      await bootDefaultPage();
+  }
+
+}
 async function getUserProfile(uid) {
   const userDoc = await getDoc(doc(db, 'users', uid));
   if (!userDoc.exists()) return null;
@@ -2792,3 +3067,6 @@ onAuthStateChanged(auth, async (user) => {
   // 2. New system: unified modern renderer — overrides content for known new pages
   await loadExtendedPages(user, profile);
 });
+if (pageRole === 'parent') {
+  bootParentPages();
+}
