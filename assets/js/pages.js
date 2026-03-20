@@ -1178,7 +1178,7 @@ function renderStudentDashboard(profile, assignments, submissions, resources, re
 }
 
 async function submitStudentPortfolio({ user, profile }) {
-
+  
   const form = document.getElementById('portfolioForm');
   if (!form) return;
 
@@ -1207,62 +1207,6 @@ async function submitStudentPortfolio({ user, profile }) {
     location.reload();
   });
 }
-/* =========================
-   LOAD TUTOR ASSIGNMENTS
-========================= */
-async function loadTutorAssignments(tutorUid) {
-  const snap = await getDocs(
-    query(collection(db, 'assignments'), where('tutorId', '==', tutorUid))
-  );
-
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...d.data()
-  }));
-}
-
-async function createAssignment({ user }) {
-  const form = document.getElementById('assignmentForm');
-  const msg = document.getElementById('assignmentMsg');
-
-  if (!form) return;
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const title = document.getElementById('assignmentTitle').value.trim();
-    const subject = document.getElementById('assignmentSubject').value.trim();
-    const description = document.getElementById('assignmentDescription').value.trim();
-    const dueDate = document.getElementById('assignmentDueDate').value;
-
-    const selectedStudents = [
-      ...document.getElementById('assignmentStudents').selectedOptions
-    ].map(opt => opt.value);
-
-    if (!title || selectedStudents.length === 0) {
-      msg.textContent = 'Title and students required';
-      return;
-    }
-
-    const assignmentRef = doc(collection(db, 'assignments'));
-
-    await setDoc(assignmentRef, {
-      tutorId: user.uid,
-      title,
-      subject,
-      description,
-      dueDate,
-      studentIds: selectedStudents,   // 🔥 KEY FIX
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    msg.textContent = 'Assignment created ✔';
-
-    form.reset();
-  });
-}
-
 /* =========================
    RENDER: STUDENT ASSIGNMENTS
 ========================= */
@@ -1439,13 +1383,16 @@ async function refreshStudentDashboard(bundle) {
     portfolioItems
   );
 }
+
 async function refreshStudentAssignmentsPage(bundle) {
   const { user } = bundle;
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
-  const assignments = await loadStudentAssignments(user.uid);
-  const submissions = await loadStudentSubmissions(user.uid);
+  const [assignments, submissions] = await Promise.all([
+    loadStudentAssignments(user.uid),
+    loadStudentSubmissions(user.uid)
+  ]);
 
   pageContent.innerHTML = renderStudentAssignmentsPage(assignments, submissions);
 }
@@ -1455,15 +1402,8 @@ async function refreshStudentResourcesPage(bundle) {
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
-  try {
-    const resources = await loadStudentResources(user.uid);
-
-    pageContent.innerHTML = renderStudentResourcesPage(resources);
-
-  } catch (err) {
-    console.error(err);
-    pageContent.innerHTML = `<div class="card panel">Error loading resources</div>`;
-  }
+  const resources = await loadStudentResources(user.uid);
+  pageContent.innerHTML = renderStudentResourcesPage(resources);
 }
 
 async function refreshStudentAssessmentsPage(bundle) {
@@ -1480,15 +1420,8 @@ async function refreshStudentReportsPage(bundle) {
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
-  try {
-    const reports = await loadStudentReports(user.uid);
-
-    pageContent.innerHTML = renderStudentReportsPage(reports);
-
-  } catch (err) {
-    console.error(err);
-    pageContent.innerHTML = `<div class="card panel">Error loading reports</div>`;
-  }
+  const items = await loadStudentReports(user.uid);
+  pageContent.innerHTML = renderStudentReportsPage(items);
 }
 
 async function refreshStudentActivitiesPage(bundle) {
@@ -2191,14 +2124,6 @@ async function refreshMessagesPage(bundle) {
   }
 }
 
-async function bootStudentReportsPage() {
-  const bundle = await requireAuth();
-  if (!bundle) return;
-
-  await refreshStudentReportsPage(bundle);
-}
-
-
 /* =========================
    BOOT PAGES
 ========================= */
@@ -2317,48 +2242,69 @@ async function bootStudentMessagesPage() {
 /* =========================
    PORTFOLIO (STUDENT)
 ========================= */
+
 async function loadStudentPortfolio(studentUid) {
   const snap = await getDocs(
     query(collection(db, 'portfolio'), where('studentId', '==', studentUid))
   );
 
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...d.data()
-  }));
+  return snap.docs
+    .map(d => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
 
 function renderStudentPortfolioPage(items) {
   const rows = items.map(item => `
-    <div class="card panel" style="margin-bottom:12px">
-      <strong>${escapeHtml(item.tag || 'Portfolio')}</strong>
-      <p>${escapeHtml(item.note || '')}</p>
+    <div class="card panel" style="margin-bottom:14px">
+
+      <div style="display:flex;justify-content:space-between">
+        <strong>${escapeHtml(item.tag || 'Portfolio')}</strong>
+        <small>${fmtDate(item.createdAt)}</small>
+      </div>
+
+      <p style="margin-top:10px">${escapeHtml(item.note || '')}</p>
 
       ${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : ''}
 
-      <small>${fmtDate(item.createdAt)}</small>
     </div>
   `).join('');
 
   return `
     <section class="card panel">
       <h3>My Portfolio</h3>
-      ${rows || '<div class="empty">No portfolio yet</div>'}
+
+      <form id="portfolioForm" class="stack-form">
+
+        <div class="form-row">
+          <label>Tag</label>
+          <input id="portfolioTag" placeholder="e.g Achievement / Project">
+        </div>
+
+        <div class="form-row">
+          <label>Note</label>
+          <textarea id="portfolioNote"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Upload</label>
+          <input id="portfolioFile" type="file">
+        </div>
+
+        <button class="btn">Add to Portfolio</button>
+      </form>
+
+    </section>
+
+    <section style="margin-top:20px">
+      ${items.length ? rows : '<div class="empty">No portfolio yet</div>'}
     </section>
   `;
 }
-async function refreshStudentPortfolioPage(bundle) {
-  const { user } = bundle;
-  const pageContent = document.getElementById('page-content');
-  if (!pageContent) return;
 
-  const items = await loadStudentPortfolio(user.uid);
-
-  pageContent.innerHTML = renderStudentPortfolioPage(items);
-
-  await submitStudentPortfolio(bundle); // keep upload working
-}
 function renderStudentPortfolio(items) {
   const rows = items.map(i => `
     <div class="card panel" style="margin-bottom:12px">
@@ -2562,7 +2508,14 @@ async function bootStudentResourcesPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
 
-  await refreshStudentResourcesPage(bundle);
+  const { user } = bundle;
+
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const resources = await loadStudentResources(user.uid);
+
+  pageContent.innerHTML = renderStudentResourcesPage(resources);
 }
 
 
@@ -2601,19 +2554,7 @@ if (pageKey === 'submit-work') {
 } else if (pageKey === 'portfolios') {
   bootTutorPortfolios();
 
-} 
-
-else if (pageKey === 'assignments' && pageRole === 'student') {
-  bootStudentAssignmentsPage();
-} else if (pageKey === 'resources' && pageRole === 'student') {
-  bootStudentResourcesPage();
-} else if (pageKey === 'portfolio' && pageRole === 'student') {
-  bootStudentPortfolioPage();
 } else if (pageKey === 'reports' && pageRole === 'student') {
-  bootStudentReportsPage();
-}
-
-else if (pageKey === 'reports' && pageRole === 'student') {
   bootStudentReportsPage();
 
 } else if (pageKey === 'reports') {
