@@ -1409,7 +1409,6 @@ async function refreshClassroomsPage(bundle) {
 /* =========================
    ACTIONS: RESOURCES (FIXED + BETTER UX)
 ========================= */
-
 async function refreshResourcesPage(bundle) {
   const { user } = bundle;
   const pageContent = document.getElementById('page-content');
@@ -1430,7 +1429,7 @@ async function refreshResourcesPage(bundle) {
   if (!form) return;
 
   /* =========================
-     SUBMIT HANDLER (FULL FIX)
+     SUBMIT HANDLER (FINAL FIX)
   ========================= */
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1451,41 +1450,20 @@ async function refreshResourcesPage(bundle) {
 
     // 🔒 Lock UI
     if (saveBtn) saveBtn.disabled = true;
-    msg.textContent = '⏳ Uploading...';
+    msg.textContent = '📤 Uploading...';
     msg.style.color = '';
 
     try {
       let upload = { url: '', path: '', name: '' };
 
       /* =========================
-         SAFE FILE UPLOAD
+         CLOUDINARY UPLOAD ONLY
       ========================= */
       if (file) {
-        const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-        const filePath = `resources/${user.uid}/${Date.now()}-${safeName}`;
-        const storageRef = ref(storage, filePath);
-
-        console.log('📤 Uploading:', filePath);
-
-        // 🔥 Timeout protection (prevents freezing)
-        const uploadTask = uploadBytes(storageRef, file);
-
-        const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Upload timeout (10s)')), 10000)
-        );
-
-        await Promise.race([uploadTask, timeout]);
-
-        console.log('✅ Upload complete');
-
-        const url = await getDownloadURL(storageRef);
-
-        upload = {
-          url,
-          path: filePath,
-          name: file.name
-        };
+        upload = await uploadFile(file, `resources/${user.uid}`);
       }
+
+      console.log('UPLOAD RESULT:', upload);
 
       /* =========================
          SAVE TO FIRESTORE
@@ -1531,8 +1509,10 @@ async function refreshResourcesPage(bundle) {
 
       form.reset();
 
-      // 🔄 Reload list instantly
-      await refreshResourcesPage(bundle);
+      // 🔄 Refresh UI
+      setTimeout(() => {
+        refreshResourcesPage(bundle);
+      }, 300);
 
     } catch (err) {
       console.error('❌ Resource error:', err);
