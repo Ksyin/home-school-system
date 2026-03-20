@@ -1180,35 +1180,58 @@ function renderStudentDashboard(profile, assignments, submissions, resources, re
 }
 
 async function submitStudentPortfolio({ user, profile }) {
-  
+
   const form = document.getElementById('portfolioForm');
   if (!form) return;
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    const type = document.getElementById('portfolioType').value;
+    const title = document.getElementById('portfolioTitle').value.trim();
     const note = document.getElementById('portfolioNote').value.trim();
-    const tag = document.getElementById('portfolioTag').value;
     const file = document.getElementById('portfolioFile').files?.[0];
 
-    if (!note && !file) return;
+    if (!title && !note && !file) return;
 
     const upload = await uploadFile(file, `portfolio/${user.uid}`);
 
     await setDoc(doc(collection(db, 'portfolio')), {
       studentId: user.uid,
       studentName: getStudentDisplayName(profile, user),
+
+      type,
+      title,
       note,
-      tag,
+
       fileUrl: upload.url,
       fileName: upload.name,
+
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
 
-    location.reload();
+    // clear form
+    form.reset();
+
+    // reload UI
+    await refreshStudentPortfolioPage({ user, profile });
+
   });
 }
+
+
+async function refreshStudentPortfolioPage(bundle) {
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+
+  const items = await loadStudentPortfolio(user.uid);
+
+  pageContent.innerHTML = renderStudentPortfolioPage(items);
+
+  await submitStudentPortfolio({ user, profile });
+}
+
 /* =========================
    RENDER: STUDENT ASSIGNMENTS
 ========================= */
@@ -2258,52 +2281,82 @@ async function loadStudentPortfolio(studentUid) {
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
-
 function renderStudentPortfolioPage(items) {
-  const rows = items.map(item => `
-    <div class="card panel" style="margin-bottom:14px">
+
+  const feed = items.map(item => `
+    <div class="portfolio-card">
 
       <div style="display:flex;justify-content:space-between">
-        <strong>${escapeHtml(item.tag || 'Portfolio')}</strong>
+        <span class="tag">${escapeHtml(item.type || 'Entry')}</span>
         <small>${fmtDate(item.createdAt)}</small>
       </div>
 
-      <p style="margin-top:10px">${escapeHtml(item.note || '')}</p>
+      <h4 style="margin-top:10px">${escapeHtml(item.title || '')}</h4>
 
-      ${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : ''}
+      <p>${escapeHtml(item.note || '')}</p>
+
+      ${item.fileUrl ? `
+        <div style="margin-top:10px">
+          ${renderFilePreview(item.fileUrl, item.fileName)}
+        </div>
+      ` : ''}
 
     </div>
   `).join('');
 
   return `
-    <section class="card panel">
-      <h3>My Portfolio</h3>
+    <div class="portfolio-grid">
 
-      <form id="portfolioForm" class="stack-form">
+      <!-- LEFT: ADD ENTRY -->
+      <div class="card panel portfolio-form">
 
-        <div class="form-row">
-          <label>Tag</label>
-          <input id="portfolioTag" placeholder="e.g Achievement / Project">
+        <h3>Add New Entry</h3>
+
+        <form id="portfolioForm" class="stack-form">
+
+          <div class="form-row">
+            <label>Type</label>
+            <select id="portfolioType">
+              <option value="Achievement">Achievement</option>
+              <option value="Challenge">Challenge</option>
+              <option value="Progress">Progress</option>
+              <option value="Reflection">Reflection</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>Title</label>
+            <input id="portfolioTitle" placeholder="What happened today?">
+          </div>
+
+          <div class="form-row">
+            <label>Details</label>
+            <textarea id="portfolioNote" placeholder="Explain your progress, lows, or achievements..."></textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Upload (image, video, pdf)</label>
+            <input id="portfolioFile" type="file">
+          </div>
+
+          <button class="btn">Save Entry</button>
+
+        </form>
+
+      </div>
+
+      <!-- RIGHT: TIMELINE -->
+      <div>
+
+        <h3>My Journey</h3>
+
+        <div class="portfolio-feed">
+          ${items.length ? feed : '<div class="empty">Start your journey 🚀</div>'}
         </div>
 
-        <div class="form-row">
-          <label>Note</label>
-          <textarea id="portfolioNote"></textarea>
-        </div>
+      </div>
 
-        <div class="form-row">
-          <label>Upload</label>
-          <input id="portfolioFile" type="file">
-        </div>
-
-        <button class="btn">Add to Portfolio</button>
-      </form>
-
-    </section>
-
-    <section style="margin-top:20px">
-      ${items.length ? rows : '<div class="empty">No portfolio yet</div>'}
-    </section>
+    </div>
   `;
 }
 
@@ -2352,6 +2405,13 @@ function renderStudentPortfolio(items) {
     </section>
   `;
 }
+async function bootStudentPortfolioPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  await ensureStudentMirror(bundle.user, bundle.profile);
+  await refreshStudentPortfolioPage(bundle);
+}
 
 async function bootStudentPortfolio() {
   const bundle = await requireAuth();
@@ -2372,37 +2432,85 @@ async function bootStudentPortfolio() {
 ========================= */
 
 async function bootTutorPortfolios() {
-  const { user } = await requireAuth();
+  const bundle = await requireAuth();
+  if (!bundle) return;
 
-  const students = await loadAllStudents();
+  const items = await loadAllPortfolios();
 
-  let html = `<section class="card panel"><h3>Student Life Overview</h3>`;
-
-  for (const s of students) {
-    const portfolio = await loadStudentPortfolio(s.id);
-    const assessments = await getDocs(query(collection(db,'assessments'), where('studentId','==',s.id)));
-    const attendance = await getDocs(query(collection(db,'attendance'), where('studentId','==',s.id)));
-
-    const highs = portfolio.filter(p => p.tag === 'high').length;
-    const lows = portfolio.filter(p => p.tag === 'low').length;
-
-    html += `
-      <div class="card panel" style="margin-top:12px">
-        <h4>${escapeHtml(s.full_name || s.name)}</h4>
-        <p>Portfolio Items: ${portfolio.length}</p>
-        <p>Highs: ${highs} | Lows: ${lows}</p>
-        <p>Assessments: ${assessments.size}</p>
-        <p>Attendance Records: ${attendance.size}</p>
-      </div>
-    `;
-  }
-
-  html += `</section>`;
-
-  document.getElementById('page-content').innerHTML = html;
+  document.getElementById('page-content').innerHTML =
+    renderTutorPortfolios(items);
 }
 
+async function loadParentChildren(parentUid) {
 
+  // 🔥 You MUST store parentId on student when linking
+  const snap = await getDocs(
+    query(collection(db, 'users'), where('parentId', '==', parentUid))
+  );
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  }));
+}
+function renderParentChildrenPage(children) {
+
+  const cards = children.map(child => `
+    <div class="card panel" style="margin-bottom:16px">
+
+      <h3>${escapeHtml(child.full_name || child.name || 'Student')}</h3>
+      <p>Grade: ${escapeHtml(child.grade_level || '—')}</p>
+
+      <button 
+        class="btn view-portfolio-btn"
+        data-id="${child.id}"
+      >
+        View Portfolio
+      </button>
+
+    </div>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>Your Children</h3>
+      ${children.length ? cards : '<div class="empty">No children linked</div>'}
+    </section>
+  `;
+}
+
+async function bootParentChildrenPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  const { user } = bundle;
+
+  const children = await loadParentChildren(user.uid);
+
+  const container = document.getElementById('page-content');
+  container.innerHTML = renderParentChildrenPage(children);
+
+  // 🔥 CLICK HANDLER (NAVIGATE)
+  document.querySelectorAll('.view-portfolio-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const childId = btn.dataset.id;
+
+      // 🔥 PASS CHILD ID VIA URL
+      window.location.href = `/parent/portfolio.html?childId=${childId}`;
+    });
+  });
+}
+async function loadChildPortfolio(childId) {
+
+  const snap = await getDocs(
+    query(collection(db, 'portfolio'), where('studentId', '==', childId))
+  );
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  }));
+}
 async function bootStudentReportsPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
@@ -2418,7 +2526,50 @@ async function bootStudentReportsPage() {
 }
 
 
+async function loadAllPortfolios() {
+  const snap = await getDocs(collection(db, 'portfolio'));
 
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+function renderTutorPortfolios(items) {
+
+  const grouped = {};
+
+  items.forEach(item => {
+    if (!grouped[item.studentId]) {
+      grouped[item.studentId] = {
+        name: item.studentName || 'Student',
+        entries: []
+      };
+    }
+    grouped[item.studentId].entries.push(item);
+  });
+
+  const html = Object.values(grouped).map(student => `
+    <section class="card panel" style="margin-bottom:20px">
+
+      <h3>${escapeHtml(student.name)}</h3>
+
+      ${student.entries.map(entry => `
+        <div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-2)">
+          
+          <strong>${escapeHtml(entry.type || '')}</strong>
+          <small style="float:right">${fmtDate(entry.createdAt)}</small>
+
+          <p>${escapeHtml(entry.note || '')}</p>
+
+          ${entry.fileUrl ? renderFilePreview(entry.fileUrl, entry.fileName) : ''}
+
+        </div>
+      `).join('')}
+
+    </section>
+  `).join('');
+
+  return html || '<div class="empty">No portfolios yet</div>';
+}
 
 /* =========================
    REPORT SYSTEM
@@ -2520,12 +2671,28 @@ async function bootStudentResourcesPage() {
   pageContent.innerHTML = renderStudentResourcesPage(resources);
 }
 
+async function bootParentPortfolioPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
 
+  const params = new URLSearchParams(window.location.search);
+  const childId = params.get('childId');
+
+  if (!childId) {
+    document.getElementById('page-content').innerHTML =
+      '<div class="empty">No child selected</div>';
+    return;
+  }
+
+  const items = await loadChildPortfolio(childId);
+
+  document.getElementById('page-content').innerHTML =
+    renderParentPortfolio(items);
+}
 
 /* =========================
    OLD PAGE ROUTER (still used for legacy/special pages)
 ========================= */
-
 if (pageKey === 'submit-work') {
   bootSubmitWorkPage();
 
@@ -2547,18 +2714,37 @@ if (pageKey === 'submit-work') {
 } else if (pageKey === 'messages') {
   bootMessagesPage();
 
+
+// =========================
+// 🎓 STUDENT
+// =========================
 } else if (pageKey === 'portfolio' && pageRole === 'student') {
   bootStudentPortfolioPage();
-
-} else if (pageKey === 'portfolio') {
-  bootStudentPortfolio();
-
-} else if (pageKey === 'portfolios') {
-  bootTutorPortfolios();
 
 } else if (pageKey === 'reports' && pageRole === 'student') {
   bootStudentReportsPage();
 
+
+// =========================
+// 👨‍👩‍👧 PARENT
+// =========================
+} else if (pageKey === 'children' && pageRole === 'parent') {
+  bootParentChildrenPage();   // 🔥 MISSING FIX
+
+} else if (pageKey === 'portfolio' && pageRole === 'parent') {
+  bootParentPortfolioPage();
+
+
+// =========================
+// 👨‍🏫 TUTOR
+// =========================
+} else if (pageKey === 'portfolios' && pageRole === 'tutor') {
+  bootTutorPortfolios();
+
+
+// =========================
+// GENERAL
+// =========================
 } else if (pageKey === 'reports') {
   bootReportsPage();
 
