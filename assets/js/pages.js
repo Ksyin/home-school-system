@@ -1198,14 +1198,11 @@ async function submitStudentPortfolio({ user, profile }) {
       studentName: getStudentDisplayName(profile, user),
       note,
       tag,
-      type: file ? 'file' : 'note',
       fileUrl: upload.url,
       fileName: upload.name,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-
-    alert("Portfolio updated");
 
     location.reload();
   });
@@ -2247,19 +2244,66 @@ async function bootStudentMessagesPage() {
    PORTFOLIO (STUDENT)
 ========================= */
 
-async function loadStudentPortfolio(studentId) {
+async function loadStudentPortfolio(studentUid) {
   const snap = await getDocs(
-    query(collection(db, 'portfolio'), where('studentId', '==', studentId))
+    query(collection(db, 'portfolio'), where('studentId', '==', studentUid))
   );
 
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...d.data()
-  })).sort((a, b) => {
-    const aTime = a.createdAt?.seconds || 0;
-    const bTime = b.createdAt?.seconds || 0;
-    return bTime - aTime;
-  });
+  return snap.docs
+    .map(d => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
+
+function renderStudentPortfolioPage(items) {
+  const rows = items.map(item => `
+    <div class="card panel" style="margin-bottom:14px">
+
+      <div style="display:flex;justify-content:space-between">
+        <strong>${escapeHtml(item.tag || 'Portfolio')}</strong>
+        <small>${fmtDate(item.createdAt)}</small>
+      </div>
+
+      <p style="margin-top:10px">${escapeHtml(item.note || '')}</p>
+
+      ${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : ''}
+
+    </div>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>My Portfolio</h3>
+
+      <form id="portfolioForm" class="stack-form">
+
+        <div class="form-row">
+          <label>Tag</label>
+          <input id="portfolioTag" placeholder="e.g Achievement / Project">
+        </div>
+
+        <div class="form-row">
+          <label>Note</label>
+          <textarea id="portfolioNote"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Upload</label>
+          <input id="portfolioFile" type="file">
+        </div>
+
+        <button class="btn">Add to Portfolio</button>
+      </form>
+
+    </section>
+
+    <section style="margin-top:20px">
+      ${items.length ? rows : '<div class="empty">No portfolio yet</div>'}
+    </section>
+  `;
 }
 
 function renderStudentPortfolio(items) {
@@ -2357,6 +2401,24 @@ async function bootTutorPortfolios() {
   document.getElementById('page-content').innerHTML = html;
 }
 
+
+async function bootStudentReportsPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  const { user } = bundle;
+
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const reports = await loadStudentReports(user.uid);
+
+  pageContent.innerHTML = renderStudentReportsPage(reports);
+}
+
+
+
+
 /* =========================
    REPORT SYSTEM
 ========================= */
@@ -2441,9 +2503,24 @@ window.AppUtil = {
   updateProfile
 };
 
-/* =========================
-   OLD PAGE ROUTER (still used for legacy/special pages)
-========================= */
+
+
+async function bootStudentResourcesPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+
+  const { user } = bundle;
+
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const resources = await loadStudentResources(user.uid);
+
+  pageContent.innerHTML = renderStudentResourcesPage(resources);
+}
+
+
+
 /* =========================
    OLD PAGE ROUTER (still used for legacy/special pages)
 ========================= */
@@ -2460,15 +2537,17 @@ if (pageKey === 'submit-work') {
 } else if (pageKey === 'classrooms') {
   bootClassroomsPage();
 
-} else if (pageKey === 'resources') {
+} else if (pageKey === 'resources' && pageRole === 'tutor') {
   bootResourcesPage();
 
+} else if (pageKey === 'resources' && pageRole === 'student') {
+  bootStudentResourcesPage();
+
 } else if (pageKey === 'messages') {
-  if (pageRole === 'student') {
-    bootStudentMessagesPage();
-  } else {
-    bootMessagesPage();
-  }
+  bootMessagesPage();
+
+} else if (pageKey === 'portfolio' && pageRole === 'student') {
+  bootStudentPortfolioPage();
 
 } else if (pageKey === 'portfolio') {
   bootStudentPortfolio();
@@ -2476,32 +2555,14 @@ if (pageKey === 'submit-work') {
 } else if (pageKey === 'portfolios') {
   bootTutorPortfolios();
 
+} else if (pageKey === 'reports' && pageRole === 'student') {
+  bootStudentReportsPage();
+
 } else if (pageKey === 'reports') {
   bootReportsPage();
 
 } else if (pageKey === 'dashboard') {
-  bootDashboard();   // ← can be removed later if you fully migrate to new system
-
-} else if (pageKey === 'assignments') {
-  if (pageRole === 'student') {
-    bootStudentAssignmentsPage();
-  } else {
-    bootDefaultPage();
-  }
-
-} else if (pageKey === 'assessments') {
-  if (pageRole === 'student') {
-    bootStudentAssessmentsPage();
-  } else {
-    bootDefaultPage();
-  }
-
-} else if (pageKey === 'activities') {
-  if (pageRole === 'student') {
-    bootStudentActivitiesPage();
-  } else {
-    bootDefaultPage();
-  }
+  bootDashboard();
 
 } else {
   bootDefaultPage();
