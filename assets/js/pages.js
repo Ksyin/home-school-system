@@ -242,20 +242,42 @@ async function requireAuth() {
 }
 
 async function uploadFile(file, folder = 'uploads') {
-  if (!file) return { url: '', path: '', name: '' };
+  try {
+    if (!file) {
+      return { url: '', path: '', name: '' };
+    }
 
-  const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-  const filePath = `${folder}/${Date.now()}-${safeName}`;
-  const storageRef = ref(storage, filePath);
+    const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+    const filePath = `${folder}/${Date.now()}-${safeName}`;
+    const storageRef = ref(storage, filePath);
 
-  await uploadBytes(storageRef, file);
-  const url = await getDownloadURL(storageRef);
+    console.log("Uploading file:", filePath);
 
-  return {
-    url,
-    path: filePath,
-    name: file.name
-  };
+    // 🔥 Add timeout protection
+    const uploadPromise = uploadBytes(storageRef, file);
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Upload timeout (10s)")), 10000)
+    );
+
+    await Promise.race([uploadPromise, timeoutPromise]);
+
+    console.log("Upload complete");
+
+    const url = await getDownloadURL(storageRef);
+
+    console.log("Download URL:", url);
+
+    return {
+      url,
+      path: filePath,
+      name: file.name
+    };
+
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err);
+    throw err; // very important
+  }
 }
 
 function getStudentDisplayName(profile, user) {
@@ -1407,7 +1429,10 @@ async function refreshResourcesPage(bundle) {
       const classroomId = document.getElementById('resourceClassroomId').value;
       const studentId = document.getElementById('resourceStudentId').value;
       const note = document.getElementById('resourceNote').value.trim();
-      const file = document.getElementById('resourceFile').files?.[0] || null;
+      const fileInput = document.getElementById('resourceFile');
+      const file = fileInput?.files?.[0] || null;
+
+      console.log("Selected file:", file); // 🔍 DEBUG
 
       if (!title) {
         msg.textContent = '❌ Please enter a resource title.';
@@ -1416,16 +1441,22 @@ async function refreshResourcesPage(bundle) {
       }
 
       if (saveBtn) saveBtn.disabled = true;
-      msg.textContent = '⏳ Uploading file and saving...';
+      msg.textContent = '⏳ Uploading... please wait';
       msg.style.color = '';
 
       try {
         const classroom = classrooms.find(c => c.id === classroomId);
         const student = students.find(s => s.id === studentId);
 
-        const upload = await uploadFile(file, `resources/${user.uid}`);
+        // ✅ SAFE upload (handles null + timeout issues)
+        let upload = { url: '', path: '', name: '' };
+
+        if (file) {
+          upload = await uploadFile(file, `resources/${user.uid}`);
+        }
 
         const resourceRef = doc(collection(db, 'resources'));
+
         await setDoc(resourceRef, {
           tutorId: user.uid,
           title,
@@ -1435,9 +1466,9 @@ async function refreshResourcesPage(bundle) {
           classroomName: classroom?.name || '',
           studentId: studentId || '',
           studentName: student?.full_name || student?.name || student?.email || '',
-          fileUrl: upload.url || '',
-          filePath: upload.path || '',
-          fileName: upload.name || '',
+          fileUrl: upload.url,
+          filePath: upload.path,
+          fileName: upload.name,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -1445,11 +1476,17 @@ async function refreshResourcesPage(bundle) {
         msg.textContent = '✅ Resource saved successfully!';
         msg.style.color = 'var(--success)';
 
-        form.reset();                    // clear form for next upload
-        await refreshResourcesPage(bundle); // show the new resource instantly
+        form.reset();
+
+        // 🔥 small delay to avoid UI race condition
+        setTimeout(() => {
+          refreshResourcesPage(bundle);
+        }, 500);
+
       } catch (err) {
         console.error('Resource save error:', err);
-        msg.textContent = `❌ ${err.message || 'Upload failed. Check console.'}`;
+
+        msg.textContent = `❌ ${err.message || 'Upload failed.'}`;
         msg.style.color = 'var(--danger)';
       } finally {
         if (saveBtn) saveBtn.disabled = false;
@@ -1457,6 +1494,20 @@ async function refreshResourcesPage(bundle) {
     });
   }
 
+  // delete handler (unchanged)
+  document.querySelectorAll('.resource-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this resource permanently?')) return;
+
+      try {
+        await deleteDoc(doc(db, 'resources', btn.dataset.id));
+        await refreshResourcesPage(bundle);
+      } catch (err) {
+        alert('Delete failed: ' + err.message);
+      }
+    });
+  });
+}
   // Delete with confirmation
   document.querySelectorAll('.resource-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
