@@ -874,103 +874,241 @@ function renderFilePreview(url, name = '') {
 
   const lower = (name || url).toLowerCase();
 
-  // 🖼️ IMAGE
   if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
     return `
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <img src="${url}" style="max-width:120px;border-radius:8px;cursor:pointer"
-             onclick="openFileModal('${url}', 'image')">
-        <button class="btn small" onclick="openFileModal('${url}', 'image')">View</button>
-      </div>
-    `;
-  }
-
-  // 📄 PDF (FIXED — NO iframe anymore)
-  if (lower.endsWith('.pdf')) {
-    return `
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <div class="file-box" onclick="openFileModal('${url}', 'pdf')"
-             style="width:120px;height:150px;background:#f4f6fa;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
-          📄 PDF
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;">
+        <div
+          style="
+            width:160px;
+            height:110px;
+            border-radius:16px;
+            overflow:hidden;
+            background:#eef2ff;
+            box-shadow:0 8px 24px rgba(15,23,42,.08);
+            cursor:pointer;
+          "
+          onclick="openFileModal('${url}', 'image', '${escapeHtml(name).replaceAll("'", "\\'")}')"
+        >
+          <img
+            src="${url}"
+            alt="${escapeHtml(name || 'Image')}"
+            style="width:100%;height:100%;object-fit:cover;display:block;"
+          >
         </div>
 
-        <button class="btn small" onclick="openFileModal('${url}', 'pdf')">
-          Open PDF
-        </button>
-
-        <a href="${url}" target="_blank" class="btn ghost small">Download</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button
+            type="button"
+            class="btn"
+            onclick="openFileModal('${url}', 'image', '${escapeHtml(name).replaceAll("'", "\\'")}')"
+          >
+            View
+          </button>
+          <a href="${url}" target="_blank" rel="noopener" class="btn ghost">Open</a>
+        </div>
       </div>
     `;
   }
 
-  // 🎥 VIDEO
-  if (lower.match(/\.(mp4|webm|ogg)$/)) {
+  if (lower.endsWith('.pdf')) {
     return `
-      <video controls style="width:120px;border-radius:8px;">
-        <source src="${url}">
-      </video>
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;">
+        <div
+          style="
+            width:160px;
+            height:110px;
+            border-radius:16px;
+            background:linear-gradient(180deg,#f8fafc 0%,#eef2ff 100%);
+            border:1px solid #dbe4ff;
+            box-shadow:0 8px 24px rgba(15,23,42,.08);
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            gap:8px;
+            cursor:pointer;
+            font-weight:800;
+            color:#1e3a8a;
+          "
+          onclick="openFileModal('${url}', 'pdf', '${escapeHtml(name).replaceAll("'", "\\'")}')"
+        >
+          <div style="font-size:28px;">📄</div>
+          <div>PDF Document</div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button
+            type="button"
+            class="btn"
+            onclick="openFileModal('${url}', 'pdf', '${escapeHtml(name).replaceAll("'", "\\'")}')"
+          >
+            Read PDF
+          </button>
+          <a href="${url}" target="_blank" rel="noopener" class="btn ghost">Open</a>
+          <a href="${url}" target="_blank" rel="noopener" download class="btn ghost">Download</a>
+        </div>
+      </div>
     `;
   }
 
-  // 📁 DEFAULT
+  if (lower.match(/\.(mp4|webm|ogg)$/)) {
+    return `
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;">
+        <video controls style="width:160px;border-radius:16px;background:#000;">
+          <source src="${url}">
+        </video>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button
+            type="button"
+            class="btn"
+            onclick="openFileModal('${url}', 'video', '${escapeHtml(name).replaceAll("'", "\\'")}')"
+          >
+            Play
+          </button>
+          <a href="${url}" target="_blank" rel="noopener" class="btn ghost">Open</a>
+        </div>
+      </div>
+    `;
+  }
+
   return `
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <button class="btn small" onclick="openFileModal('${url}', 'file')">
-        Open File
-      </button>
-      <a href="${url}" target="_blank" class="btn ghost small">Download</a>
+    <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;">
+      <div
+        style="
+          width:160px;
+          height:110px;
+          border-radius:16px;
+          background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%);
+          border:1px solid #e2e8f0;
+          box-shadow:0 8px 24px rgba(15,23,42,.08);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-weight:700;
+          color:#334155;
+        "
+      >
+        File
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button
+          type="button"
+          class="btn"
+          onclick="openFileModal('${url}', 'file', '${escapeHtml(name).replaceAll("'", "\\'")}')"
+        >
+          Open
+        </button>
+        <a href="${url}" target="_blank" rel="noopener" class="btn ghost">Open tab</a>
+      </div>
     </div>
   `;
 }
 
-function openFileModal(url, type) {
+function openFileModal(url, type, name = '') {
+  const existing = document.getElementById('filePreviewModal');
+  if (existing) existing.remove();
+
   let content = '';
 
   if (type === 'image') {
-    content = `<img src="${url}" style="max-width:100%;border-radius:10px">`;
-  } else if (type === 'pdf') {
-    // 🔥 BEST PDF VIEWER (Google Docs — always works)
     content = `
-      <iframe 
-        src="https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}"
-        style="width:100%;height:80vh;border:none;border-radius:10px;">
-      </iframe>
+      <div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
+        <img src="${url}" alt="${escapeHtml(name || 'Image preview')}"
+             style="max-width:100%;max-height:75vh;border-radius:14px;object-fit:contain;">
+      </div>
+    `;
+  } else if (type === 'pdf') {
+    content = `
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:12px 14px;border-radius:12px;background:#f5f7fb;color:#1f2937;font-weight:600;">
+          PDF Preview
+        </div>
+
+        <iframe
+          src="https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}"
+          style="width:100%;height:75vh;border:none;border-radius:14px;background:#fff;">
+        </iframe>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a href="${url}" target="_blank" rel="noopener" class="btn">Open in new tab</a>
+          <a href="${url}" target="_blank" rel="noopener" download class="btn ghost">Download</a>
+        </div>
+      </div>
+    `;
+  } else if (type === 'video') {
+    content = `
+      <div style="display:flex;justify-content:center;">
+        <video controls style="max-width:100%;max-height:75vh;border-radius:14px;background:#000;">
+          <source src="${url}">
+          Your browser does not support video preview.
+        </video>
+      </div>
     `;
   } else {
     content = `
-      <iframe src="${url}" style="width:100%;height:80vh;border:none;"></iframe>
+      <div style="display:flex;flex-direction:column;gap:14px;align-items:flex-start;">
+        <div style="padding:12px 14px;border-radius:12px;background:#f5f7fb;color:#1f2937;">
+          Preview is not available for this file type.
+        </div>
+        <a href="${url}" target="_blank" rel="noopener" class="btn">Open file</a>
+        <a href="${url}" target="_blank" rel="noopener" download class="btn ghost">Download</a>
+      </div>
     `;
   }
 
   const modal = document.createElement('div');
+  modal.id = 'filePreviewModal';
   modal.innerHTML = `
-    <div style="
-      position:fixed;
-      top:0;left:0;
-      width:100%;height:100%;
-      background:rgba(0,0,0,0.7);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      z-index:9999;
-    ">
-      <div style="
-        background:#fff;
-        padding:16px;
-        border-radius:12px;
-        max-width:90%;
-        max-height:90%;
-        overflow:auto;
-      ">
-        <div style="text-align:right;margin-bottom:10px">
-          <button class="btn danger" onclick="this.closest('div').parentElement.parentElement.remove()">Close</button>
+    <div
+      id="filePreviewOverlay"
+      style="
+        position:fixed;
+        inset:0;
+        background:rgba(15,23,42,.72);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:24px;
+        z-index:99999;
+      "
+    >
+      <div
+        style="
+          width:min(1100px, 96vw);
+          max-height:92vh;
+          overflow:auto;
+          background:#ffffff;
+          border-radius:22px;
+          box-shadow:0 25px 80px rgba(0,0,0,.28);
+          padding:20px;
+        "
+      >
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+          <div style="min-width:0;">
+            <div style="font-size:20px;font-weight:800;color:#0f172a;">${escapeHtml(name || 'File Preview')}</div>
+            <div style="font-size:13px;color:#64748b;word-break:break-all;">${escapeHtml(url)}</div>
+          </div>
+          <button type="button" id="closeFilePreviewBtn" class="btn danger">Close</button>
         </div>
+
         ${content}
       </div>
     </div>
   `;
 
   document.body.appendChild(modal);
+
+  const close = () => {
+    const el = document.getElementById('filePreviewModal');
+    if (el) el.remove();
+  };
+
+  document.getElementById('closeFilePreviewBtn')?.addEventListener('click', close);
+  document.getElementById('filePreviewOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'filePreviewOverlay') close();
+  });
 }
 
 
