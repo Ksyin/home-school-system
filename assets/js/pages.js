@@ -2309,33 +2309,17 @@ function renderStudentPortfolio(items) {
 }
 
 async function bootStudentPortfolio() {
-  const { user, profile } = await requireAuth();
+  const bundle = await requireAuth();
+  if (!bundle) return;
 
-  const items = await loadStudentPortfolio(user.uid);
+  await ensureStudentMirror(bundle.user, bundle.profile);
+
+  const items = await loadStudentPortfolio(bundle.user.uid);
 
   document.getElementById('page-content').innerHTML =
     renderStudentPortfolio(items);
 
-  document.getElementById('portfolioForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const note = document.getElementById('portfolioNote').value;
-    const tag = document.getElementById('portfolioTag').value;
-    const file = document.getElementById('portfolioFile').files[0];
-
-    const upload = await uploadFile(file, `portfolio/${user.uid}`);
-
-    await setDoc(doc(collection(db, 'portfolio')), {
-      studentId: user.uid,
-      note,
-      tag,
-      fileUrl: upload.url,
-      filePath: upload.path,
-      createdAt: serverTimestamp()
-    });
-
-    bootStudentPortfolio();
-  });
+  await submitStudentPortfolio(bundle);
 }
 
 /* =========================
