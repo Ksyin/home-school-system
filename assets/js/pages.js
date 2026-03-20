@@ -1601,49 +1601,6 @@ async function bootDefaultPage() {
 }
 
 /* =========================
-   GLOBALS
-========================= */
-
-window.AppUtil = {
-  auth,
-  db,
-  storage,
-  requireAuth,
-  getUserProfile,
-  uploadFile,
-  fmtDate,
-  statusBadge,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  updateProfile
-};
-
-/* =========================
-   ROUTER
-========================= */
-
-if (pageKey === 'submit-work') {
-  bootSubmitWorkPage();
-} else if (pageKey === 'lesson-plans') {
-  bootLessonPlansPage();
-} else if (pageKey === 'learners') {
-  bootLearnersPage();
-} else if (pageKey === 'classrooms') {
-  bootClassroomsPage();
-} else if (pageKey === 'resources') {
-  bootResourcesPage();
-} else if (pageKey === 'messages') {
-  bootMessagesPage();
-} else {
-  bootDefaultPage();
-}
-/* =====================================================
-   NEW: PORTFOLIO + ANALYTICS + REPORT SYSTEM
-   (APPENDED - DOES NOT REMOVE ANY OLD CODE)
-===================================================== */
-
-/* =========================
    PORTFOLIO (STUDENT)
 ========================= */
 
@@ -1738,7 +1695,6 @@ async function bootStudentPortfolio() {
   });
 }
 
-
 /* =========================
    TUTOR PORTFOLIO (FULL LIFE VIEW)
 ========================= */
@@ -1773,7 +1729,6 @@ async function bootTutorPortfolios() {
 
   document.getElementById('page-content').innerHTML = html;
 }
-
 
 /* =========================
    REPORT SYSTEM
@@ -1819,42 +1774,285 @@ async function bootReportsPage() {
   });
 }
 
-
 /* =========================
    DASHBOARD (REAL ANALYTICS)
 ========================= */
 
 async function bootDashboard() {
-  const { user } = await requireAuth();
-
-  const students = await loadAllStudents();
-  const assignments = await getDocs(collection(db,'assignments'));
-  const submissions = await getDocs(collection(db,'submissions'));
-
-  document.getElementById('page-content').innerHTML = `
-    <section class="card panel">
-      <h3>Dashboard</h3>
-      <p>Students: ${students.length}</p>
-      <p>Assignments: ${assignments.size}</p>
-      <p>Submissions: ${submissions.size}</p>
-    </section>
-  `;
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  // The new unified version will override this — see loadExtendedPages below
 }
-
 
 /* =========================
-   ROUTER EXTENSION (DO NOT REMOVE OLD ONE)
+   GLOBALS
 ========================= */
 
-if (pageKey === 'portfolio') {
+window.AppUtil = {
+  auth,
+  db,
+  storage,
+  requireAuth,
+  getUserProfile,
+  uploadFile,
+  fmtDate,
+  statusBadge,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile
+};
+
+/* =========================
+   OLD PAGE ROUTER (still used for legacy/special pages)
+========================= */
+
+if (pageKey === 'submit-work') {
+  bootSubmitWorkPage();
+} else if (pageKey === 'lesson-plans') {
+  bootLessonPlansPage();
+} else if (pageKey === 'learners') {
+  bootLearnersPage();
+} else if (pageKey === 'classrooms') {
+  bootClassroomsPage();
+} else if (pageKey === 'resources') {
+  bootResourcesPage();
+} else if (pageKey === 'messages') {
+  bootMessagesPage();
+} else if (pageKey === 'portfolio') {
   bootStudentPortfolio();
-}
-else if (pageKey === 'portfolios') {
+} else if (pageKey === 'portfolios') {
   bootTutorPortfolios();
-}
-else if (pageKey === 'reports') {
+} else if (pageKey === 'reports') {
   bootReportsPage();
+} else if (pageKey === 'dashboard') {
+  bootDashboard();   // ← can be removed later if you fully migrate to new system
+} else {
+  bootDefaultPage();
 }
-else if (pageKey === 'dashboard') {
-  bootDashboard();
+
+/* =====================================================
+   EXTENSION: NEW PAGE SYSTEM (DO NOT REMOVE OLD CODE)
+   Unified handler for new / modernized pages
+   ===================================================== */
+
+async function loadExtendedPages(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  switch (pageKey) {
+    /* ================= DASHBOARD ================= */
+    case 'dashboard': {
+      const students = await loadAllStudents();
+      const assignmentsSnap = await getDocs(
+        query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
+      );
+      const submissionsSnap = await getDocs(
+        query(collection(db, 'submissions'), where('tutorId', '==', user.uid))
+      );
+
+      pageContent.innerHTML = `
+        <div class="grid cols-3 gap-4" style="margin-bottom:24px;">
+          <div class="card stat success">
+            <h3>${students.length}</h3>
+            <p>Total Students</p>
+          </div>
+          <div class="card stat primary">
+            <h3>${assignmentsSnap.size}</h3>
+            <p>Assignments Created</p>
+          </div>
+          <div class="card stat warn">
+            <h3>${submissionsSnap.size}</h3>
+            <p>Total Submissions</p>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <h3>Recent Activity (last 10 submissions)</h3>
+          <div id="recentActivity" class="stack gap-3"></div>
+        </div>
+      `;
+
+      const container = document.getElementById('recentActivity');
+      if (container && submissionsSnap.docs.length > 0) {
+        submissionsSnap.docs.slice(0, 10).forEach(docSnap => {
+          const d = docSnap.data();
+          container.innerHTML += `
+            <div class="list-item flex between">
+              <div>
+                <strong>${escapeHtml(d.assignmentTitle || 'Submission')}</strong>
+                <div><small>by ${escapeHtml(d.studentName || 'Student')}</small></div>
+              </div>
+              <div class="text-right">
+                <small>${fmtDate(d.submittedAt)}</small>
+                <div>${statusBadge(d.status)}</div>
+              </div>
+            </div>
+          `;
+        });
+      } else if (container) {
+        container.innerHTML = '<p class="empty">No recent submissions yet.</p>';
+      }
+      break;
+    }
+
+    /* ================= ASSIGNMENTS (tutor only for now) ================= */
+    case 'assignments': {
+      if (pageRole !== 'tutor') {
+        pageContent.innerHTML = '<div class="card panel"><p>This page is only available for tutors.</p></div>';
+        break;
+      }
+
+      const snap = await getDocs(
+        query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
+      );
+
+      pageContent.innerHTML = `
+        <section class="card panel">
+          <h3>Create New Assignment</h3>
+          <form id="assignmentForm" class="stack-form">
+            <div class="form-row">
+              <label>Title</label>
+              <input name="title" required placeholder="Mid-term Math Test">
+            </div>
+            <div class="form-row">
+              <label>Subject</label>
+              <input name="subject" placeholder="Mathematics">
+            </div>
+            <div class="form-row">
+              <label>Description / Instructions</label>
+              <textarea name="description" rows="4" placeholder="Complete all questions..."></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Create Assignment</button>
+              <span id="assignMsg"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card panel" style="margin-top:24px;">
+          <h3>Your Assignments (${snap.size})</h3>
+          <div id="assignmentList" class="stack gap-3"></div>
+        </section>
+      `;
+
+      const list = document.getElementById('assignmentList');
+      if (snap.empty) {
+        list.innerHTML = '<p class="empty">No assignments created yet.</p>';
+      } else {
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          list.innerHTML += `
+            <div class="list-item flex between">
+              <div>
+                <strong>${escapeHtml(d.title || 'Untitled')}</strong>
+                <div><small>${escapeHtml(d.subject || '—')}</small></div>
+              </div>
+              <div>
+                <button class="btn danger small" data-id="${docSnap.id}">Delete</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      document.getElementById('assignmentForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const msg = document.getElementById('assignMsg');
+
+        try {
+          await setDoc(doc(collection(db, 'assignments')), {
+            tutorId: user.uid,
+            tutorName: profile?.name || profile?.full_name || user.email || 'Tutor',
+            title: f.title.value.trim(),
+            subject: f.subject.value.trim(),
+            description: f.description.value.trim(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+          msg.textContent = 'Assignment created!';
+          msg.className = 'success';
+          setTimeout(() => location.reload(), 1200);
+        } catch (err) {
+          msg.textContent = 'Error: ' + err.message;
+          msg.className = 'danger';
+        }
+      });
+
+      list?.addEventListener('click', async (e) => {
+        if (e.target.dataset.id && confirm('Delete this assignment?')) {
+          await deleteDoc(doc(db, 'assignments', e.target.dataset.id));
+          location.reload();
+        }
+      });
+      break;
+    }
+
+    // ────────────────────────────────────────────────
+    //  Placeholder / skeleton for other new pages
+    //  You can expand these later
+    // ────────────────────────────────────────────────
+
+    case 'assessments':
+      pageContent.innerHTML = `<div class="card panel"><h3>Assessments (coming soon)</h3><p>Grade submissions here...</p></div>`;
+      break;
+
+    case 'attendance':
+      pageContent.innerHTML = `<div class="card panel"><h3>Attendance (coming soon)</h3><p>Record daily presence...</p></div>`;
+      break;
+
+    case 'portfolios':
+      pageContent.innerHTML = `<div class="card panel"><h3>Student Portfolios Overview (coming soon)</h3></div>`;
+      break;
+
+    case 'reports':
+      pageContent.innerHTML = `<div class="card panel"><h3>Report Cards (coming soon)</h3></div>`;
+      break;
+
+    case 'settings':
+      pageContent.innerHTML = `
+        <div class="card panel">
+          <h3>Profile Settings</h3>
+          <form id="settingsForm" class="stack-form">
+            <div class="form-row">
+              <label>Full Name</label>
+              <input name="full_name" value="${escapeHtml(profile?.full_name || profile?.name || '')}">
+            </div>
+            <button type="submit" class="btn primary">Update Profile</button>
+          </form>
+        </div>
+      `;
+      document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = e.target.full_name.value.trim();
+        if (name) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            full_name: name,
+            updatedAt: serverTimestamp()
+          });
+          alert('Profile updated');
+          location.reload();
+        }
+      });
+      break;
+
+    default:
+      // Do nothing — let old boot functions handle it
+      break;
+  }
 }
+
+/* =========================
+   FINAL AUTH HOOK – runs BOTH old + new systems
+========================= */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+
+  const profile = await getUserProfile(user.uid);
+  if (!profile) return;
+
+  // 1. Old system: page-specific boot functions already ran via the if/else above
+  // 2. New system: unified modern renderer — overrides content for known new pages
+  await loadExtendedPages(user, profile);
+});
