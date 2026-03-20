@@ -868,6 +868,50 @@ function renderClassroomsPage(classrooms, students) {
   `;
 }
 
+
+function renderFilePreview(url, name = '') {
+  if (!url) return '—';
+
+  const lower = (name || url).toLowerCase();
+
+  // 🖼️ IMAGE
+  if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+    return `
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <img src="${url}" style="max-width:120px;border-radius:8px;">
+        <a href="${url}" target="_blank">View Full</a>
+      </div>
+    `;
+  }
+
+  // 📄 PDF
+  if (lower.endsWith('.pdf')) {
+    return `
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <iframe src="${url}#toolbar=0" style="width:120px;height:150px;border:none;border-radius:6px;"></iframe>
+        <a href="${url}" target="_blank">Open PDF</a>
+      </div>
+    `;
+  }
+
+  // 🎥 VIDEO
+  if (lower.match(/\.(mp4|webm|ogg)$/)) {
+    return `
+      <video controls style="width:120px;border-radius:8px;">
+        <source src="${url}">
+      </video>
+    `;
+  }
+
+  // 📁 DEFAULT
+  return `
+    <a href="${url}" target="_blank" class="btn ghost">
+      📄 ${name || 'Open File'}
+    </a>
+  `;
+}
+
+
 /* =========================
    RENDER: RESOURCES (NEW & IMPROVED)
 ========================= */
@@ -879,21 +923,27 @@ function renderResourcesPage(resources, classrooms, students) {
       <td>${escapeHtml(item.type || 'File')}</td>
       <td>${escapeHtml(item.classroomName || '—')}</td>
       <td>${escapeHtml(item.studentName || '—')}</td>
+
       <td>
         ${item.fileUrl 
-          ? `<a href="${item.fileUrl}" target="_blank" rel="noopener" class="btn ghost">📄 ${escapeHtml(item.fileName || 'Open')}</a>` 
+          ? renderFilePreview(item.fileUrl, item.fileName) 
           : '—'
         }
       </td>
+
       <td>${fmtDate(item.createdAt)}</td>
+
       <td>
-        <button class="btn danger resource-delete-btn" type="button" data-id="${escapeHtml(item.id)}">Delete</button>
+        <button class="btn danger resource-delete-btn" type="button" data-id="${escapeHtml(item.id)}">
+          Delete
+        </button>
       </td>
     </tr>
+
     <tr class="details-row">
       <td colspan="7">
-        <div style="padding:14px; background:var(--surface-2); border-radius:12px; font-size:14px; line-height:1.5;">
-          <strong>Description:</strong> ${escapeHtml(item.note || 'No description provided')}<br>
+        <div style="padding:14px; background:var(--surface-2); border-radius:12px;">
+          <strong>Description:</strong> ${escapeHtml(item.note || 'No description')}<br>
           ${item.fileName ? `<strong>File:</strong> ${escapeHtml(item.fileName)}` : ''}
         </div>
       </td>
@@ -903,57 +953,54 @@ function renderResourcesPage(resources, classrooms, students) {
   return `
     <section class="card panel">
       <h3>📚 Upload New Resource</h3>
-      <p>Share worksheets, PDFs, videos, notes, or any file with your classroom or individual students.</p>
 
       <form id="resourceForm" class="stack-form">
+
         <div class="form-row">
-          <label for="resourceTitle">Resource Title <span style="color:var(--danger)">*</span></label>
-          <input id="resourceTitle" type="text" required placeholder="Algebra Worksheet #3">
+          <label>Title *</label>
+          <input id="resourceTitle" required>
         </div>
 
         <div class="form-row">
-          <label for="resourceType">Type / Category</label>
-          <input id="resourceType" type="text" placeholder="Worksheet, Video, PDF, Notes...">
+          <label>Type</label>
+          <input id="resourceType">
         </div>
 
         <div class="form-row">
-          <label for="resourceClassroomId">Assign to Classroom (optional)</label>
+          <label>Classroom</label>
           <select id="resourceClassroomId">
-            <option value="">None / All students</option>
-            ${classrooms.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || 'Classroom')}</option>`).join('')}
+            <option value="">None</option>
+            ${classrooms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
           </select>
         </div>
 
         <div class="form-row">
-          <label for="resourceStudentId">Assign to Specific Student (optional)</label>
+          <label>Student</label>
           <select id="resourceStudentId">
             <option value="">None</option>
-            ${students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.full_name || s.name || s.email || 'Student')}</option>`).join('')}
+            ${students.map(s => `<option value="${s.id}">${s.full_name || s.email}</option>`).join('')}
           </select>
         </div>
 
         <div class="form-row">
-          <label for="resourceFile">Upload File</label>
+          <label>File</label>
           <input id="resourceFile" type="file">
         </div>
 
         <div class="form-row">
-          <label for="resourceNote">Description / Instructions for Students</label>
-          <textarea id="resourceNote" rows="4" placeholder="Add any notes or instructions..."></textarea>
+          <label>Description</label>
+          <textarea id="resourceNote"></textarea>
         </div>
 
-        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button type="submit" class="btn" id="saveResourceBtn">📤 Save & Upload Resource</button>
-          <span id="resourceMsg" style="font-weight:500"></span>
-        </div>
+        <button class="btn" id="saveResourceBtn">Upload</button>
+        <span id="resourceMsg"></span>
       </form>
     </section>
 
-    <section class="card panel" style="margin-top:24px">
-      <h3>My Resources (${resources.length})</h3>
-      <p>Click the blue button to open the file. Delete removes it permanently.</p>
+    <section class="card panel" style="margin-top:20px">
+      <h3>Resources (${resources.length})</h3>
       ${simpleTable(
-        ['Title', 'Type', 'Classroom', 'Student', 'File', 'Created', 'Action'],
+        ['Title','Type','Classroom','Student','File','Created','Action'],
         rowsHtml
       )}
     </section>
@@ -1414,12 +1461,10 @@ async function refreshResourcesPage(bundle) {
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
-  // 🔹 Load data
   const resources = await loadResources(user.uid);
   const classrooms = await loadClassrooms(user.uid);
   const students = await loadAllStudents();
 
-  // 🔹 Render UI
   pageContent.innerHTML = renderResourcesPage(resources, classrooms, students);
 
   const form = document.getElementById('resourceForm');
@@ -1428,9 +1473,6 @@ async function refreshResourcesPage(bundle) {
 
   if (!form) return;
 
-  /* =========================
-     SUBMIT HANDLER (FINAL FIX)
-  ========================= */
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -1441,55 +1483,35 @@ async function refreshResourcesPage(bundle) {
     const note = document.getElementById('resourceNote').value.trim();
     const file = document.getElementById('resourceFile').files?.[0] || null;
 
-    // 🔴 Validation
     if (!title) {
-      msg.textContent = '❌ Please enter a resource title.';
-      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Enter title';
       return;
     }
 
-    // 🔒 Lock UI
-    if (saveBtn) saveBtn.disabled = true;
-    msg.textContent = '📤 Uploading...';
-    msg.style.color = '';
+    saveBtn.disabled = true;
+    msg.textContent = 'Uploading...';
 
     try {
       let upload = { url: '', path: '', name: '' };
 
-      /* =========================
-         CLOUDINARY UPLOAD ONLY
-      ========================= */
       if (file) {
         upload = await uploadFile(file, `resources/${user.uid}`);
       }
 
-      console.log('UPLOAD RESULT:', upload);
-
-      /* =========================
-         SAVE TO FIRESTORE
-      ========================= */
-      msg.textContent = '💾 Saving resource...';
-
       const classroom = classrooms.find(c => c.id === classroomId);
       const student = students.find(s => s.id === studentId);
 
-      const resourceRef = doc(collection(db, 'resources'));
-
-      await setDoc(resourceRef, {
+      await setDoc(doc(collection(db, 'resources')), {
         tutorId: user.uid,
         title,
-        type: type || 'File',
+        type,
         note,
 
-        classroomId: classroomId || '',
+        classroomId,
         classroomName: classroom?.name || '',
 
-        studentId: studentId || '',
-        studentName:
-          student?.full_name ||
-          student?.name ||
-          student?.email ||
-          '',
+        studentId,
+        studentName: student?.full_name || student?.email || '',
 
         fileUrl: upload.url,
         filePath: upload.path,
@@ -1499,47 +1521,24 @@ async function refreshResourcesPage(bundle) {
         updatedAt: serverTimestamp()
       });
 
-      console.log('✅ Resource saved');
-
-      /* =========================
-         SUCCESS UI
-      ========================= */
-      msg.textContent = '✅ Resource saved successfully!';
-      msg.style.color = 'var(--success)';
-
+      msg.textContent = 'Saved!';
       form.reset();
 
-      // 🔄 Refresh UI
-      setTimeout(() => {
-        refreshResourcesPage(bundle);
-      }, 300);
+      setTimeout(() => refreshResourcesPage(bundle), 300);
 
     } catch (err) {
-      console.error('❌ Resource error:', err);
-
-      msg.textContent = `❌ ${err.message || 'Upload failed.'}`;
-      msg.style.color = 'var(--danger)';
-
+      msg.textContent = err.message;
     } finally {
-      if (saveBtn) saveBtn.disabled = false;
+      saveBtn.disabled = false;
     }
   });
 
-  /* =========================
-     DELETE HANDLER
-  ========================= */
   document.querySelectorAll('.resource-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const ok = confirm('Delete this resource permanently?');
-      if (!ok) return;
+      if (!confirm('Delete?')) return;
 
-      try {
-        await deleteDoc(doc(db, 'resources', btn.dataset.id));
-        await refreshResourcesPage(bundle);
-      } catch (err) {
-        console.error('Delete error:', err);
-        alert('❌ Failed to delete: ' + err.message);
-      }
+      await deleteDoc(doc(db, 'resources', btn.dataset.id));
+      refreshResourcesPage(bundle);
     });
   });
 }
