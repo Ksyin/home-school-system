@@ -878,18 +878,27 @@ function renderFilePreview(url, name = '') {
   if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
     return `
       <div style="display:flex;flex-direction:column;gap:6px">
-        <img src="${url}" style="max-width:120px;border-radius:8px;">
-        <a href="${url}" target="_blank">View Full</a>
+        <img src="${url}" style="max-width:120px;border-radius:8px;cursor:pointer"
+             onclick="openFileModal('${url}', 'image')">
+        <button class="btn small" onclick="openFileModal('${url}', 'image')">View</button>
       </div>
     `;
   }
 
-  // 📄 PDF
+  // 📄 PDF (FIXED — NO iframe anymore)
   if (lower.endsWith('.pdf')) {
     return `
       <div style="display:flex;flex-direction:column;gap:6px">
-        <iframe src="${url}#toolbar=0" style="width:120px;height:150px;border:none;border-radius:6px;"></iframe>
-        <a href="${url}" target="_blank">Open PDF</a>
+        <div class="file-box" onclick="openFileModal('${url}', 'pdf')"
+             style="width:120px;height:150px;background:#f4f6fa;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          📄 PDF
+        </div>
+
+        <button class="btn small" onclick="openFileModal('${url}', 'pdf')">
+          Open PDF
+        </button>
+
+        <a href="${url}" target="_blank" class="btn ghost small">Download</a>
       </div>
     `;
   }
@@ -905,10 +914,63 @@ function renderFilePreview(url, name = '') {
 
   // 📁 DEFAULT
   return `
-    <a href="${url}" target="_blank" class="btn ghost">
-      📄 ${name || 'Open File'}
-    </a>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn small" onclick="openFileModal('${url}', 'file')">
+        Open File
+      </button>
+      <a href="${url}" target="_blank" class="btn ghost small">Download</a>
+    </div>
   `;
+}
+
+function openFileModal(url, type) {
+  let content = '';
+
+  if (type === 'image') {
+    content = `<img src="${url}" style="max-width:100%;border-radius:10px">`;
+  } else if (type === 'pdf') {
+    // 🔥 BEST PDF VIEWER (Google Docs — always works)
+    content = `
+      <iframe 
+        src="https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}"
+        style="width:100%;height:80vh;border:none;border-radius:10px;">
+      </iframe>
+    `;
+  } else {
+    content = `
+      <iframe src="${url}" style="width:100%;height:80vh;border:none;"></iframe>
+    `;
+  }
+
+  const modal = document.createElement('div');
+  modal.innerHTML = `
+    <div style="
+      position:fixed;
+      top:0;left:0;
+      width:100%;height:100%;
+      background:rgba(0,0,0,0.7);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+    ">
+      <div style="
+        background:#fff;
+        padding:16px;
+        border-radius:12px;
+        max-width:90%;
+        max-height:90%;
+        overflow:auto;
+      ">
+        <div style="text-align:right;margin-bottom:10px">
+          <button class="btn danger" onclick="this.closest('div').parentElement.parentElement.remove()">Close</button>
+        </div>
+        ${content}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
 }
 
 
