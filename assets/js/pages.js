@@ -246,29 +246,36 @@ async function uploadFile(file, folder = 'uploads') {
     return { url: '', path: '', name: '' };
   }
 
+  const CLOUD_NAME = 'djqqcepe8';
+  const UPLOAD_PRESET = 'homeschool';
+
   try {
-    const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-    const filePath = `${folder}/${Date.now()}-${safeName}`;
-    const storageRef = ref(storage, filePath);
+    console.log('📤 Uploading to Cloudinary...');
 
-    console.log('📤 Uploading:', filePath);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    formData.append('folder', folder);
 
-    // 🔥 IMPORTANT: add timeout protection
-    const uploadPromise = uploadBytes(storageRef, file);
-
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Upload timeout (10s)')), 10000)
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
+      {
+        method: 'POST',
+        body: formData
+      }
     );
 
-    await Promise.race([uploadPromise, timeout]);
+    const data = await response.json();
 
-    console.log('✅ Upload complete');
+    if (!response.ok || !data.secure_url) {
+      throw new Error(data?.error?.message || 'Upload failed');
+    }
 
-    const url = await getDownloadURL(storageRef);
+    console.log('✅ Upload success:', data.secure_url);
 
     return {
-      url,
-      path: filePath,
+      url: data.secure_url,
+      path: data.public_id,
       name: file.name
     };
 
