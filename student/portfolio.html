@@ -1,42 +1,29 @@
-<div id="page-content">
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio</title>
+<link rel="stylesheet" href="/assets/css/styles.css">
+</head>
 
-  <!-- UPLOAD -->
-  <section class="card panel">
-    <h3>Upload to Portfolio</h3>
+<body data-role="student" data-page="portfolio">
 
-    <form id="portfolioForm" class="stack-form">
+<div id="app-shell">
 
-      <div class="form-row">
-        <label>Note / Description</label>
-        <textarea id="portfolioNote" rows="4" placeholder="Explain this work..."></textarea>
-      </div>
+<main class="content">
 
-      <div class="form-row">
-        <label>Upload File</label>
-        <input type="file" id="portfolioFile">
-      </div>
+  <div class="topbar">
+    <h2>My Portfolio</h2>
+    <p>Track your progress and achievements</p>
+  </div>
 
-      <div class="form-row">
-        <label>Status (optional)</label>
-        <select id="portfolioStatus">
-          <option value="normal">Normal</option>
-          <option value="high">High Performance</option>
-          <option value="low">Needs Improvement</option>
-        </select>
-      </div>
+  <!-- KEEP YOUR EXISTING CONTENT -->
+  <div id="page-content"></div>
 
-      <div class="form-actions">
-        <button class="btn" type="submit">Upload</button>
-        <span id="portfolioMsg"></span>
-      </div>
-
-    </form>
-  </section>
-
-  <!-- LIST -->
-  <section class="card panel" style="margin-top:20px">
-    <h3>My Portfolio Items</h3>
-    <div id="portfolioList"></div>
-  </section>
-
+</main>
 </div>
+
+<script type="module" src="/assets/js/pages.js"></script>
+</body>
+</html>

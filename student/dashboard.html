@@ -1,1 +1,60 @@
-<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Dashboard</title><link rel='stylesheet' href='/assets/css/styles.css'></head><body data-role='student' data-page='dashboard' data-title='Dashboard' data-description='Overview of learning, tasks, resources, and performance.'><div id='app-shell' class='page-shell'></div><script type='module' src='/assets/js/pages.js'></script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Student Dashboard</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+
+<body data-role="student" data-page="dashboard">
+
+<div id="app-shell" class="page-shell">
+
+  <main class="content">
+
+    <div class="topbar">
+      <h2>Dashboard</h2>
+      <p>Your learning overview</p>
+    </div>
+
+    <div id="page-content">
+
+      <!-- STATS -->
+      <section class="grid cols-4 gap-4">
+        <div class="card stat primary">
+          <h3 id="statAssignments">0</h3>
+          <p>Assignments</p>
+        </div>
+
+        <div class="card stat success">
+          <h3 id="statSubmissions">0</h3>
+          <p>Submitted</p>
+        </div>
+
+        <div class="card stat warn">
+          <h3 id="statPending">0</h3>
+          <p>Pending</p>
+        </div>
+
+        <div class="card stat danger">
+          <h3 id="statReports">0</h3>
+          <p>Reports</p>
+        </div>
+      </section>
+
+      <!-- RECENT -->
+      <section class="card panel" style="margin-top:20px">
+        <h3>Recent Activity</h3>
+        <div id="studentRecent"></div>
+      </section>
+
+    </div>
+
+  </main>
+
+</div>
+
+<script type="module" src="/assets/js/pages.js"></script>
+</body>
+</html>
