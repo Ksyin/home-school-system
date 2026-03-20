@@ -1,1 +1,101 @@
-<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Register</title><link rel='stylesheet' href='/assets/css/styles.css'></head><body data-auth-page='public'><div class="auth-wrap"><div class="auth-card card"><div class="auth-aside"><h1 class="auth-title">Create an account</h1><p class="auth-sub">This form creates a real Firebase Authentication user, then stores profile data in Cloud Firestore under the <strong>users</strong> collection.</p><div class="list" style="margin-top:24px"><div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">Tutor demo access code: <strong>TUTOR2026</strong></div><div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">Parents and students can register directly.</div></div></div><div class="auth-main"><h2 class="auth-title" style="color:#162033">Register</h2><div id="notice" class="notice">Fill in the form below.</div><form id="registerForm" class="form-grid" style="margin-top:16px"><div><label>Full name</label><input name="fullName" required></div><div><label>Email</label><input type="email" name="email" required></div><div><label>Phone</label><input name="phone"></div><div><label>Password</label><input type="password" name="password" minlength="6" required></div><div><label>Role</label><select name="role"><option value="parent">Parent</option><option value="tutor">Tutor</option><option value="student">Student</option></select></div><div><label>Access code (tutor only)</label><input name="accessCode" placeholder="Optional unless role is tutor"></div><button type="submit">Create account</button></form><div class="row" style="margin-top:16px"><a href="/login.html">Already have an account? Login</a></div></div></div></div><script type='module' src='/assets/js/auth.js'></script></body></html>
+<!doctype html>
+<html>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Register</title>
+<link rel='stylesheet' href='/assets/css/styles.css'>
+</head>
+
+<body data-auth-page='public'>
+
+<div class="auth-wrap">
+<div class="auth-card card">
+
+<div class="auth-aside">
+
+<h1 class="auth-title">Create an account</h1>
+
+<p class="auth-sub">
+Join the HomeSchool platform and start your personalized learning experience.
+</p>
+
+<div class="list" style="margin-top:24px">
+
+<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
+Tutors guide and support student learning journeys
+</div>
+
+<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
+Students build their academic and personal growth portfolios
+</div>
+
+<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
+Parents stay connected and track progress in real time
+</div>
+
+</div>
+
+</div>
+
+<div class="auth-main">
+
+<h2 class="auth-title" style="color:#162033">Register</h2>
+
+<div id="notice" class="notice">
+Fill in your details to get started.
+</div>
+
+<form id="registerForm" class="form-grid" style="margin-top:16px">
+
+<div>
+<label>Full name</label>
+<input name="fullName" required>
+</div>
+
+<div>
+<label>Email</label>
+<input type="email" name="email" required>
+</div>
+
+<div>
+<label>Phone</label>
+<input name="phone">
+</div>
+
+<div>
+<label>Password</label>
+<input type="password" name="password" minlength="6" required>
+</div>
+
+<div>
+<label>Role</label>
+<select name="role">
+<option value="parent">Parent</option>
+<option value="tutor">Tutor</option>
+<option value="student">Student</option>
+</select>
+</div>
+
+<div>
+<label>Access code (tutor only)</label>
+<input name="accessCode" placeholder="Only required for tutors">
+</div>
+
+<button type="submit">Create account</button>
+
+</form>
+
+<div class="row" style="margin-top:16px">
+<a href="/login.html">Already have an account? Login</a>
+</div>
+
+</div>
+
+</div>
+</div>
+
+<script type='module' src='/assets/js/auth.js'></script>
+
+</body>
+</html>
