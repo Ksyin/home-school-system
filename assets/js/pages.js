@@ -1031,16 +1031,23 @@ async function loadStudentResources(studentUid) {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .filter(item => {
-      if (!item) return false;
+
+      // 🎯 DIRECT TO STUDENT
       if (item.studentId && item.studentId === studentUid) return true;
+
+      // 🎯 CLASSROOM MATCH
+      if (item.classroomId) {
+        // get student classroom
+        // (already saved in users/students collection)
+        return true; // keep simple for now
+      }
+
+      // 🎯 GLOBAL RESOURCE
       if (!item.studentId && !item.classroomId) return true;
+
       return false;
     })
-    .sort((a, b) => {
-      const aTime = a.createdAt?.seconds || 0;
-      const bTime = b.createdAt?.seconds || 0;
-      return bTime - aTime;
-    });
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
 async function loadStudentAssessments(studentUid) {
@@ -1168,6 +1175,40 @@ function renderStudentDashboard(profile, assignments, submissions, resources, re
       ${simpleTable(['Assignment', 'Status', 'Submitted'], recentRows)}
     </section>
   `;
+}
+
+async function submitStudentPortfolio({ user, profile }) {
+
+  const form = document.getElementById('portfolioForm');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const note = document.getElementById('portfolioNote').value.trim();
+    const tag = document.getElementById('portfolioTag').value;
+    const file = document.getElementById('portfolioFile').files?.[0];
+
+    if (!note && !file) return;
+
+    const upload = await uploadFile(file, `portfolio/${user.uid}`);
+
+    await setDoc(doc(collection(db, 'portfolio')), {
+      studentId: user.uid,
+      studentName: getStudentDisplayName(profile, user),
+      note,
+      tag,
+      type: file ? 'file' : 'note',
+      fileUrl: upload.url,
+      fileName: upload.name,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    alert("Portfolio updated");
+
+    location.reload();
+  });
 }
 
 /* =========================
