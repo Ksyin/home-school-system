@@ -49,44 +49,45 @@ const pageDescription = document.body.dataset.description || '';
 
 const navMap = {
   parent: [
-    ['Dashboard', '/parent/dashboard.html', '🏠'],
-    ['Children', '/parent/children.html', '👧'],
-    ['Assignments', '/parent/assignments.html', '📝'],
-    ['Assessments', '/parent/assessments.html', '📊'],
-    ['Portfolio', '/parent/portfolio.html', '🗂️'],
-    ['Attendance', '/parent/attendance.html', '📅'],
-    ['Reports', '/parent/reports.html', '📄'],
-    ['Resources', '/parent/resources.html', '📚'],
-    ['Messages', '/parent/messages.html', '💬'],
-    ['Settings', '/parent/settings.html', '⚙️']
+    ['Dashboard', appPath('parent/dashboard.html'), '🏠'],
+    ['Children', appPath('parent/children.html'), '👧'],
+    ['Assignments', appPath('parent/assignments.html'), '📝'],
+    ['Assessments', appPath('parent/assessments.html'), '📊'],
+    ['Portfolio', appPath('parent/portfolio.html'), '🗂️'],
+    ['Attendance', appPath('parent/attendance.html'), '📅'],
+    ['Reports', appPath('parent/reports.html'), '📄'],
+    ['Resources', appPath('parent/resources.html'), '📚'],
+    ['Messages', appPath('parent/messages.html'), '💬'],
+    ['Settings', appPath('parent/settings.html'), '⚙️']
   ],
   tutor: [
-    ['Dashboard', '/tutor/dashboard.html', '🏠'],
-    ['Learners', '/tutor/learners.html', '👦'],
-    ['Classrooms', '/tutor/classrooms.html', '🏫'],
-    ['Assignments', '/tutor/assignments.html', '📝'],
-    ['Assessments', '/tutor/assessments.html', '📊'],
-    ['Portfolios', '/tutor/portfolios.html', '🗂️'],
-    ['Attendance', '/tutor/attendance.html', '📅'],
-    ['Report Cards', '/tutor/reports.html', '📄'],
-    ['Lesson Plans', '/tutor/lesson-plans.html', '🗓️'],
-    ['Resources', '/tutor/resources.html', '📚'],
-    ['Messages', '/tutor/messages.html', '💬'],
-    ['Settings', '/tutor/settings.html', '⚙️']
+    ['Dashboard', appPath('tutor/dashboard.html'), '🏠'],
+    ['Learners', appPath('tutor/learners.html'), '👦'],
+    ['Classrooms', appPath('tutor/classrooms.html'), '🏫'],
+    ['Assignments', appPath('tutor/assignments.html'), '📝'],
+    ['Assessments', appPath('tutor/assessments.html'), '📊'],
+    ['Portfolios', appPath('tutor/portfolios.html'), '🗂️'],
+    ['Attendance', appPath('tutor/attendance.html'), '📅'],
+    ['Report Cards', appPath('tutor/reports.html'), '📄'],
+    ['Lesson Plans', appPath('tutor/lesson-plans.html'), '🗓️'],
+    ['Resources', appPath('tutor/resources.html'), '📚'],
+    ['Messages', appPath('tutor/messages.html'), '💬'],
+    ['Settings', appPath('tutor/settings.html'), '⚙️']
   ],
   student: [
-    ['Dashboard', '/student/dashboard.html', '🏠'],
-    ['My Assignments', '/student/assignments.html', '📝'],
-    ['Submit Work', '/student/submit-work.html', '📤'],
-    ['Assessments', '/student/assessments.html', '📊'],
-    ['Portfolio', '/student/portfolio.html', '🗂️'],
-    ['Attendance', '/student/attendance.html', '📅'],
-    ['Reports', '/student/reports.html', '📄'],
-    ['Resources', '/student/resources.html', '📚'],
-    ['Messages', '/student/messages.html', '💬'],
-    ['Settings', '/student/settings.html', '⚙️']
+    ['Dashboard', appPath('student/dashboard.html'), '🏠'],
+    ['My Assignments', appPath('student/assignments.html'), '📝'],
+    ['Submit Work', appPath('student/submit-work.html'), '📤'],
+    ['Assessments', appPath('student/assessments.html'), '📊'],
+    ['Portfolio', appPath('student/portfolio.html'), '🗂️'],
+    ['Attendance', appPath('student/attendance.html'), '📅'],
+    ['Reports', appPath('student/reports.html'), '📄'],
+    ['Resources', appPath('student/resources.html'), '📚'],
+    ['Messages', appPath('student/messages.html'), '💬'],
+    ['Settings', appPath('student/settings.html'), '⚙️']
   ]
 };
+
 
 function escapeHtml(value = '') {
   return String(value)
@@ -196,52 +197,49 @@ async function getUserProfile(uid) {
   return userDoc.data();
 }
 
+function appPath(path = '') {
+  if (!path) return './';
+
+  const clean = String(path).replace(/^\/+/, '');
+  const depth = window.location.pathname
+    .split('/')
+    .filter(Boolean)
+    .slice(0, -1).length;
+
+  const prefix = depth > 0 ? '../'.repeat(depth) : './';
+  return prefix + clean;
+}
+
+
 async function requireAuth() {
   return new Promise((resolve) => {
     onAuthStateChanged(auth, async (user) => {
+
       if (!user) {
-        location.href = '/login.html';
+        location.href = appPath('login.html');
         return;
       }
 
       const profile = await getUserProfile(user.uid);
+
       if (!profile) {
-        location.href = '/unauthorized.html';
+        location.href = appPath('login.html');
         return;
       }
 
-      if (pageRole && profile.role !== pageRole) {
-        location.href = '/unauthorized.html';
+      const pageRole = document.body.dataset.role;
+
+      if (pageRole && pageRole !== profile.role) {
+        location.href = appPath('unauthorized.html');
         return;
-      }
-
-      const shell = document.getElementById('app-shell');
-      if (!shell) {
-        console.error('Missing #app-shell in page HTML');
-        return;
-      }
-
-      shell.innerHTML = `
-        ${sidebar({ ...profile, email: user.email })}
-        <main class="content">
-          ${uiHeader({ ...profile, email: user.email })}
-          <div id="page-content"></div>
-          <footer class="page-foot">HomeSchool student system</footer>
-        </main>
-      `;
-
-      const logoutBtn = document.getElementById('logoutBtn');
-      if (logoutBtn) {
-        logoutBtn.onclick = async () => {
-          await signOut(auth);
-          location.href = '/login.html';
-        };
       }
 
       resolve({ user, profile });
+
     });
   });
 }
+
 
 async function uploadFile(file, folder = 'uploads') {
   if (!file) {
@@ -1236,37 +1234,83 @@ async function refreshStudentPortfolioPage(bundle) {
    RENDER: STUDENT ASSIGNMENTS
 ========================= */
 
-function renderStudentAssignmentsPage(assignments, submissions) {
-  const submittedMap = new Map(
-    submissions.map(item => [item.assignmentId, item])
-  );
-
-  const rows = assignments.map(item => {
-    const submission = submittedMap.get(item.id);
-
-    return `
-      <tr>
-        <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
-        <td>${escapeHtml(item.subject || '—')}</td>
-        <td>${escapeHtml(item.description || 'No instructions')}</td>
-        <td>${item.dueDate ? fmtDate(item.dueDate) : '—'}</td>
-        <td>${submission ? statusBadge(submission.status || 'Submitted') : statusBadge('Pending')}</td>
-        <td>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <a class="btn" href="/student/submit-work.html?assignmentId=${encodeURIComponent(item.id)}">Do Task</a>
-            ${submission?.fileUrl ? `<a class="btn ghost" href="${submission.fileUrl}" target="_blank" rel="noopener">My File</a>` : ''}
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
+function renderStudentAssignmentsPage(assignments = []) {
   return `
-    <section class="card panel">
-      <h3>My Assignments</h3>
-      ${simpleTable(['Title', 'Subject', 'Instructions', 'Due', 'Status', 'Action'], rows)}
-    </section>
+    <div class="page-header">
+      <h2>My Assignments</h2>
+    </div>
+
+    <div class="card-grid">
+      ${assignments.length === 0 ? `<p>No assignments yet.</p>` : assignments.map(item => `
+        <div class="card">
+          <h3>${item.title}</h3>
+          <p>${item.description || ''}</p>
+          <small>Due: ${item.dueDate || 'N/A'}</small>
+
+          <div style="margin-top:10px;">
+            <a class="btn" href="${appPath('student/submit-work.html')}?assignmentId=${encodeURIComponent(item.id)}">
+              Do Task
+            </a>
+          </div>
+        </div>
+      `).join('')}
+    </div>
   `;
+}
+async function createAssignment(data) {
+  const docRef = await addDoc(collection(db, "assignments"), {
+    ...data,
+    createdAt: serverTimestamp()
+  });
+
+  return docRef.id;
+}
+
+async function bootAssignmentsPage() {
+  const bundle = await requireAuth();
+  const { user } = bundle;
+
+  const students = await fetchProfilesByRole("student");
+
+  const page = document.getElementById('page-content');
+
+  page.innerHTML = `
+    <h2>Create Assignment</h2>
+
+    <form id="assignmentForm">
+      <input id="title" placeholder="Title" required />
+      <textarea id="description" placeholder="Task / Questions"></textarea>
+
+      <select id="studentId" required>
+        <option value="">Select Student</option>
+        ${students.map(s => `
+          <option value="${s.id}">${s.full_name}</option>
+        `).join('')}
+      </select>
+
+      <button type="submit">Assign</button>
+    </form>
+
+    <p id="msg"></p>
+  `;
+
+  document.getElementById('assignmentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const title = document.getElementById('title').value;
+    const description = document.getElementById('description').value;
+    const studentId = document.getElementById('studentId').value;
+
+    await createAssignment({
+      title,
+      description,
+      studentId,
+      tutorId: user.uid,
+      status: "assigned"
+    });
+
+    document.getElementById('msg').innerText = "Assignment created!";
+  });
 }
 
 /* =========================
@@ -2155,30 +2199,62 @@ async function refreshMessagesPage(bundle) {
 
 async function bootSubmitWorkPage() {
   const bundle = await requireAuth();
-  if (!bundle) return;
-
-  if (bundle.profile?.role === 'student') {
-    await ensureStudentMirror(bundle.user, bundle.profile);
-  }
-
-  const { user, profile } = bundle;
-  const pageContent = document.getElementById('page-content');
-  if (!pageContent) return;
+  const { user } = bundle;
 
   const params = new URLSearchParams(window.location.search);
-  const forcedAssignmentId = params.get('assignmentId');
+  const assignmentId = params.get('assignmentId');
 
-  const assignments = await loadStudentAssignments(user.uid);
-  const submissions = await loadStudentSubmissions(user.uid);
+  const page = document.getElementById('page-content');
 
-  pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
+  const q = query(
+    collection(db, "assignments"),
+    where("id", "==", assignmentId)
+  );
 
-  if (forcedAssignmentId) {
-    const select = document.getElementById('assignmentId');
-    if (select) select.value = forcedAssignmentId;
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    page.innerHTML = `<p>Assignment not found</p>`;
+    return;
   }
 
-  await submitStudentWork({ user, profile });
+  const data = snap.docs[0].data();
+
+  page.innerHTML = `
+    <h2>${data.title}</h2>
+    <p>${data.description}</p>
+
+    <form id="submitForm">
+      <textarea id="answer" placeholder="Write your answer here..." required></textarea>
+      <input type="file" id="file" />
+      <button type="submit">Submit</button>
+    </form>
+
+    <p id="msg"></p>
+  `;
+
+  document.getElementById('submitForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const answer = document.getElementById('answer').value;
+    const file = document.getElementById('file').files[0];
+
+    let fileUrl = '';
+
+    if (file) {
+      fileUrl = await uploadToStorage(file, 'submissions');
+    }
+
+    await addDoc(collection(db, "submissions"), {
+      assignmentId,
+      studentId: user.uid,
+      answer,
+      fileUrl,
+      createdAt: serverTimestamp()
+    });
+
+    document.getElementById('msg').innerText = "Submitted!";
+  });
 }
 
 async function bootLessonPlansPage() {
@@ -2976,7 +3052,21 @@ onAuthStateChanged(auth, async (user) => {
   const profile = await getUserProfile(user.uid);
   if (!profile) return;
 
-  // 1. Old system: page-specific boot functions already ran via the if/else above
-  // 2. New system: unified modern renderer — overrides content for known new pages
+  const legacyHandledPages = [
+    'submit-work',
+    'lesson-plans',
+    'learners',
+    'classrooms',
+    'resources',
+    'messages',
+    'portfolio',
+    'reports',
+    'dashboard',
+    'children',
+    'portfolios'
+  ];
+
+  if (legacyHandledPages.includes(pageKey)) return;
+
   await loadExtendedPages(user, profile);
 });
