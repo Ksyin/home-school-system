@@ -522,14 +522,18 @@ async function loadMessagesForTutor(tutorUid) {
    RENDER: STUDENT SUBMIT WORK
 ========================= */
 
-function renderSubmitWorkPage(profile, user, assignments, submissions) {
+function renderSubmitWorkPage(profile, user, assignments, submissions, activeAssignmentId = '') {
   const studentName = getStudentDisplayName(profile, user);
-
   const options = assignments.map(item => `
-    <option value="${escapeHtml(item.id)}">
+    <option value="${escapeHtml(item.id)}" ${activeAssignmentId === item.id ? 'selected' : ''}>
       ${escapeHtml(item.title || 'Untitled Assignment')} ${item.subject ? `- ${escapeHtml(item.subject)}` : ''}
     </option>
   `).join('');
+
+  const selectedAssignment = assignments.find(item => item.id === activeAssignmentId) || assignments[0] || null;
+  const selectedSubmission = selectedAssignment
+    ? submissions.find(item => item.assignmentId === selectedAssignment.id) || null
+    : null;
 
   const submissionRows = submissions.map(item => `
     <tr>
@@ -537,14 +541,15 @@ function renderSubmitWorkPage(profile, user, assignments, submissions) {
       <td>${escapeHtml(item.subject || '—')}</td>
       <td>${statusBadge(item.status || 'Submitted')}</td>
       <td>${fmtDate(item.submittedAt)}</td>
+      <td>${item.answerText ? `<div style="max-width:260px;white-space:pre-wrap">${escapeHtml(item.answerText.slice(0, 180))}${item.answerText.length > 180 ? '…' : ''}</div>` : '—'}</td>
       <td>${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">View File</a>` : '—'}</td>
     </tr>
   `).join('');
 
   return `
     <section class="card panel">
-      <h3>Submit Assignment</h3>
-      <p>Welcome, ${escapeHtml(studentName)}. Choose an assignment, attach your work, and submit it.</p>
+      <h3>Complete Assignment</h3>
+      <p>Welcome, ${escapeHtml(studentName)}. Read the task, answer inside the system, and attach a file only when needed.</p>
 
       <form id="submissionForm" class="stack-form">
         <div class="form-row">
@@ -555,29 +560,66 @@ function renderSubmitWorkPage(profile, user, assignments, submissions) {
           </select>
         </div>
 
-        <div class="form-row">
-          <label for="submissionNote">Message / Notes</label>
-          <textarea id="submissionNote" name="submissionNote" rows="5" placeholder="Add notes about this work"></textarea>
+        <div id="assignmentDetailsCard" class="card" style="padding:16px;border-radius:16px;background:var(--surface-2);margin:8px 0 18px 0;">
+          ${selectedAssignment ? `
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <h4 style="margin:0 0 6px 0">${escapeHtml(selectedAssignment.title || 'Assignment')}</h4>
+                <div><small>${escapeHtml(selectedAssignment.subject || 'General')}</small></div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+                ${selectedAssignment.dueDate ? `<span class="badge warn">Due ${escapeHtml(fmtDate(selectedAssignment.dueDate))}</span>` : '<span class="badge">No due date</span>'}
+                ${selectedSubmission ? statusBadge(selectedSubmission.status || 'Submitted') : statusBadge('Pending')}
+              </div>
+            </div>
+
+            <div style="margin-top:14px">
+              <strong>Task Summary</strong>
+              <p style="margin:8px 0 0 0;white-space:pre-wrap">${escapeHtml(selectedAssignment.description || 'No summary provided.')}</p>
+            </div>
+
+            <div style="margin-top:14px">
+              <strong>Questions / Prompts</strong>
+              <div style="margin-top:10px">${renderAssignmentQuestions(selectedAssignment.questions || '')}</div>
+            </div>
+          ` : `
+            <div class="empty">Choose an assignment to view the full task.</div>
+          `}
         </div>
 
         <div class="form-row">
-          <label for="submissionFile">Attach file</label>
+          <label for="submissionAnswer">Your Answer</label>
+          <textarea id="submissionAnswer" name="submissionAnswer" rows="10" placeholder="Write your answers here..." required>${escapeHtml(selectedSubmission?.answerText || '')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="submissionNote">Private Note / Reflection</label>
+          <textarea id="submissionNote" name="submissionNote" rows="4" placeholder="Add a short note for your tutor">${escapeHtml(selectedSubmission?.note || '')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="submissionFile">Attach file (optional)</label>
           <input id="submissionFile" name="submissionFile" type="file">
+          ${selectedSubmission?.fileUrl ? `
+            <div style="margin-top:10px">
+              <span class="badge success">Existing file saved</span>
+              <a href="${selectedSubmission.fileUrl}" target="_blank" rel="noopener" style="margin-left:10px">Open attachment</a>
+            </div>
+          ` : ''}
         </div>
 
         <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button type="submit" class="btn" id="submitWorkBtn">Submit Work</button>
+          <button id="submitWorkBtn" type="submit" class="btn primary">
+            ${selectedSubmission ? 'Update Submission' : 'Submit Work'}
+          </button>
           <span id="submitWorkMsg"></span>
         </div>
       </form>
     </section>
 
-    <section class="card panel" style="margin-top:18px">
-      <h3>My Previous Submissions</h3>
-      ${simpleTable(
-        ['Assignment', 'Subject', 'Status', 'Submitted', 'Attachment'],
-        submissionRows
-      )}
+    <section class="card panel" style="margin-top:24px;">
+      <h3>Submission History</h3>
+      ${simpleTable(['Assignment', 'Subject', 'Status', 'Submitted', 'Answer', 'File'], submissionRows)}
     </section>
   `;
 }
@@ -1180,8 +1222,8 @@ function renderStudentDashboard(profile, assignments, submissions, resources, re
 }
 
 async function submitStudentPortfolio({ user, profile }) {
-
   const form = document.getElementById('portfolioForm');
+  const msg = document.getElementById('portfolioMsg');
   if (!form) return;
 
   form.addEventListener('submit', async (e) => {
@@ -1192,31 +1234,41 @@ async function submitStudentPortfolio({ user, profile }) {
     const note = document.getElementById('portfolioNote').value.trim();
     const file = document.getElementById('portfolioFile').files?.[0];
 
-    if (!title && !note && !file) return;
+    if (!title && !note && !file) {
+      if (msg) msg.textContent = 'Add a title, details, or a file first.';
+      return;
+    }
 
-    const upload = await uploadFile(file, `portfolio/${user.uid}`);
+    try {
+      if (msg) msg.textContent = 'Saving...';
 
-    await setDoc(doc(collection(db, 'portfolio')), {
-      studentId: user.uid,
-      studentName: getStudentDisplayName(profile, user),
+      const upload = await uploadFile(file, `portfolio/${user.uid}`);
 
-      type,
-      title,
-      note,
+      await setDoc(doc(collection(db, 'portfolio')), {
+        studentId: user.uid,
+        studentName: getStudentDisplayName(profile, user),
+        studentEmail: user.email || '',
+        type,
+        title,
+        note,
+        fileUrl: upload.url || '',
+        fileName: upload.name || '',
+        filePath: upload.path || '',
+        createdById: user.uid,
+        createdByName: getStudentDisplayName(profile, user),
+        createdByRole: 'student',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
-      fileUrl: upload.url,
-      fileName: upload.name,
+      form.reset();
+      if (msg) msg.textContent = 'Saved.';
 
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    // clear form
-    form.reset();
-
-    // reload UI
-    await refreshStudentPortfolioPage({ user, profile });
-
+      await refreshStudentPortfolioPage({ user, profile });
+    } catch (error) {
+      console.error('Portfolio save failed:', error);
+      if (msg) msg.textContent = error.message || 'Unable to save this entry.';
+    }
   });
 }
 
@@ -1243,17 +1295,23 @@ function renderStudentAssignmentsPage(assignments, submissions) {
 
   const rows = assignments.map(item => {
     const submission = submittedMap.get(item.id);
+    const assignedOn = item.createdAt ? fmtDate(item.createdAt) : '—';
+    const questionCount = assignmentQuestionBlocks(item.questions || item.description || '').length;
 
     return `
       <tr>
-        <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
+        <td>
+          <strong>${escapeHtml(item.title || 'Untitled')}</strong>
+          <div><small>Assigned ${assignedOn}</small></div>
+        </td>
         <td>${escapeHtml(item.subject || '—')}</td>
-        <td>${escapeHtml(item.description || 'No instructions')}</td>
+        <td>${escapeHtml((item.description || '').slice(0, 120) || 'No instructions')}</td>
+        <td>${questionCount ? `${questionCount} question${questionCount === 1 ? '' : 's'}` : 'Task'}</td>
         <td>${item.dueDate ? fmtDate(item.dueDate) : '—'}</td>
         <td>${submission ? statusBadge(submission.status || 'Submitted') : statusBadge('Pending')}</td>
         <td>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <a class="btn" href="/student/submit-work.html?assignmentId=${encodeURIComponent(item.id)}">Do Task</a>
+            <a class="btn" href="/student/submit-work.html?assignmentId=${encodeURIComponent(item.id)}">Open Task</a>
             ${submission?.fileUrl ? `<a class="btn ghost" href="${submission.fileUrl}" target="_blank" rel="noopener">My File</a>` : ''}
           </div>
         </td>
@@ -1263,8 +1321,13 @@ function renderStudentAssignmentsPage(assignments, submissions) {
 
   return `
     <section class="card panel">
-      <h3>My Assignments</h3>
-      ${simpleTable(['Title', 'Subject', 'Instructions', 'Due', 'Status', 'Action'], rows)}
+      <div class="section-head">
+        <div>
+          <h3>My Assignments</h3>
+          <p>Open each task, answer inside the system, and optionally attach supporting work.</p>
+        </div>
+      </div>
+      ${simpleTable(['Title', 'Subject', 'Overview', 'Task', 'Due', 'Status', 'Action'], rows)}
     </section>
   `;
 }
@@ -1579,6 +1642,7 @@ async function submitStudentWork({ user, profile }) {
     event.preventDefault();
 
     const assignmentId = form.assignmentId.value.trim();
+    const answerText = form.submissionAnswer.value.trim();
     const note = form.submissionNote.value.trim();
     const file = form.submissionFile.files?.[0] || null;
 
@@ -1587,8 +1651,13 @@ async function submitStudentWork({ user, profile }) {
       return;
     }
 
+    if (!answerText) {
+      msg.textContent = 'Please answer the task in the text area.';
+      return;
+    }
+
     submitBtn.disabled = true;
-    msg.textContent = 'Submitting...';
+    msg.textContent = 'Saving your work...';
 
     try {
       const assignmentRef = doc(db, 'assignments', assignmentId);
@@ -1599,10 +1668,17 @@ async function submitStudentWork({ user, profile }) {
       }
 
       const assignment = assignmentSnap.data();
-      const upload = await uploadFile(file, `submissions/${user.uid}`);
+      const existingSubmission = await loadAssignmentSubmission(assignmentId, user.uid);
+      const upload = file ? await uploadFile(file, `submissions/${user.uid}`) : {
+        url: existingSubmission?.fileUrl || '',
+        path: existingSubmission?.filePath || '',
+        name: existingSubmission?.fileName || ''
+      };
 
       const studentName = getStudentDisplayName(profile, user);
-      const submissionRef = doc(collection(db, 'submissions'));
+      const submissionRef = existingSubmission?.id
+        ? doc(db, 'submissions', existingSubmission.id)
+        : doc(collection(db, 'submissions'));
 
       const submissionPayload = {
         assignmentId,
@@ -1614,30 +1690,33 @@ async function submitStudentWork({ user, profile }) {
         studentName,
         studentEmail: user.email || '',
         note,
+        answerText,
         fileUrl: upload.url || '',
         filePath: upload.path || '',
         fileName: upload.name || '',
         status: 'Submitted',
-        grade: assignment.grade || '',
-        feedback: '',
+        grade: existingSubmission?.grade || assignment.grade || '',
+        feedback: existingSubmission?.feedback || '',
         submittedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
+        createdAt: existingSubmission?.createdAt || serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
       const batch = writeBatch(db);
 
-      batch.set(submissionRef, submissionPayload);
+      batch.set(submissionRef, submissionPayload, { merge: true });
 
       batch.set(
         doc(db, 'assignments', assignmentId, 'submissions', user.uid),
         {
           submissionId: submissionRef.id,
           assignmentId,
+          assignmentTitle: assignment.title || 'Untitled Assignment',
           studentId: user.uid,
           studentName,
           studentEmail: user.email || '',
           note,
+          answerText,
           fileUrl: upload.url || '',
           filePath: upload.path || '',
           fileName: upload.name || '',
@@ -1657,6 +1736,7 @@ async function submitStudentWork({ user, profile }) {
           subject: assignment.subject || '',
           tutorId: assignment.tutorId || assignment.createdBy || '',
           note,
+          answerText,
           fileUrl: upload.url || '',
           filePath: upload.path || '',
           fileName: upload.name || '',
@@ -1694,9 +1774,7 @@ async function submitStudentWork({ user, profile }) {
 
       await batch.commit();
 
-      msg.textContent = 'Work submitted successfully.';
-      form.reset();
-
+      msg.textContent = 'Your work has been saved successfully.';
       const latestAssignments = await loadStudentAssignments(user.uid);
       const latestSubmissions = await loadStudentSubmissions(user.uid);
 
@@ -1704,7 +1782,8 @@ async function submitStudentWork({ user, profile }) {
         profile,
         user,
         latestAssignments,
-        latestSubmissions
+        latestSubmissions,
+        assignmentId
       );
 
       await submitStudentWork({ user, profile });
@@ -2149,80 +2228,6 @@ async function refreshMessagesPage(bundle) {
   }
 }
 
-
-async function saveAssignment({ user }) {
-
-  const form = document.getElementById('assignmentForm');
-  const msg = document.getElementById('assignmentMsg');
-  const btn = document.getElementById('saveAssignmentBtn');
-
-  if (!form) return;
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const title = document.getElementById('assignmentTitle').value.trim();
-    const subject = document.getElementById('assignmentSubject').value.trim();
-    const description = document.getElementById('assignmentDescription').value.trim();
-    const dueDate = document.getElementById('assignmentDueDate').value;
-
-    const selectedStudents = [...document.getElementById('assignmentStudents').selectedOptions]
-      .map(opt => opt.value);
-
-    const file = document.getElementById('assignmentFile').files?.[0];
-
-    if (!title) {
-      msg.textContent = 'Enter title';
-      return;
-    }
-
-    btn.disabled = true;
-    msg.textContent = 'Saving...';
-
-    try {
-
-      let upload = { url: '', path: '', name: '' };
-
-      if (file) {
-        upload = await uploadFile(file, `assignments/${user.uid}`);
-      }
-
-      const assignmentRef = doc(collection(db, 'assignments'));
-
-      await setDoc(assignmentRef, {
-        title,
-        subject,
-        description,
-        dueDate,
-
-        tutorId: user.uid,
-
-        // ✅ THIS IS THE FIX
-        studentIds: selectedStudents,
-
-        // fallback compatibility
-        assignedTo: selectedStudents,
-
-        fileUrl: upload.url,
-        fileName: upload.name,
-
-        published: true,
-
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      msg.textContent = 'Assignment created!';
-      form.reset();
-
-    } catch (err) {
-      console.error(err);
-      msg.textContent = err.message;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-}
 /* =========================
    BOOT PAGES
 ========================= */
@@ -2240,16 +2245,22 @@ async function bootSubmitWorkPage() {
   if (!pageContent) return;
 
   const params = new URLSearchParams(window.location.search);
-  const forcedAssignmentId = params.get('assignmentId');
+  const forcedAssignmentId = params.get('assignmentId') || '';
 
-  const assignments = await loadStudentAssignments(user.uid);
-  const submissions = await loadStudentSubmissions(user.uid);
+  const [assignments, submissions] = await Promise.all([
+    loadStudentAssignments(user.uid),
+    loadStudentSubmissions(user.uid)
+  ]);
 
-  pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
+  pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions, forcedAssignmentId);
 
-  if (forcedAssignmentId) {
-    const select = document.getElementById('assignmentId');
-    if (select) select.value = forcedAssignmentId;
+  const select = document.getElementById('assignmentId');
+  if (select) {
+    select.addEventListener('change', async () => {
+      const latestSubmissions = await loadStudentSubmissions(user.uid);
+      pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, latestSubmissions, select.value);
+      await submitStudentWork({ user, profile });
+    });
   }
 
   await submitStudentWork({ user, profile });
@@ -2356,38 +2367,35 @@ async function loadStudentPortfolio(studentUid) {
 }
 
 function renderStudentPortfolioPage(items) {
-
   const feed = items.map(item => `
     <div class="portfolio-card">
-
-      <div style="display:flex;justify-content:space-between">
-        <span class="tag">${escapeHtml(item.type || 'Entry')}</span>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span class="tag">${escapeHtml(item.type || 'Entry')}</span>
+          <span class="badge">${escapeHtml(item.createdByRole || 'student')}</span>
+          <span class="badge">${escapeHtml(item.createdByName || item.studentName || 'User')}</span>
+        </div>
         <small>${fmtDate(item.createdAt)}</small>
       </div>
 
       <h4 style="margin-top:10px">${escapeHtml(item.title || '')}</h4>
-
-      <p>${escapeHtml(item.note || '')}</p>
+      <p style="white-space:pre-wrap">${escapeHtml(item.note || '')}</p>
 
       ${item.fileUrl ? `
         <div style="margin-top:10px">
           ${renderFilePreview(item.fileUrl, item.fileName)}
         </div>
       ` : ''}
-
     </div>
   `).join('');
 
   return `
     <div class="portfolio-grid">
-
-      <!-- LEFT: ADD ENTRY -->
       <div class="card panel portfolio-form">
-
-        <h3>Add New Entry</h3>
+        <h3>Growth Diary</h3>
+        <p>Capture wins, struggles, reflections, goals, and evidence of growth.</p>
 
         <form id="portfolioForm" class="stack-form">
-
           <div class="form-row">
             <label>Type</label>
             <select id="portfolioType">
@@ -2395,6 +2403,9 @@ function renderStudentPortfolioPage(items) {
               <option value="Challenge">Challenge</option>
               <option value="Progress">Progress</option>
               <option value="Reflection">Reflection</option>
+              <option value="Goal">Goal</option>
+              <option value="High">High</option>
+              <option value="Low">Low</option>
             </select>
           </div>
 
@@ -2405,31 +2416,32 @@ function renderStudentPortfolioPage(items) {
 
           <div class="form-row">
             <label>Details</label>
-            <textarea id="portfolioNote" placeholder="Explain your progress, lows, or achievements..."></textarea>
+            <textarea id="portfolioNote" placeholder="Write about your highs, lows, growth, or milestones..."></textarea>
           </div>
 
           <div class="form-row">
-            <label>Upload (image, video, pdf)</label>
+            <label>Upload evidence (image, video, pdf, doc)</label>
             <input id="portfolioFile" type="file">
           </div>
 
-          <button class="btn">Save Entry</button>
-
+          <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <button class="btn primary">Save Entry</button>
+            <span id="portfolioMsg"></span>
+          </div>
         </form>
-
       </div>
 
-      <!-- RIGHT: TIMELINE -->
-      <div>
-
-        <h3>My Journey</h3>
-
-        <div class="portfolio-feed">
-          ${items.length ? feed : '<div class="empty">Start your journey 🚀</div>'}
+      <div class="card panel">
+        <div class="section-head">
+          <div>
+            <h3>My Growth Timeline</h3>
+            <p>Entries from both you and your tutor appear here in one place.</p>
+          </div>
         </div>
-
+        <div class="portfolio-feed">
+          ${feed || `<div class="empty">No portfolio entries yet. Start with your first reflection.</div>`}
+        </div>
       </div>
-
     </div>
   `;
 }
@@ -2509,10 +2521,86 @@ async function bootTutorPortfolios() {
   const bundle = await requireAuth();
   if (!bundle) return;
 
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const students = await loadAllStudents();
+  const selectedStudentId = new URLSearchParams(window.location.search).get('studentId') || '';
   const items = await loadAllPortfolios();
 
-  document.getElementById('page-content').innerHTML =
-    renderTutorPortfolios(items);
+  pageContent.innerHTML = renderTutorPortfolios(items, students, selectedStudentId);
+
+  const filter = document.getElementById('portfolioFilterStudentId');
+  if (filter) {
+    filter.addEventListener('change', () => {
+      const url = new URL(window.location.href);
+      if (filter.value) {
+        url.searchParams.set('studentId', filter.value);
+      } else {
+        url.searchParams.delete('studentId');
+      }
+      window.location.href = url.toString();
+    });
+  }
+
+  const form = document.getElementById('tutorPortfolioForm');
+  const msg = document.getElementById('tutorPortfolioMsg');
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const studentId = document.getElementById('portfolioStudentId').value.trim();
+    const type = document.getElementById('portfolioType').value;
+    const title = document.getElementById('portfolioTitle').value.trim();
+    const note = document.getElementById('portfolioNote').value.trim();
+    const file = document.getElementById('portfolioFile').files?.[0] || null;
+
+    if (!studentId) {
+      if (msg) msg.textContent = 'Select a learner first.';
+      return;
+    }
+
+    if (!title && !note && !file) {
+      if (msg) msg.textContent = 'Add a title, detail, or file first.';
+      return;
+    }
+
+    try {
+      if (msg) msg.textContent = 'Saving...';
+
+      const student = await loadStudentById(studentId);
+      if (!student) throw new Error('Selected learner was not found.');
+
+      const upload = await uploadFile(file, `portfolio/${studentId}`);
+
+      await setDoc(doc(collection(db, 'portfolio')), {
+        studentId,
+        studentName: student.full_name || student.name || student.email || 'Student',
+        studentEmail: student.email || '',
+        type,
+        title,
+        note,
+        fileUrl: upload.url || '',
+        fileName: upload.name || '',
+        filePath: upload.path || '',
+        createdById: user.uid,
+        createdByName: profile?.name || profile?.full_name || user.email || 'Tutor',
+        createdByRole: 'tutor',
+        tutorId: user.uid,
+        tutorName: profile?.name || profile?.full_name || user.email || 'Tutor',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      form.reset();
+      if (msg) msg.textContent = 'Saved.';
+      await bootTutorPortfolios();
+    } catch (error) {
+      console.error('Tutor portfolio save failed:', error);
+      if (msg) msg.textContent = error.message || 'Unable to save this entry.';
+    }
+  });
 }
 
 async function loadParentChildren(parentUid) {
@@ -2607,11 +2695,19 @@ async function loadAllPortfolios() {
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
-function renderTutorPortfolios(items) {
+function renderTutorPortfolios(items, students = [], selectedStudentId = '') {
+  const studentOptions = students.map(student => `
+    <option value="${escapeHtml(student.id)}" ${selectedStudentId === student.id ? 'selected' : ''}>
+      ${escapeHtml(student.full_name || student.name || student.email || 'Student')}
+    </option>
+  `).join('');
+
+  const visibleItems = selectedStudentId
+    ? items.filter(item => item.studentId === selectedStudentId)
+    : items;
 
   const grouped = {};
-
-  items.forEach(item => {
+  visibleItems.forEach(item => {
     if (!grouped[item.studentId]) {
       grouped[item.studentId] = {
         name: item.studentName || 'Student',
@@ -2623,26 +2719,97 @@ function renderTutorPortfolios(items) {
 
   const html = Object.values(grouped).map(student => `
     <section class="card panel" style="margin-bottom:20px">
-
       <h3>${escapeHtml(student.name)}</h3>
 
       ${student.entries.map(entry => `
-        <div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-2)">
-          
-          <strong>${escapeHtml(entry.type || '')}</strong>
-          <small style="float:right">${fmtDate(entry.createdAt)}</small>
+        <div style="margin-top:12px;padding:16px;border-radius:16px;background:var(--surface-2)">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <span class="tag">${escapeHtml(entry.type || '')}</span>
+              <span class="badge">${escapeHtml(entry.createdByRole || 'user')}</span>
+              <span class="badge">${escapeHtml(entry.createdByName || entry.studentName || '')}</span>
+            </div>
+            <small>${fmtDate(entry.createdAt)}</small>
+          </div>
 
-          <p>${escapeHtml(entry.note || '')}</p>
-
-          ${entry.fileUrl ? renderFilePreview(entry.fileUrl, entry.fileName) : ''}
-
+          <h4 style="margin:12px 0 8px 0">${escapeHtml(entry.title || 'Untitled Entry')}</h4>
+          <p style="white-space:pre-wrap">${escapeHtml(entry.note || '')}</p>
+          ${entry.fileUrl ? `<div style="margin-top:12px">${renderFilePreview(entry.fileUrl, entry.fileName)}</div>` : ''}
         </div>
       `).join('')}
-
     </section>
   `).join('');
 
-  return html || '<div class="empty">No portfolios yet</div>';
+  return `
+    <section class="card panel" style="margin-bottom:24px">
+      <div class="section-head">
+        <div>
+          <h3>Add Tutor Portfolio Note</h3>
+          <p>Write observations, growth notes, highs, lows, and upload evidence for a learner.</p>
+        </div>
+      </div>
+
+      <form id="tutorPortfolioForm" class="stack-form">
+        <div class="form-row">
+          <label>Learner</label>
+          <select id="portfolioStudentId" required>
+            <option value="">Select learner</option>
+            ${studentOptions}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Type</label>
+          <select id="portfolioType">
+            <option value="Tutor Reflection">Tutor Reflection</option>
+            <option value="Progress Note">Progress Note</option>
+            <option value="Achievement">Achievement</option>
+            <option value="Challenge">Challenge</option>
+            <option value="Wellbeing Check">Wellbeing Check</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Title</label>
+          <input id="portfolioTitle" placeholder="What did you observe?">
+        </div>
+
+        <div class="form-row">
+          <label>Details</label>
+          <textarea id="portfolioNote" rows="5" placeholder="Write the learner's growth pattern, highs, lows, and reflections..."></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Attachment (optional)</label>
+          <input id="portfolioFile" type="file">
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary" type="submit">Save Tutor Entry</button>
+          <span id="tutorPortfolioMsg"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card panel" style="margin-bottom:24px">
+      <div class="section-head">
+        <div>
+          <h3>Learner Portfolio Feed</h3>
+          <p>Use the filter to view one learner or all learners.</p>
+        </div>
+      </div>
+
+      <div class="form-row" style="max-width:360px">
+        <label>Filter learner</label>
+        <select id="portfolioFilterStudentId">
+          <option value="">All learners</option>
+          ${studentOptions}
+        </select>
+      </div>
+    </section>
+
+    ${html || '<div class="empty">No portfolio entries yet.</div>'}
+  `;
 }
 
 /* =========================
@@ -2841,6 +3008,58 @@ async function loadExtendedPages(user, profile) {
   switch (pageKey) {
     /* ================= DASHBOARD ================= */
     case 'dashboard': {
+      if (pageRole === 'student') {
+        const [assignments, submissions, portfolioItems] = await Promise.all([
+          loadStudentAssignments(user.uid),
+          loadStudentSubmissions(user.uid),
+          loadStudentPortfolio(user.uid)
+        ]);
+
+        const pending = assignments.filter(item => !submissions.some(sub => sub.assignmentId === item.id));
+        pageContent.innerHTML = `
+          <div class="grid cols-3 gap-4" style="margin-bottom:24px;">
+            <div class="card stat primary">
+              <h3>${assignments.length}</h3>
+              <p>Total Assignments</p>
+            </div>
+            <div class="card stat warn">
+              <h3>${pending.length}</h3>
+              <p>Pending Tasks</p>
+            </div>
+            <div class="card stat success">
+              <h3>${portfolioItems.length}</h3>
+              <p>Portfolio Entries</p>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="section-head">
+              <div>
+                <h3>Current Tasks</h3>
+                <p>Your latest assignments appear here in real time.</p>
+              </div>
+            </div>
+            ${pending.length ? `
+              <div class="stack gap-3">
+                ${pending.slice(0, 6).map(item => `
+                  <div class="list-item flex between">
+                    <div>
+                      <strong>${escapeHtml(item.title || 'Untitled')}</strong>
+                      <div><small>${escapeHtml(item.subject || 'General')}</small></div>
+                    </div>
+                    <div class="text-right">
+                      <div>${item.dueDate ? `Due ${escapeHtml(fmtDate(item.dueDate))}` : 'No due date'}</div>
+                      <a class="btn small" href="/student/submit-work.html?assignmentId=${encodeURIComponent(item.id)}">Open</a>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<p class="empty">You are all caught up.</p>'}
+          </div>
+        `;
+        break;
+      }
+
       const students = await loadAllStudents();
       const assignmentsSnap = await getDocs(
         query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
@@ -2894,33 +3113,86 @@ async function loadExtendedPages(user, profile) {
       break;
     }
 
-    /* ================= ASSIGNMENTS (tutor only for now) ================= */
+    /* ================= ASSIGNMENTS ================= */
     case 'assignments': {
+      if (pageRole === 'student') {
+        const [assignments, submissions] = await Promise.all([
+          loadStudentAssignments(user.uid),
+          loadStudentSubmissions(user.uid)
+        ]);
+
+        pageContent.innerHTML = renderStudentAssignmentsPage(assignments, submissions);
+        break;
+      }
+
       if (pageRole !== 'tutor') {
         pageContent.innerHTML = '<div class="card panel"><p>This page is only available for tutors.</p></div>';
         break;
       }
 
-      const snap = await getDocs(
-        query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
-      );
+      const [students, tutorAssignments] = await Promise.all([
+        loadAllStudents(),
+        loadTutorAssignments(user.uid)
+      ]);
+
+      const assignmentRows = tutorAssignments.map(item => `
+        <tr>
+          <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
+          <td>${escapeHtml(item.subject || '—')}</td>
+          <td>${escapeHtml(item.studentName || 'Unassigned')}</td>
+          <td>${item.dueDate ? fmtDate(item.dueDate) : '—'}</td>
+          <td>${assignmentQuestionBlocks(item.questions || item.description || '').length || '—'}</td>
+          <td>${fmtDate(item.createdAt)}</td>
+        </tr>
+      `).join('');
 
       pageContent.innerHTML = `
         <section class="card panel">
-          <h3>Create New Assignment</h3>
+          <div class="section-head">
+            <div>
+              <h3>Create New Assignment</h3>
+              <p>Select a learner, write the task, and publish it directly into the student system.</p>
+            </div>
+          </div>
+
           <form id="assignmentForm" class="stack-form">
             <div class="form-row">
-              <label>Title</label>
-              <input name="title" required placeholder="Mid-term Math Test">
+              <label>Learner</label>
+              <select name="studentId" required>
+                <option value="">Select learner</option>
+                ${students.map(student => `
+                  <option value="${escapeHtml(student.id)}">
+                    ${escapeHtml(student.full_name || student.name || student.email || 'Student')}
+                  </option>
+                `).join('')}
+              </select>
             </div>
+
+            <div class="form-row">
+              <label>Title</label>
+              <input name="title" required placeholder="Reading Reflection Task">
+            </div>
+
             <div class="form-row">
               <label>Subject</label>
-              <input name="subject" placeholder="Mathematics">
+              <input name="subject" placeholder="English">
             </div>
+
             <div class="form-row">
-              <label>Description / Instructions</label>
-              <textarea name="description" rows="4" placeholder="Complete all questions..."></textarea>
+              <label>Short Description</label>
+              <textarea name="description" rows="3" placeholder="Explain the task briefly..."></textarea>
             </div>
+
+            <div class="form-row">
+              <label>Questions / Prompts</label>
+              <textarea name="questions" rows="8" placeholder="Write the task questions. Use a blank line between questions."></textarea>
+            </div>
+
+            <div class="form-row">
+              <label>Due Date</label>
+              <input type="date" name="dueDate">
+            </div>
+
             <div class="form-actions">
               <button type="submit" class="btn primary">Create Assignment</button>
               <span id="assignMsg"></span>
@@ -2929,30 +3201,10 @@ async function loadExtendedPages(user, profile) {
         </section>
 
         <section class="card panel" style="margin-top:24px;">
-          <h3>Your Assignments (${snap.size})</h3>
-          <div id="assignmentList" class="stack gap-3"></div>
+          <h3>Your Assignments (${tutorAssignments.length})</h3>
+          ${simpleTable(['Title', 'Subject', 'Learner', 'Due', 'Questions', 'Created'], assignmentRows)}
         </section>
       `;
-
-      const list = document.getElementById('assignmentList');
-      if (snap.empty) {
-        list.innerHTML = '<p class="empty">No assignments created yet.</p>';
-      } else {
-        snap.forEach(docSnap => {
-          const d = docSnap.data();
-          list.innerHTML += `
-            <div class="list-item flex between">
-              <div>
-                <strong>${escapeHtml(d.title || 'Untitled')}</strong>
-                <div><small>${escapeHtml(d.subject || '—')}</small></div>
-              </div>
-              <div>
-                <button class="btn danger small" data-id="${docSnap.id}">Delete</button>
-              </div>
-            </div>
-          `;
-        });
-      }
 
       document.getElementById('assignmentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -2960,28 +3212,75 @@ async function loadExtendedPages(user, profile) {
         const msg = document.getElementById('assignMsg');
 
         try {
-          await setDoc(doc(collection(db, 'assignments')), {
+          const studentId = f.studentId.value.trim();
+          if (!studentId) throw new Error('Please choose a learner.');
+
+          const student = await loadStudentById(studentId);
+          if (!student) throw new Error('Selected learner was not found.');
+
+          const payload = {
             tutorId: user.uid,
             tutorName: profile?.name || profile?.full_name || user.email || 'Tutor',
+            studentId,
+            studentIds: [studentId],
+            assignedTo: [studentId],
+            studentName: student.full_name || student.name || student.email || 'Student',
+            studentEmail: student.email || '',
             title: f.title.value.trim(),
             subject: f.subject.value.trim(),
             description: f.description.value.trim(),
+            questions: f.questions.value.trim(),
+            dueDate: f.dueDate.value || '',
+            status: 'Published',
+            published: true,
+            createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
-          });
-          msg.textContent = 'Assignment created!';
+          };
+
+          const assignmentRef = doc(collection(db, 'assignments'));
+          const batch = writeBatch(db);
+
+          batch.set(assignmentRef, payload);
+          batch.set(
+            doc(db, 'students', studentId),
+            {
+              uid: studentId,
+              name: student.full_name || student.name || student.email || 'Student',
+              full_name: student.full_name || student.name || student.email || 'Student',
+              email: student.email || '',
+              role: 'student',
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
+          );
+
+          batch.set(
+            doc(db, 'students', studentId, 'assignments', assignmentRef.id),
+            {
+              assignmentId: assignmentRef.id,
+              title: payload.title,
+              subject: payload.subject,
+              description: payload.description,
+              questions: payload.questions,
+              dueDate: payload.dueDate,
+              tutorId: user.uid,
+              tutorName: payload.tutorName,
+              status: 'Published',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
+          );
+
+          await batch.commit();
+
+          msg.textContent = 'Assignment created and sent to the learner.';
           msg.className = 'success';
-          setTimeout(() => location.reload(), 1200);
+          setTimeout(() => location.reload(), 800);
         } catch (err) {
           msg.textContent = 'Error: ' + err.message;
           msg.className = 'danger';
-        }
-      });
-
-      list?.addEventListener('click', async (e) => {
-        if (e.target.dataset.id && confirm('Delete this assignment?')) {
-          await deleteDoc(doc(db, 'assignments', e.target.dataset.id));
-          location.reload();
         }
       });
       break;
@@ -3000,7 +3299,73 @@ async function loadExtendedPages(user, profile) {
       pageContent.innerHTML = `<div class="card panel"><h3>Attendance (coming soon)</h3><p>Record daily presence...</p></div>`;
       break;
 
-    case 'portfolios':
+    case 'portfolios': {
+      if (pageRole === 'tutor') {
+        const students = await loadAllStudents();
+        const selectedStudentId = new URLSearchParams(window.location.search).get('studentId') || '';
+        const items = await loadAllPortfolios();
+        pageContent.innerHTML = renderTutorPortfolios(items, students, selectedStudentId);
+
+        const filter = document.getElementById('portfolioFilterStudentId');
+        if (filter) {
+          filter.addEventListener('change', () => {
+            const url = new URL(window.location.href);
+            if (filter.value) url.searchParams.set('studentId', filter.value);
+            else url.searchParams.delete('studentId');
+            window.location.href = url.toString();
+          });
+        }
+
+        const form = document.getElementById('tutorPortfolioForm');
+        const msg = document.getElementById('tutorPortfolioMsg');
+        form?.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const studentId = document.getElementById('portfolioStudentId').value.trim();
+          const type = document.getElementById('portfolioType').value;
+          const title = document.getElementById('portfolioTitle').value.trim();
+          const note = document.getElementById('portfolioNote').value.trim();
+          const file = document.getElementById('portfolioFile').files?.[0] || null;
+          if (!studentId) {
+            if (msg) msg.textContent = 'Select a learner first.';
+            return;
+          }
+          if (!title && !note && !file) {
+            if (msg) msg.textContent = 'Add a title, detail, or file first.';
+            return;
+          }
+          try {
+            if (msg) msg.textContent = 'Saving...';
+            const student = await loadStudentById(studentId);
+            if (!student) throw new Error('Selected learner was not found.');
+            const upload = await uploadFile(file, `portfolio/${studentId}`);
+            await setDoc(doc(collection(db, 'portfolio')), {
+              studentId,
+              studentName: student.full_name || student.name || student.email || 'Student',
+              studentEmail: student.email || '',
+              type,
+              title,
+              note,
+              fileUrl: upload.url || '',
+              fileName: upload.name || '',
+              filePath: upload.path || '',
+              createdById: user.uid,
+              createdByName: profile?.name || profile?.full_name || user.email || 'Tutor',
+              createdByRole: 'tutor',
+              tutorId: user.uid,
+              tutorName: profile?.name || profile?.full_name || user.email || 'Tutor',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            form.reset();
+            if (msg) msg.textContent = 'Saved.';
+            await loadExtendedPages(user, profile);
+          } catch (error) {
+            console.error('Tutor portfolio save failed:', error);
+            if (msg) msg.textContent = error.message || 'Unable to save this entry.';
+          }
+        });
+        break;
+      }
       pageContent.innerHTML = `<div class="card panel"><h3>Student Portfolios Overview (coming soon)</h3></div>`;
       break;
 
