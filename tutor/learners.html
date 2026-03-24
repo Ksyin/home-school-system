@@ -1,35 +1,58 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Learners</title>
+  <title>Learners | HomeSchool System</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="Tutor learners page">
 </head>
 <body
   data-role="tutor"
   data-page="learners"
   data-title="Learners"
-  data-description="View all student accounts, add notes, and manage tutor selection."
+  data-section="teaching"
 >
-  <div id="app-shell" class="page-shell">
-    <main class="content">
-      <div class="topbar">
-        <div>
-          <h2>Learners</h2>
-          <p>View all student accounts, add notes, and manage tutor selection.</p>
+  <div id="app-shell">
+    <main class="page-wrap">
+      <section class="page-hero card">
+        <div class="page-hero-copy">
+          <p class="eyebrow">Tutor Workspace</p>
+          <h1>Learners</h1>
+          <p class="page-subtext">
+            View registered students, manage linked learners, and prepare assignment targeting.
+          </p>
         </div>
-      </div>
+      </section>
 
-      <div id="page-content">
-        <section class="card panel">
-          <h3>Learners</h3>
-          <p>Loading learners...</p>
-        </section>
-      </div>
+      <section id="page-content" class="page-content">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Loading learners...</h2>
+              <p>Your learner list and learner management tools will appear here.</p>
+            </div>
+          </div>
+
+          <div class="loading-block">
+            <div class="loading-line"></div>
+            <div class="loading-line short"></div>
+            <div class="loading-line"></div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
+  <noscript>
+    <div class="card" style="margin:24px;">
+      JavaScript is required to use this page.
+    </div>
+  </noscript>
+
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
   <script type="module" src="/assets/js/pages.js"></script>
+  <script type="module" src="/assets/js/page-app.js"></script>
 </body>
 </html>

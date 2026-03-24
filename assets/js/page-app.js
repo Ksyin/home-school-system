@@ -6,7 +6,8 @@ import {
   where,
   serverTimestamp,
   doc,
-  updateDoc
+  updateDoc,
+  orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import {
@@ -21,7 +22,7 @@ const db = FB.db;
 const storage = FB.storage;
 
 /* =====================================================
-   STORAGE UPLOAD (FIREBASE)
+   STORAGE UPLOAD
 ===================================================== */
 
 export async function uploadToStorage(file, folder = "uploads") {
@@ -58,7 +59,7 @@ export async function fetchProfilesByRole(role) {
 }
 
 /* =====================================================
-   FETCH ALL STUDENTS (FOR TUTOR DASHBOARD)
+   FETCH ALL STUDENTS (TUTOR SEES ALL)
 ===================================================== */
 
 export async function fetchAllStudents() {
@@ -77,15 +78,28 @@ export async function fetchAllStudents() {
 }
 
 /* =====================================================
-   CREATE ASSIGNMENT
+   CREATE ASSIGNMENT (FIXED STRUCTURE)
 ===================================================== */
 
 export async function createAssignment(data) {
 
+  if (!data.studentId) {
+    throw new Error("Student ID is required");
+  }
+
+  if (!data.title) {
+    throw new Error("Assignment title required");
+  }
+
   const refDoc = await addDoc(
     collection(db, "assignments"),
     {
-      ...data,
+      title: data.title,
+      description: data.description || "",
+      studentId: data.studentId,
+      tutorId: data.tutorId,
+      dueDate: data.dueDate || "",
+      fileUrl: data.fileUrl || "",
       createdAt: serverTimestamp(),
       status: "pending"
     }
@@ -95,12 +109,18 @@ export async function createAssignment(data) {
 }
 
 /* =====================================================
-   GET ASSIGNMENTS
+   GET ASSIGNMENTS FOR STUDENT (CRITICAL FIX)
 ===================================================== */
 
-export async function getAssignments() {
+export async function getAssignmentsForStudent(studentId) {
 
-  const snap = await getDocs(collection(db, "assignments"));
+  const q = query(
+    collection(db, "assignments"),
+    where("studentId", "==", studentId),
+    orderBy("createdAt", "desc")
+  );
+
+  const snap = await getDocs(q);
 
   return snap.docs.map(d => ({
     id: d.id,
@@ -109,15 +129,47 @@ export async function getAssignments() {
 }
 
 /* =====================================================
-   STUDENT SUBMISSION
+   GET ASSIGNMENTS FOR TUTOR
+===================================================== */
+
+export async function getAssignmentsForTutor(tutorId) {
+
+  const q = query(
+    collection(db, "assignments"),
+    where("tutorId", "==", tutorId),
+    orderBy("createdAt", "desc")
+  );
+
+  const snap = await getDocs(q);
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  }));
+}
+
+/* =====================================================
+   STUDENT SUBMISSION (FIXED LINK)
 ===================================================== */
 
 export async function submitAssignment(data) {
 
+  if (!data.assignmentId) {
+    throw new Error("Assignment ID missing");
+  }
+
+  if (!data.studentId) {
+    throw new Error("Student ID missing");
+  }
+
   const refDoc = await addDoc(
     collection(db, "submissions"),
     {
-      ...data,
+      assignmentId: data.assignmentId,
+      studentId: data.studentId,
+      tutorId: data.tutorId,
+      fileUrl: data.fileUrl || "",
+      note: data.note || "",
       submittedAt: serverTimestamp(),
       status: "submitted"
     }
@@ -127,20 +179,22 @@ export async function submitAssignment(data) {
 }
 
 /* =====================================================
-   TUTOR REVIEW
+   GET SUBMISSIONS FOR ASSIGNMENT (TUTOR VIEW)
 ===================================================== */
 
-export async function reviewSubmission(submissionId, grade, feedback) {
+export async function getSubmissionsForAssignment(assignmentId) {
 
-  const submissionRef = doc(db, "submissions", submissionId);
+  const q = query(
+    collection(db, "submissions"),
+    where("assignmentId", "==", assignmentId)
+  );
 
-  await updateDoc(submissionRef, {
-    grade: grade,
-    feedback: feedback,
-    status: "reviewed",
-    reviewedAt: serverTimestamp()
-  });
+  const snap = await getDocs(q);
 
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  }));
 }
 
 /* =====================================================
@@ -160,4 +214,21 @@ export async function getStudentSubmissions(studentId) {
     id: d.id,
     ...d.data()
   }));
+}
+
+/* =====================================================
+   REVIEW SUBMISSION
+===================================================== */
+
+export async function reviewSubmission(submissionId, grade, feedback) {
+
+  const submissionRef = doc(db, "submissions", submissionId);
+
+  await updateDoc(submissionRef, {
+    grade: grade,
+    feedback: feedback,
+    status: "reviewed",
+    reviewedAt: serverTimestamp()
+  });
+
 }

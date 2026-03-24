@@ -1,21 +1,58 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Assignments</title>
-<link rel="stylesheet" href="/assets/css/styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Assignments | HomeSchool System</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="Student assignments page">
 </head>
-
 <body
   data-role="student"
   data-page="assignments"
-  data-title="My Assignments"
-  data-description="View and complete assigned work"
+  data-title="Assignments"
+  data-section="academics"
 >
+  <div id="app-shell">
+    <main class="page-wrap">
+      <section class="page-hero card">
+        <div class="page-hero-copy">
+          <p class="eyebrow">Student Tasks</p>
+          <h1>Your Assignments</h1>
+          <p class="page-subtext">
+            Review assigned work, check deadlines, and move to submission when ready.
+          </p>
+        </div>
+      </section>
 
-<div id="app-shell"></div>
+      <section id="page-content" class="page-content">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Loading assignments...</h2>
+              <p>Your assignment list will appear here once the page finishes loading.</p>
+            </div>
+          </div>
 
-<script type="module" src="/assets/js/pages.js"></script>
+          <div class="loading-block">
+            <div class="loading-line"></div>
+            <div class="loading-line short"></div>
+            <div class="loading-line"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <noscript>
+    <div class="card" style="margin:24px;">
+      JavaScript is required to use this page.
+    </div>
+  </noscript>
+
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
+  <script type="module" src="/assets/js/page-app.js"></script>
 </body>
 </html>
