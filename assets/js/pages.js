@@ -2149,6 +2149,80 @@ async function refreshMessagesPage(bundle) {
   }
 }
 
+
+async function saveAssignment({ user }) {
+
+  const form = document.getElementById('assignmentForm');
+  const msg = document.getElementById('assignmentMsg');
+  const btn = document.getElementById('saveAssignmentBtn');
+
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const title = document.getElementById('assignmentTitle').value.trim();
+    const subject = document.getElementById('assignmentSubject').value.trim();
+    const description = document.getElementById('assignmentDescription').value.trim();
+    const dueDate = document.getElementById('assignmentDueDate').value;
+
+    const selectedStudents = [...document.getElementById('assignmentStudents').selectedOptions]
+      .map(opt => opt.value);
+
+    const file = document.getElementById('assignmentFile').files?.[0];
+
+    if (!title) {
+      msg.textContent = 'Enter title';
+      return;
+    }
+
+    btn.disabled = true;
+    msg.textContent = 'Saving...';
+
+    try {
+
+      let upload = { url: '', path: '', name: '' };
+
+      if (file) {
+        upload = await uploadFile(file, `assignments/${user.uid}`);
+      }
+
+      const assignmentRef = doc(collection(db, 'assignments'));
+
+      await setDoc(assignmentRef, {
+        title,
+        subject,
+        description,
+        dueDate,
+
+        tutorId: user.uid,
+
+        // ✅ THIS IS THE FIX
+        studentIds: selectedStudents,
+
+        // fallback compatibility
+        assignedTo: selectedStudents,
+
+        fileUrl: upload.url,
+        fileName: upload.name,
+
+        published: true,
+
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      msg.textContent = 'Assignment created!';
+      form.reset();
+
+    } catch (err) {
+      console.error(err);
+      msg.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
 /* =========================
    BOOT PAGES
 ========================= */
@@ -2691,70 +2765,136 @@ async function bootParentPortfolioPage() {
 }
 
 /* =========================
-   OLD PAGE ROUTER (still used for legacy/special pages)
+   GLOBAL PAGE ROUTER (FIXED & COMPLETE)
 ========================= */
-if (pageKey === 'submit-work') {
-  bootSubmitWorkPage();
 
-} else if (pageKey === 'lesson-plans') {
-  bootLessonPlansPage();
+async function routePage(bundle) {
 
-} else if (pageKey === 'learners') {
-  bootLearnersPage();
+  const { user, profile } = bundle;
 
-} else if (pageKey === 'classrooms') {
-  bootClassroomsPage();
+  try {
 
-} else if (pageKey === 'resources' && pageRole === 'tutor') {
-  bootResourcesPage();
+    /* =========================
+       🎓 STUDENT ROUTES
+    ========================= */
 
-} else if (pageKey === 'resources' && pageRole === 'student') {
-  bootStudentResourcesPage();
+    if (pageRole === 'student') {
 
-} else if (pageKey === 'messages') {
-  bootMessagesPage();
+      if (pageKey === 'dashboard') {
+        await refreshStudentDashboard(bundle);
 
+      } else if (pageKey === 'assignments') {
+        await refreshStudentAssignmentsPage(bundle);
 
-// =========================
-// 🎓 STUDENT
-// =========================
-} else if (pageKey === 'portfolio' && pageRole === 'student') {
-  bootStudentPortfolioPage();
+      } else if (pageKey === 'submit-work') {
+        await refreshSubmitWorkPage(bundle);
 
-} else if (pageKey === 'reports' && pageRole === 'student') {
-  bootStudentReportsPage();
+      } else if (pageKey === 'resources') {
+        await refreshStudentResourcesPage(bundle);
 
+      } else if (pageKey === 'assessments') {
+        await refreshStudentAssessmentsPage(bundle);
 
-// =========================
-// 👨‍👩‍👧 PARENT
-// =========================
-} else if (pageKey === 'children' && pageRole === 'parent') {
-  bootParentChildrenPage();   // 🔥 MISSING FIX
+      } else if (pageKey === 'portfolio') {
+        await refreshStudentPortfolioPage(bundle);
 
-} else if (pageKey === 'portfolio' && pageRole === 'parent') {
-  bootParentPortfolioPage();
+      } else if (pageKey === 'reports') {
+        await refreshStudentReportsPage(bundle);
 
+      } else if (pageKey === 'messages') {
+        await refreshStudentMessagesPage(bundle);
 
-// =========================
-// 👨‍🏫 TUTOR
-// =========================
-} else if (pageKey === 'portfolios' && pageRole === 'tutor') {
-  bootTutorPortfolios();
+      } else {
+        bootDefaultPage();
+      }
 
+    }
 
-// =========================
-// GENERAL
-// =========================
-} else if (pageKey === 'reports') {
-  bootReportsPage();
+    /* =========================
+       👨‍🏫 TUTOR ROUTES
+    ========================= */
 
-} else if (pageKey === 'dashboard') {
-  bootDashboard();
+    else if (pageRole === 'tutor') {
 
-} else {
-  bootDefaultPage();
+      if (pageKey === 'dashboard') {
+        await refreshTutorDashboard(bundle); // (if exists, else fallback)
+
+      } else if (pageKey === 'learners') {
+        await refreshLearnersPage(bundle);
+
+      } else if (pageKey === 'classrooms') {
+        await refreshClassroomsPage(bundle);
+
+      } else if (pageKey === 'assignments') {
+        await refreshAssignmentsTutorPage(bundle); // 🔥 NEW FIX
+
+      } else if (pageKey === 'lesson-plans') {
+        await refreshLessonPlansPage(bundle);
+
+      } else if (pageKey === 'resources') {
+        await refreshResourcesPage(bundle);
+
+      } else if (pageKey === 'messages') {
+        await refreshMessagesPage(bundle);
+
+      } else if (pageKey === 'portfolios') {
+        await refreshTutorPortfoliosPage(bundle); // 🔥 make sure exists
+
+      } else if (pageKey === 'reports') {
+        await refreshReportsPage(bundle);
+
+      } else {
+        bootDefaultPage();
+      }
+
+    }
+
+    /* =========================
+       👨‍👩‍👧 PARENT ROUTES
+    ========================= */
+
+    else if (pageRole === 'parent') {
+
+      if (pageKey === 'dashboard') {
+        await refreshParentDashboard(bundle); // if exists
+
+      } else if (pageKey === 'children') {
+        await refreshParentChildrenPage(bundle);
+
+      } else if (pageKey === 'assignments') {
+        await refreshParentAssignmentsPage(bundle);
+
+      } else if (pageKey === 'portfolio') {
+        await refreshParentPortfolioPage(bundle);
+
+      } else if (pageKey === 'reports') {
+        await refreshParentReportsPage(bundle);
+
+      } else if (pageKey === 'resources') {
+        await refreshParentResourcesPage(bundle);
+
+      } else if (pageKey === 'messages') {
+        await refreshParentMessagesPage(bundle);
+
+      } else {
+        bootDefaultPage();
+      }
+
+    }
+
+    /* =========================
+       FALLBACK
+    ========================= */
+
+    else {
+      bootDefaultPage();
+    }
+
+  } catch (err) {
+    console.error("Routing error:", err);
+    bootDefaultPage();
+  }
 }
-
 /* =====================================================
    EXTENSION: NEW PAGE SYSTEM (DO NOT REMOVE OLD CODE)
    Unified handler for new / modernized pages
