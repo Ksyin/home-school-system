@@ -1,84 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Student Portfolios</title>
-
+  <title>Portfolio</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
-
-  <style>
-    .student-block {
-      margin-bottom: 28px;
-    }
-
-    .entry-card {
-      background: var(--surface);
-      padding: 14px;
-      border-radius: 12px;
-      margin-top: 12px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .entry-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .entry-header {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .entry-type {
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: var(--primary-soft);
-      color: var(--primary);
-      font-weight: 600;
-    }
-  </style>
 </head>
-
 <body
-  data-role="tutor"
-  data-page="portfolios"
-  data-title="Student Portfolios"
-  data-description="View student growth, reflections, uploads, and progress evidence."
+  data-role="student"
+  data-page="portfolio"
+  data-title="Portfolio"
+  data-description="Upload learning evidence, reflections, PDFs, images, and personal progress notes."
 >
-
-  <!-- APP SHELL -->
-  <div id="app-shell">
-
-    <!-- TOPBAR -->
-    <header class="topbar">
-      <h2>Student Portfolios</h2>
-      <p>Monitor student progress, growth, and reflections</p>
-    </header>
-
-    <!-- MAIN -->
-    <main id="page-content">
-
-      <div class="card panel" style="margin-bottom:20px">
-        <h3>Portfolio Overview</h3>
-        <p>All student portfolio entries will appear here grouped by student.</p>
+  <div id="app-shell" class="page-shell">
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h2>Portfolio</h2>
+          <p>Upload learning evidence, reflections, PDFs, images, and personal progress notes.</p>
+        </div>
       </div>
 
-      <div id="tutorPortfolioContainer">
-
-        <!-- JS FILLS THIS -->
-        <div class="empty">No portfolio data yet.</div>
-
+      <div id="page-content">
+        <section class="card panel">
+          <h3>My Portfolio Space</h3>
+          <p>Loading the upload form, my saved portfolio entries, and my evidence timeline.</p>
+        </section>
       </div>
-
     </main>
-
   </div>
 
-  <script src="/assets/js/pages.js"></script>
-
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

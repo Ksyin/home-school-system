@@ -1179,71 +1179,45 @@ function renderStudentDashboard(profile, assignments, submissions, resources, re
   `;
 }
 
-function renderStudentPortfolioPage(items) {
-  const feed = items.map((item) => `
-    <div class="portfolio-card">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
-        <span class="tag">${escapeHtml(item.type || 'Entry')}</span>
-        <small>${fmtDate(item.createdAt)}</small>
-      </div>
+async function submitStudentPortfolio({ user, profile }) {
 
-      ${item.title ? `<h4 style="margin-top:10px">${escapeHtml(item.title)}</h4>` : ''}
-      ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
+  const form = document.getElementById('portfolioForm');
+  if (!form) return;
 
-      ${item.fileUrl ? `
-        <div style="margin-top:10px">
-          ${renderFilePreview(item.fileUrl, item.fileName || item.title || 'Portfolio file')}
-        </div>
-      ` : ''}
-    </div>
-  `).join('');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  return `
-    <div class="portfolio-grid">
-      <div class="card panel portfolio-form">
-        <h3>Add New Entry</h3>
+    const type = document.getElementById('portfolioType').value;
+    const title = document.getElementById('portfolioTitle').value.trim();
+    const note = document.getElementById('portfolioNote').value.trim();
+    const file = document.getElementById('portfolioFile').files?.[0];
 
-        <form id="portfolioForm" class="stack-form">
-          <div class="form-row">
-            <label for="portfolioType">Type</label>
-            <select id="portfolioType">
-              <option value="Achievement">Achievement</option>
-              <option value="Challenge">Challenge</option>
-              <option value="Progress">Progress</option>
-              <option value="Reflection">Reflection</option>
-            </select>
-          </div>
+    if (!title && !note && !file) return;
 
-          <div class="form-row">
-            <label for="portfolioTitle">Title</label>
-            <input id="portfolioTitle" placeholder="What happened today?">
-          </div>
+    const upload = await uploadFile(file, `portfolio/${user.uid}`);
 
-          <div class="form-row">
-            <label for="portfolioNote">Details</label>
-            <textarea id="portfolioNote" placeholder="Explain your progress, lows, or achievements..."></textarea>
-          </div>
+    await setDoc(doc(collection(db, 'portfolio')), {
+      studentId: user.uid,
+      studentName: getStudentDisplayName(profile, user),
 
-          <div class="form-row">
-            <label for="portfolioFile">Upload (image, video, pdf, doc)</label>
-            <input id="portfolioFile" type="file">
-          </div>
+      type,
+      title,
+      note,
 
-          <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-            <button class="btn" type="submit">Save Entry</button>
-            <span id="portfolioMsg"></span>
-          </div>
-        </form>
-      </div>
+      fileUrl: upload.url,
+      fileName: upload.name,
 
-      <div>
-        <h3>My Journey</h3>
-        <div class="portfolio-feed">
-          ${items.length ? feed : '<div class="empty">Start your journey 🚀</div>'}
-        </div>
-      </div>
-    </div>
-  `;
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    // clear form
+    form.reset();
+
+    // reload UI
+    await refreshStudentPortfolioPage({ user, profile });
+
+  });
 }
 
 
@@ -2131,118 +2105,48 @@ async function refreshResourcesPage(bundle) {
 ========================= */
 
 async function refreshMessagesPage(bundle) {
-  const { user, profile } = bundle;
+  const { user } = bundle;
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
   const messages = await loadMessagesForTutor(user.uid);
   const students = await loadAllStudents();
 
-  pageContent.innerHTML = renderMessagesPage(messages, students, profile);
+  pageContent.innerHTML = renderMessagesPage(messages, students);
 
   const form = document.getElementById('messageForm');
   const msg = document.getElementById('messageMsg');
-  const sendBtn = document.getElementById('sendMessageBtn');
 
-  if (!form) return;
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+      const studentId = document.getElementById('messageStudentId').value;
+      const subject = document.getElementById('messageSubject').value.trim();
+      const messageBody = document.getElementById('messageBody').value.trim();
 
-    const studentId = document.getElementById('messageStudentId')?.value || '';
-    const subject = document.getElementById('messageSubject')?.value.trim() || '';
-    const messageBody = document.getElementById('messageBody')?.value.trim() || '';
+      if (!studentId || !messageBody) {
+        msg.textContent = 'Select student and enter a message.';
+        return;
+      }
 
-    if (!studentId || !messageBody) {
-      if (msg) msg.textContent = 'Select student and enter a message.';
-      return;
-    }
+      const student = students.find(s => s.id === studentId);
+      const msgRef = doc(collection(db, 'messages'));
 
-    try {
-      if (sendBtn) sendBtn.disabled = true;
-      if (msg) msg.textContent = 'Sending...';
-
-      const student = students.find((s) => s.id === studentId);
-
-      await setDoc(doc(collection(db, 'messages')), {
+      await setDoc(msgRef, {
         tutorId: user.uid,
-        tutorName: profile?.full_name || profile?.name || user.email || 'Tutor',
         studentId,
         studentName: student?.full_name || student?.name || student?.email || 'Student',
-        studentEmail: student?.email || '',
         subject,
         message: messageBody,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
 
-      if (msg) msg.textContent = 'Message sent.';
-      form.reset();
-
+      msg.textContent = 'Message sent.';
       await refreshMessagesPage(bundle);
-    } catch (err) {
-      console.error('Message send failed:', err);
-      if (msg) msg.textContent = err.message || 'Failed to send message.';
-    } finally {
-      if (sendBtn) sendBtn.disabled = false;
-    }
-  });
-}
-
-function renderMessagesPage(messages, students, profile) {
-  const rows = messages.map((item) => `
-    <div class="card panel" style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
-        <div>
-          <h4 style="margin:0">${escapeHtml(item.subject || 'Message')}</h4>
-          <p style="margin:6px 0 0;color:var(--muted)">To: ${escapeHtml(item.studentName || item.studentEmail || 'Student')}</p>
-        </div>
-        <small>${fmtDate(item.createdAt)}</small>
-      </div>
-      <p style="margin-top:12px">${escapeHtml(item.message || '')}</p>
-    </div>
-  `).join('');
-
-  return `
-    <section class="card panel">
-      <h3>Send Message</h3>
-      <p>Send direct messages to students and keep a communication history.</p>
-
-      <form id="messageForm" class="stack-form">
-        <div class="form-row">
-          <label for="messageStudentId">Student</label>
-          <select id="messageStudentId" required>
-            <option value="">Select student</option>
-            ${students.map((student) => `
-              <option value="${escapeHtml(student.id)}">
-                ${escapeHtml(student.full_name || student.name || student.email || 'Student')}
-              </option>
-            `).join('')}
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label for="messageSubject">Subject</label>
-          <input id="messageSubject" type="text" placeholder="Enter subject">
-        </div>
-
-        <div class="form-row">
-          <label for="messageBody">Message</label>
-          <textarea id="messageBody" rows="5" placeholder="Write your message here..." required></textarea>
-        </div>
-
-        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button type="submit" class="btn" id="sendMessageBtn">Send Message</button>
-          <span id="messageMsg"></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card panel" style="margin-top:18px">
-      <h3>Message History</h3>
-      ${messages.length ? rows : '<div class="empty">No messages yet.</div>'}
-    </section>
-  `;
+    });
+  }
 }
 
 /* =========================
@@ -2527,74 +2431,14 @@ async function bootStudentPortfolio() {
    TUTOR PORTFOLIO (FULL LIFE VIEW)
 ========================= */
 
-async function loadAllPortfolios(tutorUid = '') {
-  const snap = await getDocs(collection(db, 'portfolio'));
-
-  const items = snap.docs.map((d) => ({
-    id: d.id,
-    ...d.data()
-  }));
-
-  return items
-    .filter((item) => {
-      if (!tutorUid) return true;
-      return !item.tutorId || item.tutorId === tutorUid || !!item.studentId;
-    })
-    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-}
-
-function renderTutorPortfolios(items) {
-  const grouped = {};
-
-  items.forEach((item) => {
-    const key = item.studentId || 'unknown';
-    if (!grouped[key]) {
-      grouped[key] = {
-        studentId: key,
-        name: item.studentName || 'Student',
-        entries: []
-      };
-    }
-    grouped[key].entries.push(item);
-  });
-
-  const html = Object.values(grouped).map((student) => `
-    <section class="card panel" style="margin-bottom:20px">
-      <h3>${escapeHtml(student.name)}</h3>
-
-      ${student.entries.map((entry) => `
-        <div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-2)">
-          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
-            <strong>${escapeHtml(entry.type || 'Entry')}</strong>
-            <small>${fmtDate(entry.createdAt)}</small>
-          </div>
-
-          ${entry.title ? `<h4 style="margin:10px 0 6px">${escapeHtml(entry.title)}</h4>` : ''}
-          ${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''}
-          ${entry.fileUrl ? `<div style="margin-top:10px">${renderFilePreview(entry.fileUrl, entry.fileName || entry.title || 'Portfolio file')}</div>` : ''}
-        </div>
-      `).join('')}
-    </section>
-  `).join('');
-
-  return `
-    <section class="card panel" style="margin-bottom:18px">
-      <h3>Student Portfolios Overview</h3>
-      <p>Review uploaded student reflections, files, progress evidence, and growth notes.</p>
-    </section>
-    ${html || '<div class="empty">No portfolios yet.</div>'}
-  `;
-}
-
 async function bootTutorPortfolios() {
   const bundle = await requireAuth();
   if (!bundle) return;
 
-  const items = await loadAllPortfolios(bundle.user.uid);
-  const pageContent = document.getElementById('page-content');
-  if (!pageContent) return;
+  const items = await loadAllPortfolios();
 
-  pageContent.innerHTML = renderTutorPortfolios(items);
+  document.getElementById('page-content').innerHTML =
+    renderTutorPortfolios(items);
 }
 
 async function loadParentChildren(parentUid) {

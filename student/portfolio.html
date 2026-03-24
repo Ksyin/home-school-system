@@ -1,133 +1,62 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>My Portfolio</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Portfolio</title>
+<link rel="stylesheet" href="/assets/css/styles.css">
 
-  <link rel="stylesheet" href="/assets/css/styles.css">
+<style>
+/* 🔥 modern portfolio styling */
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
 
-  <style>
-    .portfolio-grid {
-      display: grid;
-      grid-template-columns: 380px 1fr;
-      gap: 24px;
-    }
+.portfolio-form textarea {
+  min-height: 120px;
+}
 
-    .portfolio-feed {
-      display: grid;
-      gap: 16px;
-    }
+.portfolio-card {
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
 
-    .portfolio-card {
-      background: var(--surface);
-      padding: 16px;
-      border-radius: 14px;
-      box-shadow: var(--shadow-sm);
-      transition: 0.2s ease;
-    }
+.portfolio-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
 
-    .portfolio-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .tag {
-      font-size: 12px;
-      background: var(--primary-soft);
-      color: var(--primary);
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-weight: 600;
-    }
-
-    @media (max-width: 900px) {
-      .portfolio-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+.tag {
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: #eef3ff;
+}
+</style>
 </head>
 
-<body
-  data-role="student"
-  data-page="portfolio"
-  data-title="My Portfolio"
-  data-description="Track your growth, reflections, achievements, and uploads."
->
+<body data-role="student" data-page="portfolio">
 
-  <!-- APP SHELL -->
-  <div id="app-shell">
+<div id="app-shell">
 
-    <!-- TOPBAR -->
-    <header class="topbar">
-      <h2>My Portfolio</h2>
-      <p>Track your learning journey and growth</p>
-    </header>
+<main class="content">
 
-    <!-- MAIN -->
-    <main id="page-content">
-
-      <div class="portfolio-grid">
-
-        <!-- LEFT: FORM -->
-        <div class="card panel">
-          <h3>Add New Entry</h3>
-
-          <form id="portfolioForm" class="stack-form">
-
-            <div class="form-row">
-              <label>Type</label>
-              <select id="portfolioType">
-                <option value="Achievement">Achievement</option>
-                <option value="Progress">Progress</option>
-                <option value="Challenge">Challenge</option>
-                <option value="Reflection">Reflection</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label>Title</label>
-              <input id="portfolioTitle" placeholder="What did you achieve?">
-            </div>
-
-            <div class="form-row">
-              <label>Details</label>
-              <textarea id="portfolioNote" rows="4" placeholder="Explain your progress..."></textarea>
-            </div>
-
-            <div class="form-row">
-              <label>Upload File</label>
-              <input id="portfolioFile" type="file">
-            </div>
-
-            <div class="form-actions">
-              <button class="btn" type="submit">Save Entry</button>
-              <span id="portfolioMsg"></span>
-            </div>
-
-          </form>
-        </div>
-
-        <!-- RIGHT: FEED -->
-        <div>
-
-          <h3>My Journey</h3>
-
-          <div class="portfolio-feed" id="portfolioFeed">
-            <!-- JS FILLS THIS -->
-            <div class="empty">Start your journey 🚀</div>
-          </div>
-
-        </div>
-
-      </div>
-
-    </main>
-
+  <div class="topbar">
+    <h2>My Portfolio</h2>
+    <p>Track your growth, challenges, and achievements</p>
   </div>
 
-  <script src="/assets/js/pages.js"></script>
+  <div id="page-content"></div>
 
+</main>
+</div>
+
+<script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>
