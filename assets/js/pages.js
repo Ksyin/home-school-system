@@ -195,7 +195,7 @@ async function getUserProfile(uid) {
   if (!userDoc.exists()) return null;
   return userDoc.data();
 }
-wgT
+
 async function requireAuth() {
   return new Promise((resolve) => {
     onAuthStateChanged(auth, async (user) => {
