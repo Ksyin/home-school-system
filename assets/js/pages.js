@@ -380,153 +380,6 @@ async function ensureStudentMirror(user, profile) {
 
   await batch.commit();
 }
-async function loadPortfolio(userId) {
-  const snap = await getDocs(
-    query(collection(db, 'portfolio'), where('userId', '==', userId))
-  );
-
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...d.data()
-  })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-}
-async function savePortfolioEntry(user, profile) {
-
-  const msg = document.getElementById('pMsg');
-
-  try {
-    const title = document.getElementById('pTitle').value;
-    const description = document.getElementById('pDesc').value;
-    const challenge = document.getElementById('pChallenge').value;
-    const solution = document.getElementById('pSolution').value;
-    const feeling = document.getElementById('pFeeling').value;
-    const tags = document.getElementById('pTags').value.split(',').map(t => t.trim());
-    const file = document.getElementById('pFile').files[0];
-
-    msg.textContent = 'Saving...';
-
-    let fileData = {};
-
-    if (file) {
-      fileData = await uploadFile(file, 'portfolio');
-    }
-
-    await addDoc(collection(db, 'portfolio'), {
-      userId: user.uid,
-      studentName: profile.name || '',
-      title,
-      description,
-      challenge,
-      solution,
-      feeling,
-      tags,
-      fileUrl: fileData.url || '',
-      fileType: file?.type || '',
-      createdAt: serverTimestamp()
-    });
-
-    msg.textContent = 'Saved!';
-    location.reload();
-
-  } catch (err) {
-    msg.textContent = err.message;
-  }
-}
-
-function renderPortfolioPage(entries = []) {
-  return `
-  <div class="portfolio-layout">
-
-    <!-- CREATE ENTRY -->
-    <section class="portfolio-card">
-      <h3>New Entry</h3>
-
-      <form id="portfolioForm" class="stack-form">
-
-        <div class="form-row">
-          <label>Title</label>
-          <input id="pTitle" required placeholder="What did you do today?">
-        </div>
-
-        <div class="form-row">
-          <label>Description / Reflection</label>
-          <textarea id="pDesc" rows="5" placeholder="Explain your journey, what you learned..."></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>Challenge Faced</label>
-          <textarea id="pChallenge" rows="3" placeholder="What was difficult?"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>How I Solved It</label>
-          <textarea id="pSolution" rows="3" placeholder="How did you overcome it?"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>Feeling</label>
-          <select id="pFeeling">
-            <option>😊 Happy</option>
-            <option>😐 Neutral</option>
-            <option>😓 Challenged</option>
-            <option>🔥 Motivated</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label>Tags</label>
-          <input id="pTags" placeholder="math, personal, science">
-        </div>
-
-        <div class="form-row">
-          <label>Upload Image / Video</label>
-          <input id="pFile" type="file">
-        </div>
-
-        <div class="form-actions">
-          <button class="btn" type="submit">Save Entry</button>
-          <span id="pMsg"></span>
-        </div>
-
-      </form>
-    </section>
-
-    <!-- FEED -->
-    <section class="portfolio-card">
-      <h3>My Journey</h3>
-
-      <div class="portfolio-feed">
-        ${entries.map(e => `
-          <div class="feed-item">
-            <h4>${escapeHtml(e.title)}</h4>
-
-            <div class="meta">${fmtDate(e.createdAt)} • ${escapeHtml(e.feeling || '')}</div>
-
-            <p>${escapeHtml(e.description || '')}</p>
-
-            ${e.challenge ? `<p><strong>Challenge:</strong> ${escapeHtml(e.challenge)}</p>` : ''}
-            ${e.solution ? `<p><strong>Solution:</strong> ${escapeHtml(e.solution)}</p>` : ''}
-
-            ${e.tags?.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('') || ''}
-
-            ${
-              e.fileUrl
-                ? e.fileType?.startsWith('video')
-                  ? `<video controls src="${e.fileUrl}"></video>`
-                  : `<img src="${e.fileUrl}">`
-                : ''
-            }
-          </div>
-        `).join('')}
-      </div>
-
-    </section>
-
-  </div>
-  `;
-}
-
-
 
 /* =========================
    LESSON PLANS
@@ -2560,7 +2413,19 @@ async function bootStudentPortfolioPage() {
   await refreshStudentPortfolioPage(bundle);
 }
 
+async function bootStudentPortfolio() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
 
+  await ensureStudentMirror(bundle.user, bundle.profile);
+
+  const items = await loadStudentPortfolio(bundle.user.uid);
+
+  document.getElementById('page-content').innerHTML =
+    renderStudentPortfolio(items);
+
+  await submitStudentPortfolio(bundle);
+}
 
 /* =========================
    TUTOR PORTFOLIO (FULL LIFE VIEW)
