@@ -390,89 +390,6 @@ async function loadPortfolio(userId) {
     ...d.data()
   })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
-
-
-
- async function loadPortfolio() {
-    const snap = await getDocs(
-      query(collection(db, 'portfolio'), where('userId', '==', user.uid))
-    );
-
-    return snap.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  }
-
-  const entries = await loadPortfolio();
-
-  // =========================
-  // RENDER UI
-  // =========================
-  page.innerHTML = renderPortfolioPage(entries);
-
-  // =========================
-  // HANDLE SUBMIT
-  // =========================
-  const form = document.getElementById('portfolioForm');
-
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const msg = document.getElementById('pMsg');
-
-      try {
-        msg.textContent = 'Saving...';
-
-        const title = document.getElementById('pTitle').value;
-        const description = document.getElementById('pDesc').value;
-        const challenge = document.getElementById('pChallenge').value;
-        const solution = document.getElementById('pSolution').value;
-        const feeling = document.getElementById('pFeeling').value;
-        const tags = document.getElementById('pTags').value
-          .split(',')
-          .map(t => t.trim())
-          .filter(Boolean);
-
-        const file = document.getElementById('pFile').files[0];
-
-        let fileData = {};
-
-        if (file) {
-          fileData = await uploadFile(file, 'portfolio'); // uses your Cloudinary config
-        }
-
-        await addDoc(collection(db, 'portfolio'), {
-          userId: user.uid,
-          studentName: profile.name || '',
-          title,
-          description,
-          challenge,
-          solution,
-          feeling,
-          tags,
-          fileUrl: fileData.url || '',
-          fileType: file?.type || '',
-          createdAt: serverTimestamp()
-        });
-
-        msg.textContent = 'Saved!';
-
-        // reload feed cleanly
-        const updated = await loadPortfolio();
-        page.innerHTML = renderPortfolioPage(updated);
-
-        // rebind form after rerender
-        bootStudentPortfolioPage();
-
-      } catch (err) {
-        console.error(err);
-        msg.textContent = err.message;
-      }
-    });
-  }
-
 async function savePortfolioEntry(user, profile) {
 
   const msg = document.getElementById('pMsg');
@@ -515,6 +432,7 @@ async function savePortfolioEntry(user, profile) {
     msg.textContent = err.message;
   }
 }
+
 function renderPortfolioPage(entries = []) {
   return `
   <div class="portfolio-layout">
@@ -2635,29 +2553,14 @@ function renderStudentPortfolio(items) {
   `;
 }
 async function bootStudentPortfolioPage() {
-
-  const { user, profile } = await requireAuth();
-
-  const page = document.getElementById('page-content');
-
-  if (!page) {
-    console.error('❌ Missing #page-content');
-    return;
-  }
-
-async function bootStudentPortfolio() {
   const bundle = await requireAuth();
   if (!bundle) return;
 
   await ensureStudentMirror(bundle.user, bundle.profile);
-
-  const items = await loadStudentPortfolio(bundle.user.uid);
-
-  document.getElementById('page-content').innerHTML =
-    renderStudentPortfolio(items);
-
-  await submitStudentPortfolio(bundle);
+  await refreshStudentPortfolioPage(bundle);
 }
+
+
 
 /* =========================
    TUTOR PORTFOLIO (FULL LIFE VIEW)
