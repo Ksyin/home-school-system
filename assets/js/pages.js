@@ -195,7 +195,7 @@ async function getUserProfile(uid) {
   if (!userDoc.exists()) return null;
   return userDoc.data();
 }
-
+wgT
 async function requireAuth() {
   return new Promise((resolve) => {
     onAuthStateChanged(auth, async (user) => {
@@ -380,6 +380,235 @@ async function ensureStudentMirror(user, profile) {
 
   await batch.commit();
 }
+async function loadPortfolio(userId) {
+  const snap = await getDocs(
+    query(collection(db, 'portfolio'), where('userId', '==', userId))
+  );
+
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data()
+  })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
+
+
+ async function loadPortfolio() {
+    const snap = await getDocs(
+      query(collection(db, 'portfolio'), where('userId', '==', user.uid))
+    );
+
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  }
+
+  const entries = await loadPortfolio();
+
+  // =========================
+  // RENDER UI
+  // =========================
+  page.innerHTML = renderPortfolioPage(entries);
+
+  // =========================
+  // HANDLE SUBMIT
+  // =========================
+  const form = document.getElementById('portfolioForm');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const msg = document.getElementById('pMsg');
+
+      try {
+        msg.textContent = 'Saving...';
+
+        const title = document.getElementById('pTitle').value;
+        const description = document.getElementById('pDesc').value;
+        const challenge = document.getElementById('pChallenge').value;
+        const solution = document.getElementById('pSolution').value;
+        const feeling = document.getElementById('pFeeling').value;
+        const tags = document.getElementById('pTags').value
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean);
+
+        const file = document.getElementById('pFile').files[0];
+
+        let fileData = {};
+
+        if (file) {
+          fileData = await uploadFile(file, 'portfolio'); // uses your Cloudinary config
+        }
+
+        await addDoc(collection(db, 'portfolio'), {
+          userId: user.uid,
+          studentName: profile.name || '',
+          title,
+          description,
+          challenge,
+          solution,
+          feeling,
+          tags,
+          fileUrl: fileData.url || '',
+          fileType: file?.type || '',
+          createdAt: serverTimestamp()
+        });
+
+        msg.textContent = 'Saved!';
+
+        // reload feed cleanly
+        const updated = await loadPortfolio();
+        page.innerHTML = renderPortfolioPage(updated);
+
+        // rebind form after rerender
+        bootStudentPortfolioPage();
+
+      } catch (err) {
+        console.error(err);
+        msg.textContent = err.message;
+      }
+    });
+  }
+
+async function savePortfolioEntry(user, profile) {
+
+  const msg = document.getElementById('pMsg');
+
+  try {
+    const title = document.getElementById('pTitle').value;
+    const description = document.getElementById('pDesc').value;
+    const challenge = document.getElementById('pChallenge').value;
+    const solution = document.getElementById('pSolution').value;
+    const feeling = document.getElementById('pFeeling').value;
+    const tags = document.getElementById('pTags').value.split(',').map(t => t.trim());
+    const file = document.getElementById('pFile').files[0];
+
+    msg.textContent = 'Saving...';
+
+    let fileData = {};
+
+    if (file) {
+      fileData = await uploadFile(file, 'portfolio');
+    }
+
+    await addDoc(collection(db, 'portfolio'), {
+      userId: user.uid,
+      studentName: profile.name || '',
+      title,
+      description,
+      challenge,
+      solution,
+      feeling,
+      tags,
+      fileUrl: fileData.url || '',
+      fileType: file?.type || '',
+      createdAt: serverTimestamp()
+    });
+
+    msg.textContent = 'Saved!';
+    location.reload();
+
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+}
+function renderPortfolioPage(entries = []) {
+  return `
+  <div class="portfolio-layout">
+
+    <!-- CREATE ENTRY -->
+    <section class="portfolio-card">
+      <h3>New Entry</h3>
+
+      <form id="portfolioForm" class="stack-form">
+
+        <div class="form-row">
+          <label>Title</label>
+          <input id="pTitle" required placeholder="What did you do today?">
+        </div>
+
+        <div class="form-row">
+          <label>Description / Reflection</label>
+          <textarea id="pDesc" rows="5" placeholder="Explain your journey, what you learned..."></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Challenge Faced</label>
+          <textarea id="pChallenge" rows="3" placeholder="What was difficult?"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>How I Solved It</label>
+          <textarea id="pSolution" rows="3" placeholder="How did you overcome it?"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Feeling</label>
+          <select id="pFeeling">
+            <option>😊 Happy</option>
+            <option>😐 Neutral</option>
+            <option>😓 Challenged</option>
+            <option>🔥 Motivated</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Tags</label>
+          <input id="pTags" placeholder="math, personal, science">
+        </div>
+
+        <div class="form-row">
+          <label>Upload Image / Video</label>
+          <input id="pFile" type="file">
+        </div>
+
+        <div class="form-actions">
+          <button class="btn" type="submit">Save Entry</button>
+          <span id="pMsg"></span>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- FEED -->
+    <section class="portfolio-card">
+      <h3>My Journey</h3>
+
+      <div class="portfolio-feed">
+        ${entries.map(e => `
+          <div class="feed-item">
+            <h4>${escapeHtml(e.title)}</h4>
+
+            <div class="meta">${fmtDate(e.createdAt)} • ${escapeHtml(e.feeling || '')}</div>
+
+            <p>${escapeHtml(e.description || '')}</p>
+
+            ${e.challenge ? `<p><strong>Challenge:</strong> ${escapeHtml(e.challenge)}</p>` : ''}
+            ${e.solution ? `<p><strong>Solution:</strong> ${escapeHtml(e.solution)}</p>` : ''}
+
+            ${e.tags?.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('') || ''}
+
+            ${
+              e.fileUrl
+                ? e.fileType?.startsWith('video')
+                  ? `<video controls src="${e.fileUrl}"></video>`
+                  : `<img src="${e.fileUrl}">`
+                : ''
+            }
+          </div>
+        `).join('')}
+      </div>
+
+    </section>
+
+  </div>
+  `;
+}
+
+
 
 /* =========================
    LESSON PLANS
@@ -2406,12 +2635,15 @@ function renderStudentPortfolio(items) {
   `;
 }
 async function bootStudentPortfolioPage() {
-  const bundle = await requireAuth();
-  if (!bundle) return;
 
-  await ensureStudentMirror(bundle.user, bundle.profile);
-  await refreshStudentPortfolioPage(bundle);
-}
+  const { user, profile } = await requireAuth();
+
+  const page = document.getElementById('page-content');
+
+  if (!page) {
+    console.error('❌ Missing #page-content');
+    return;
+  }
 
 async function bootStudentPortfolio() {
   const bundle = await requireAuth();

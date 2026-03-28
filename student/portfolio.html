@@ -4,18 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>My Portfolio</title>
+
 <link rel="stylesheet" href="/assets/css/styles.css">
 
 <style>
-/* 🔥 modern portfolio styling */
-.portfolio-grid {
+.portfolio-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: 20px;
 }
 
-.portfolio-form textarea {
-  min-height: 120px;
+@media(max-width: 900px){
+  .portfolio-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .portfolio-card {
@@ -29,14 +31,34 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin-top: 20px;
+}
+
+.feed-item {
+  padding: 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #eee;
+}
+
+.feed-item img,
+.feed-item video {
+  width: 100%;
+  border-radius: 10px;
+  margin-top: 10px;
 }
 
 .tag {
+  display: inline-block;
   padding: 4px 10px;
   border-radius: 10px;
   font-size: 12px;
   background: #eef3ff;
+  margin-right: 6px;
+}
+
+.meta {
+  font-size: 12px;
+  opacity: 0.7;
 }
 </style>
 </head>
@@ -46,10 +68,9 @@
 <div id="app-shell">
 
 <main class="content">
-
   <div class="topbar">
-    <h2>My Portfolio</h2>
-    <p>Track your growth, challenges, and achievements</p>
+    <h2>My Learning Journey</h2>
+    <p>Track growth, challenges, reflections & achievements</p>
   </div>
 
   <div id="page-content"></div>
