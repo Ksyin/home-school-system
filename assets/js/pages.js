@@ -3216,7 +3216,930 @@ async function loadExtendedPages(user, profile) {
 
 
 
+// Add these functions to your existing pages.js file
 
+// ==================== COMPLETE LEARNERS PAGE WITH REPORTS ====================
+async function refreshLearnersPageComplete(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  // Load all students from Firebase
+  const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+  const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  // Load all reports
+  const reportsSnap = await getDocs(collection(db, 'reports'));
+  const reports = reportsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  // Load all comments
+  const commentsSnap = await getDocs(collection(db, 'student-comments'));
+  const comments = commentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const studentsHtml = students.map(student => {
+    const studentReports = reports.filter(r => r.studentId === student.id);
+    const studentComments = comments.filter(c => c.studentId === student.id);
+    
+    return `
+      <div class="student-card">
+        <div class="student-header">
+          <div>
+            <div class="student-name">${escapeHtml(student.full_name || student.name || 'Student')}</div>
+            <div class="student-email">${escapeHtml(student.email || 'No email')}</div>
+          </div>
+          <div>
+            <button class="btn small" onclick="openReportModal('${student.id}', '${escapeHtml(student.full_name || student.name)}')">📝 Write Report</button>
+            <button class="btn small" onclick="openCommentModal('${student.id}', '${escapeHtml(student.full_name || student.name)}')">💬 Add Comment</button>
+            <button class="btn small" onclick="viewStudentDetails('${student.id}')">👁️ View</button>
+          </div>
+        </div>
+        
+        <div class="student-stats">
+          <span class="stat-badge">📊 ${studentReports.length} Reports</span>
+          <span class="stat-badge">💬 ${studentComments.length} Comments</span>
+          <span class="stat-badge">🏫 ${student.classroomName || 'No classroom'}</span>
+        </div>
+        
+        ${studentReports.length > 0 ? `
+          <div style="margin-top: 12px;">
+            <strong>Latest Reports:</strong>
+            ${studentReports.slice(0, 2).map(report => `
+              <div class="report-card">
+                <strong>${escapeHtml(report.title || 'Progress Report')}</strong>
+                <p>${escapeHtml(report.summary || report.strengths || '')}</p>
+                <small>${fmtDate(report.createdAt)}</small>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        
+        ${studentComments.length > 0 ? `
+          <div style="margin-top: 12px;">
+            <strong>Recent Comments:</strong>
+            ${studentComments.slice(0, 2).map(comment => `
+              <div class="comment-item">
+                <div>${escapeHtml(comment.comment)}</div>
+                <div class="comment-date">${fmtDate(comment.createdAt)}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  pageContent.innerHTML = `
+    <div class="grid-2">
+      <div>
+        <h3>All Students (${students.length})</h3>
+        ${studentsHtml || '<div class="empty">No students registered yet.</div>'}
+      </div>
+      
+      <div>
+        <div class="card panel">
+          <h3>Quick Actions</h3>
+          <button class="btn" onclick="showAllReports()">📊 View All Reports</button>
+          <button class="btn" onclick="showAllComments()">💬 View All Comments</button>
+          <button class="btn" onclick="exportData()">📥 Export Data</button>
+        </div>
+        
+        <div class="card panel" style="margin-top: 16px;">
+          <h3>Student Insights</h3>
+          <div id="insights"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Store data globally for modals
+  window.studentsData = students;
+  window.reportsData = reports;
+  window.commentsData = comments;
+}
+
+// ==================== COMPLETE CLASSROOMS WITH TEACHING MODE ====================
+async function refreshClassroomsPageComplete(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const classroomsSnap = await getDocs(query(collection(db, 'classrooms'), where('tutorId', '==', user.uid)));
+  const classrooms = classroomsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+  const allStudents = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const classroomsHtml = classrooms.map(classroom => {
+    const classStudents = allStudents.filter(s => classroom.studentIds?.includes(s.id));
+    
+    return `
+      <div class="classroom-card">
+        <div class="classroom-header">
+          <div>
+            <div class="classroom-title">${escapeHtml(classroom.name)}</div>
+            <div>${escapeHtml(classroom.subject)}</div>
+          </div>
+          <div>
+            <button class="btn small" onclick="startTeachingMode('${classroom.id}', '${escapeHtml(classroom.name)}')">🎓 Start Teaching Mode</button>
+            <button class="btn small danger" onclick="deleteClassroom('${classroom.id}')">Delete</button>
+          </div>
+        </div>
+        
+        <div>${escapeHtml(classroom.description || 'No description')}</div>
+        
+        <div class="student-list">
+          ${classStudents.map(s => `<span class="student-tag">${escapeHtml(s.full_name || s.name)}</span>`).join('')}
+        </div>
+        
+        <div id="teaching-mode-${classroom.id}" style="display: none;" class="teaching-mode">
+          <div style="background: #2ecc71; padding: 16px; border-radius: 8px;">
+            <h4>🎓 Teaching Mode Active</h4>
+            <p>Share screen, start lesson, or broadcast message to class</p>
+            <button class="btn" onclick="broadcastToClass('${classroom.id}')">📢 Broadcast Message</button>
+            <button class="btn" onclick="startLiveLesson('${classroom.id}')">🎥 Start Live Lesson</button>
+            <button class="btn" onclick="endTeachingMode('${classroom.id}')">End Mode</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>Create New Classroom</h3>
+      <form id="classroomForm" class="stack-form">
+        <div class="form-row">
+          <label>Classroom Name</label>
+          <input id="className" required placeholder="e.g., Grade 8 Mathematics">
+        </div>
+        <div class="form-row">
+          <label>Subject</label>
+          <input id="classSubject" required placeholder="e.g., Mathematics">
+        </div>
+        <div class="form-row">
+          <label>Description</label>
+          <textarea id="classDesc" rows="3"></textarea>
+        </div>
+        <div class="form-row">
+          <label>Select Students</label>
+          <select id="classStudents" multiple size="5">
+            ${allStudents.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}
+          </select>
+        </div>
+        <button type="submit" class="btn">Create Classroom</button>
+      </form>
+    </section>
+    
+    <h3 style="margin-top: 24px;">My Classrooms (${classrooms.length})</h3>
+    ${classroomsHtml || '<div class="empty">No classrooms yet. Create one above!</div>'}
+  `;
+  
+  // Handle form submission
+  document.getElementById('classroomForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('className').value;
+    const subject = document.getElementById('classSubject').value;
+    const description = document.getElementById('classDesc').value;
+    const studentSelect = document.getElementById('classStudents');
+    const studentIds = Array.from(studentSelect.selectedOptions).map(opt => opt.value);
+    
+    await setDoc(doc(collection(db, 'classrooms')), {
+      tutorId: user.uid,
+      name, subject, description,
+      studentIds,
+      createdAt: serverTimestamp()
+    });
+    
+    alert('Classroom created!');
+    location.reload();
+  });
+}
+
+// ==================== COMPLETE ASSIGNMENTS WITH STUDENT SELECTION ====================
+async function refreshAssignmentsPageComplete(bundle) {
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+  const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  const assignmentsSnap = await getDocs(query(collection(db, 'assignments'), where('tutorId', '==', user.uid)));
+  const assignments = assignmentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  const submissionsSnap = await getDocs(collection(db, 'submissions'));
+  const submissions = submissionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const assignmentsHtml = assignments.map(assignment => {
+    const assignmentSubmissions = submissions.filter(s => s.assignmentId === assignment.id);
+    const assignedStudent = students.find(s => s.id === assignment.studentId);
+    
+    return `
+      <div class="assignment-card">
+        <div style="display: flex; justify-content: space-between;">
+          <div>
+            <h4>${escapeHtml(assignment.title)}</h4>
+            <div>${escapeHtml(assignment.subject || 'No subject')}</div>
+            ${assignment.dueDate ? `<div>Due: ${fmtDate(assignment.dueDate)}</div>` : ''}
+            ${assignedStudent ? `<div>Assigned to: <strong>${escapeHtml(assignedStudent.full_name || assignedStudent.name)}</strong></div>` : '<div>Assigned to: All students</div>'}
+          </div>
+          <div>
+            <button class="btn small danger" onclick="deleteAssignment('${assignment.id}')">Delete</button>
+          </div>
+        </div>
+        <div>${escapeHtml(assignment.description || 'No description')}</div>
+        
+        <div style="margin-top: 12px;">
+          <strong>Submissions (${assignmentSubmissions.length}):</strong>
+          ${assignmentSubmissions.map(sub => `
+            <div class="submission-item">
+              <div>${escapeHtml(sub.studentName)} - ${sub.status || 'Submitted'}</div>
+              ${sub.fileUrl ? `<a href="${sub.fileUrl}" target="_blank">View File</a>` : ''}
+              <div>
+                <input type="number" id="grade-${sub.id}" placeholder="Grade" class="grade-input">
+                <button class="btn small" onclick="gradeSubmission('${sub.id}', '${assignment.id}')">Submit Grade</button>
+              </div>
+            </div>
+          `).join('') || '<div>No submissions yet</div>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>Create New Assignment</h3>
+      <form id="assignmentForm" class="stack-form">
+        <div class="form-row">
+          <label>Assignment Title *</label>
+          <input id="assignTitle" required>
+        </div>
+        <div class="form-row">
+          <label>Subject</label>
+          <input id="assignSubject">
+        </div>
+        <div class="form-row">
+          <label>Description / Instructions</label>
+          <textarea id="assignDesc" rows="4"></textarea>
+        </div>
+        <div class="form-row">
+          <label>Assign to Student (Optional - leave blank for all)</label>
+          <select id="assignStudent">
+            <option value="">-- All Students --</option>
+            ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Due Date</label>
+          <input id="assignDue" type="date">
+        </div>
+        <button type="submit" class="btn">Create Assignment</button>
+      </form>
+    </section>
+    
+    <h3 style="margin-top: 24px;">My Assignments (${assignments.length})</h3>
+    ${assignmentsHtml || '<div class="empty">No assignments yet. Create one above!</div>'}
+  `;
+  
+  document.getElementById('assignmentForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('assignTitle').value;
+    const subject = document.getElementById('assignSubject').value;
+    const description = document.getElementById('assignDesc').value;
+    const studentId = document.getElementById('assignStudent').value || null;
+    const dueDate = document.getElementById('assignDue').value;
+    
+    await setDoc(doc(collection(db, 'assignments')), {
+      tutorId: user.uid,
+      tutorName: profile?.full_name || profile?.name,
+      title, subject, description,
+      studentId,
+      dueDate,
+      createdAt: serverTimestamp(),
+      status: 'Active'
+    });
+    
+    alert('Assignment created!');
+    location.reload();
+  });
+}
+
+// ==================== COMPLETE REPORTS PAGE ====================
+async function refreshReportsPageComplete(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+  const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  const reportsSnap = await getDocs(collection(db, 'reports'));
+  const reports = reportsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const reportsHtml = reports.map(report => {
+    const student = students.find(s => s.id === report.studentId);
+    return `
+      <div class="report-card">
+        <div style="display: flex; justify-content: space-between;">
+          <h4>${escapeHtml(report.title || 'Progress Report')}</h4>
+          <small>${fmtDate(report.createdAt)}</small>
+        </div>
+        <div><strong>Student:</strong> ${escapeHtml(student?.full_name || student?.name || 'Unknown')}</div>
+        <div><strong>Strengths:</strong> ${escapeHtml(report.strengths || '—')}</div>
+        <div><strong>Areas to Improve:</strong> ${escapeHtml(report.lows || '—')}</div>
+        <div><strong>Summary:</strong> ${escapeHtml(report.summary || '—')}</div>
+        <div><strong>Next Steps:</strong> ${escapeHtml(report.nextSteps || '—')}</div>
+        <button class="btn small" onclick="editReport('${report.id}')">Edit</button>
+        <button class="btn small danger" onclick="deleteReport('${report.id}')">Delete</button>
+      </div>
+    `;
+  }).join('');
+
+  pageContent.innerHTML = `
+    <div class="report-form">
+      <h3>📝 Create Progress Report</h3>
+      <form id="reportForm">
+        <div class="form-group">
+          <label>Select Student *</label>
+          <select id="reportStudentId" required>
+            <option value="">-- Choose Student --</option>
+            ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Report Title</label>
+          <input id="reportTitle" placeholder="e.g., Term 1 Progress Report">
+        </div>
+        
+        <div class="form-group">
+          <label>Strengths / Highs</label>
+          <textarea id="reportStrengths" rows="3" placeholder="What is the student doing well?"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Areas to Improve / Lows</label>
+          <textarea id="reportLows" rows="3" placeholder="What needs improvement?"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Summary / Overall Progress</label>
+          <textarea id="reportSummary" rows="4" placeholder="Overall summary of student progress..."></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Next Steps / Recommendations</label>
+          <textarea id="reportNextSteps" rows="3" placeholder="What should the student focus on next?"></textarea>
+        </div>
+        
+        <button type="submit" class="btn">💾 Save Report</button>
+      </form>
+    </div>
+    
+    <h3>📋 Previous Reports (${reports.length})</h3>
+    ${reportsHtml || '<div class="empty">No reports yet. Create your first report above!</div>'}
+  `;
+  
+  document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const studentId = document.getElementById('reportStudentId').value;
+    const title = document.getElementById('reportTitle').value;
+    const strengths = document.getElementById('reportStrengths').value;
+    const lows = document.getElementById('reportLows').value;
+    const summary = document.getElementById('reportSummary').value;
+    const nextSteps = document.getElementById('reportNextSteps').value;
+    
+    if (!studentId) {
+      alert('Please select a student');
+      return;
+    }
+    
+    await setDoc(doc(collection(db, 'reports')), {
+      studentId,
+      title: title || 'Progress Report',
+      strengths,
+      lows,
+      summary,
+      nextSteps,
+      tutorId: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    alert('Report saved successfully!');
+    location.reload();
+  });
+}
+
+// ==================== COMPLETE MESSAGES PAGE ====================
+async function refreshMessagesPageComplete(bundle) {
+  const { user } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+  const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  const messagesSnap = await getDocs(query(collection(db, 'messages'), where('tutorId', '==', user.uid)));
+  const messages = messagesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Group messages by student
+  const messagesByStudent = {};
+  messages.forEach(msg => {
+    if (!messagesByStudent[msg.studentId]) messagesByStudent[msg.studentId] = [];
+    messagesByStudent[msg.studentId].push(msg);
+  });
+
+  const threadsHtml = Object.entries(messagesByStudent).map(([studentId, studentMessages]) => {
+    const student = students.find(s => s.id === studentId);
+    return `
+      <div class="message-thread">
+        <div class="message-header" onclick="toggleThread('${studentId}')">
+          💬 ${escapeHtml(student?.full_name || student?.name || 'Student')} (${studentMessages.length} messages)
+        </div>
+        <div id="thread-${studentId}" style="display: block;">
+          ${studentMessages.map(msg => `
+            <div class="message-body">
+              <div class="message-bubble ${msg.sender === 'tutor' ? 'tutor' : ''}">
+                <strong>${msg.sender === 'tutor' ? 'You' : escapeHtml(student?.full_name || student?.name)}:</strong>
+                ${escapeHtml(msg.message)}
+                <div style="font-size: 11px; margin-top: 4px;">${fmtDate(msg.createdAt)}</div>
+              </div>
+            </div>
+          `).join('')}
+          <div class="reply-area">
+            <textarea id="reply-${studentId}" rows="2" placeholder="Type your reply..."></textarea>
+            <button class="btn small" onclick="sendMessage('${studentId}', '${escapeHtml(student?.full_name || student?.name)}')">Send Reply</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  pageContent.innerHTML = `
+    <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px;">
+      <div class="card panel">
+        <h3>New Message</h3>
+        <form id="newMessageForm">
+          <div class="form-group">
+            <label>To:</label>
+            <select id="messageStudentId" required>
+              <option value="">-- Select Student --</option>
+              ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Subject (optional)</label>
+            <input id="messageSubject">
+          </div>
+          <div class="form-group">
+            <label>Message</label>
+            <textarea id="messageBody" rows="4" required></textarea>
+          </div>
+          <button type="submit" class="btn">Send Message</button>
+        </form>
+      </div>
+      
+      <div>
+        <h3>Conversations (${Object.keys(messagesByStudent).length})</h3>
+        ${threadsHtml || '<div class="empty">No conversations yet. Send your first message!</div>'}
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('newMessageForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const studentId = document.getElementById('messageStudentId').value;
+    const subject = document.getElementById('messageSubject').value;
+    const message = document.getElementById('messageBody').value;
+    
+    if (!studentId || !message) {
+      alert('Please select a student and enter a message');
+      return;
+    }
+    
+    const student = students.find(s => s.id === studentId);
+    
+    await setDoc(doc(collection(db, 'messages')), {
+      tutorId: user.uid,
+      studentId,
+      studentName: student?.full_name || student?.name,
+      subject,
+      message,
+      sender: 'tutor',
+      createdAt: serverTimestamp()
+    });
+    
+    alert('Message sent!');
+    location.reload();
+  });
+}
+
+// ==================== COMPLETE LESSON PLANS PAGE ====================
+async function refreshLessonPlansPageComplete(bundle) {
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  const plansSnap = await getDocs(query(collection(db, 'lesson-plans'), where('tutorId', '==', user.uid)));
+  const plans = plansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const plansHtml = plans.map(plan => `
+    <div class="lesson-card">
+      <div style="display: flex; justify-content: space-between;">
+        <h3>📖 ${escapeHtml(plan.title)}</h3>
+        <div>
+          <button class="btn small" onclick="editLessonPlan('${plan.id}')">Edit</button>
+          <button class="btn small danger" onclick="deleteLessonPlan('${plan.id}')">Delete</button>
+        </div>
+      </div>
+      
+      <div class="lesson-meta">
+        <span class="badge-subject">${escapeHtml(plan.subject)}</span>
+        <span>🏫 ${escapeHtml(plan.classroomName || 'General')}</span>
+        <span>📅 ${fmtDate(plan.plannedDate)}</span>
+        <span>${statusBadge(plan.status || 'Draft')}</span>
+      </div>
+      
+      <div class="objectives-list">
+        <strong>🎯 Objectives:</strong>
+        <p>${escapeHtml(plan.objectives || 'No objectives set')}</p>
+      </div>
+      
+      <div>
+        <strong>📚 Materials:</strong>
+        <p>${escapeHtml(plan.materials || 'No materials listed')}</p>
+      </div>
+      
+      <div>
+        <strong>📝 Notes / Activities:</strong>
+        <p>${escapeHtml(plan.notes || 'No notes')}</p>
+      </div>
+      
+      ${plan.attachmentUrl ? `<a href="${plan.attachmentUrl}" target="_blank" class="btn small">📎 Download Attachment</a>` : ''}
+      
+      <div style="margin-top: 12px;">
+        <button class="btn small" onclick="publishLessonPlan('${plan.id}')">${plan.status === 'Published' ? 'Unpublish' : 'Publish'}</button>
+      </div>
+    </div>
+  `).join('');
+
+  pageContent.innerHTML = `
+    <section class="card panel">
+      <h3>📝 Create New Lesson Plan</h3>
+      <form id="lessonPlanForm" class="stack-form">
+        <div class="form-row">
+          <label>Lesson Title *</label>
+          <input id="planTitle" required>
+        </div>
+        <div class="form-row">
+          <label>Subject *</label>
+          <input id="planSubject" required>
+        </div>
+        <div class="form-row">
+          <label>Classroom / Grade Level</label>
+          <input id="planClassroom">
+        </div>
+        <div class="form-row">
+          <label>Date *</label>
+          <input id="planDate" type="date" required>
+        </div>
+        <div class="form-row">
+          <label>Learning Objectives</label>
+          <textarea id="planObjectives" rows="3" placeholder="What will students learn?"></textarea>
+        </div>
+        <div class="form-row">
+          <label>Materials Needed</label>
+          <textarea id="planMaterials" rows="3" placeholder="Books, links, worksheets..."></textarea>
+        </div>
+        <div class="form-row">
+          <label>Lesson Activities / Notes</label>
+          <textarea id="planNotes" rows="5" placeholder="Step by step lesson plan..."></textarea>
+        </div>
+        <div class="form-row">
+          <label>Attachment (optional)</label>
+          <input id="planAttachment" type="file">
+        </div>
+        <button type="submit" class="btn">Save Lesson Plan</button>
+      </form>
+    </section>
+    
+    <h3 style="margin-top: 24px;">📚 My Lesson Plans (${plans.length})</h3>
+    ${plansHtml || '<div class="empty">No lesson plans yet. Create your first plan above!</div>'}
+  `;
+  
+  document.getElementById('lessonPlanForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const title = document.getElementById('planTitle').value;
+    const subject = document.getElementById('planSubject').value;
+    const classroomName = document.getElementById('planClassroom').value;
+    const plannedDate = document.getElementById('planDate').value;
+    const objectives = document.getElementById('planObjectives').value;
+    const materials = document.getElementById('planMaterials').value;
+    const notes = document.getElementById('planNotes').value;
+    const file = document.getElementById('planAttachment').files[0];
+    
+    let attachmentUrl = '';
+    if (file) {
+      const upload = await uploadFile(file, `lesson-plans/${user.uid}`);
+      attachmentUrl = upload.url;
+    }
+    
+    await setDoc(doc(collection(db, 'lesson-plans')), {
+      tutorId: user.uid,
+      tutorName: profile?.full_name || profile?.name,
+      title, subject, classroomName, plannedDate,
+      objectives, materials, notes,
+      attachmentUrl,
+      status: 'Draft',
+      createdAt: serverTimestamp()
+    });
+    
+    alert('Lesson plan saved!');
+    location.reload();
+  });
+}
+
+// ==================== UTILITY FUNCTIONS FOR MODALS ====================
+
+window.openReportModal = (studentId, studentName) => {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h3>Write Report for ${studentName}</h3>
+      <form id="quickReportForm">
+        <div class="form-group">
+          <label>Title</label>
+          <input id="quickReportTitle" placeholder="Progress Report">
+        </div>
+        <div class="form-group">
+          <label>Strengths</label>
+          <textarea id="quickStrengths" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Areas to Improve</label>
+          <textarea id="quickLows" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Summary</label>
+          <textarea id="quickSummary" rows="3"></textarea>
+        </div>
+        <button type="submit" class="btn">Save Report</button>
+        <button type="button" class="btn" onclick="this.closest('.modal').remove()">Cancel</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  document.getElementById('quickReportForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { user } = await window.AppUtil.requireAuth();
+    
+    await setDoc(doc(collection(db, 'reports')), {
+      studentId,
+      title: document.getElementById('quickReportTitle').value || 'Progress Report',
+      strengths: document.getElementById('quickStrengths').value,
+      lows: document.getElementById('quickLows').value,
+      summary: document.getElementById('quickSummary').value,
+      tutorId: user.uid,
+      createdAt: serverTimestamp()
+    });
+    
+    alert('Report saved!');
+    modal.remove();
+    location.reload();
+  });
+};
+
+window.openCommentModal = (studentId, studentName) => {
+  const comment = prompt(`Add comment for ${studentName}:`);
+  if (comment) {
+    (async () => {
+      const { user } = await window.AppUtil.requireAuth();
+      await setDoc(doc(collection(db, 'student-comments')), {
+        studentId,
+        comment,
+        tutorId: user.uid,
+        createdAt: serverTimestamp()
+      });
+      alert('Comment added!');
+      location.reload();
+    })();
+  }
+};
+
+window.sendMessage = async (studentId, studentName) => {
+  const message = document.getElementById(`reply-${studentId}`).value;
+  if (!message) return;
+  
+  const { user } = await window.AppUtil.requireAuth();
+  await setDoc(doc(collection(db, 'messages')), {
+    tutorId: user.uid,
+    studentId,
+    studentName,
+    message,
+    sender: 'tutor',
+    createdAt: serverTimestamp()
+  });
+  
+  alert('Message sent!');
+  location.reload();
+};
+
+window.deleteAssignment = async (id) => {
+  if (confirm('Delete this assignment?')) {
+    await deleteDoc(doc(db, 'assignments', id));
+    location.reload();
+  }
+};
+
+window.gradeSubmission = async (submissionId, assignmentId) => {
+  const grade = document.getElementById(`grade-${submissionId}`).value;
+  if (!grade) return;
+  
+  await updateDoc(doc(db, 'submissions', submissionId), {
+    grade: parseInt(grade),
+    gradedAt: serverTimestamp()
+  });
+  
+  alert(`Grade ${grade} saved!`);
+};
+
+window.startTeachingMode = (classroomId, className) => {
+  const modeDiv = document.getElementById(`teaching-mode-${classroomId}`);
+  if (modeDiv) {
+    modeDiv.style.display = 'block';
+    alert(`Teaching mode started for ${className}`);
+  }
+};
+
+window.endTeachingMode = (classroomId) => {
+  const modeDiv = document.getElementById(`teaching-mode-${classroomId}`);
+  if (modeDiv) {
+    modeDiv.style.display = 'none';
+    alert('Teaching mode ended');
+  }
+};
+
+window.broadcastToClass = async (classroomId) => {
+  const message = prompt('Enter broadcast message for the class:');
+  if (message) {
+    const classroomSnap = await getDoc(doc(db, 'classrooms', classroomId));
+    const classroom = classroomSnap.data();
+    
+    for (const studentId of (classroom.studentIds || [])) {
+      await setDoc(doc(collection(db, 'messages')), {
+        studentId,
+        message: `[CLASS BROADCAST] ${message}`,
+        sender: 'tutor',
+        classroomId,
+        createdAt: serverTimestamp()
+      });
+    }
+    alert(`Broadcast sent to ${classroom.studentIds?.length || 0} students!`);
+  }
+};
+
+window.startLiveLesson = (classroomId) => {
+  alert('Live lesson feature - would integrate with video conferencing API');
+};
+
+window.deleteClassroom = async (id) => {
+  if (confirm('Delete this classroom? This will remove all student associations.')) {
+    await deleteDoc(doc(db, 'classrooms', id));
+    location.reload();
+  }
+};
+
+window.deleteReport = async (id) => {
+  if (confirm('Delete this report?')) {
+    await deleteDoc(doc(db, 'reports', id));
+    location.reload();
+  }
+};
+
+window.editReport = async (id) => {
+  const reportSnap = await getDoc(doc(db, 'reports', id));
+  const report = reportSnap.data();
+  
+  const strengths = prompt('Edit strengths:', report.strengths);
+  if (strengths !== null) {
+    await updateDoc(doc(db, 'reports', id), {
+      strengths,
+      updatedAt: serverTimestamp()
+    });
+    location.reload();
+  }
+};
+
+window.editLessonPlan = async (id) => {
+  alert('Edit functionality - click the form to edit existing plans');
+};
+
+window.deleteLessonPlan = async (id) => {
+  if (confirm('Delete this lesson plan?')) {
+    await deleteDoc(doc(db, 'lesson-plans', id));
+    location.reload();
+  }
+};
+
+window.publishLessonPlan = async (id) => {
+  const planSnap = await getDoc(doc(db, 'lesson-plans', id));
+  const plan = planSnap.data();
+  const newStatus = plan.status === 'Published' ? 'Draft' : 'Published';
+  
+  await updateDoc(doc(db, 'lesson-plans', id), {
+    status: newStatus,
+    updatedAt: serverTimestamp()
+  });
+  
+  location.reload();
+};
+
+window.toggleThread = (studentId) => {
+  const thread = document.getElementById(`thread-${studentId}`);
+  if (thread) {
+    thread.style.display = thread.style.display === 'none' ? 'block' : 'none';
+  }
+};
+
+window.showAllReports = () => {
+  alert(`Total reports: ${window.reportsData?.length || 0}`);
+};
+
+window.showAllComments = () => {
+  alert(`Total comments: ${window.commentsData?.length || 0}`);
+};
+
+window.exportData = () => {
+  const data = {
+    students: window.studentsData,
+    reports: window.reportsData,
+    comments: window.commentsData,
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `homeschool-data-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+window.viewStudentDetails = (studentId) => {
+  const student = window.studentsData?.find(s => s.id === studentId);
+  if (student) {
+    alert(`
+      Student: ${student.full_name || student.name}
+      Email: ${student.email}
+      Classroom: ${student.classroomName || 'Not assigned'}
+      Role: ${student.role}
+    `);
+  }
+};
+
+// Override the page boot functions with complete versions
+const originalBoot = {};
+
+// Replace boot functions
+window.bootLearnersPageComplete = () => {
+  requireAuth().then(bundle => {
+    if (bundle) refreshLearnersPageComplete(bundle);
+  });
+};
+
+window.bootClassroomsPageComplete = () => {
+  requireAuth().then(bundle => {
+    if (bundle) refreshClassroomsPageComplete(bundle);
+  });
+};
+
+window.bootAssignmentsPageComplete = () => {
+  requireAuth().then(bundle => {
+    if (bundle) refreshAssignmentsPageComplete(bundle);
+  });
+};
+
+window.bootReportsPageComplete = () => {
+  requireAuth().then(bundle => {
+    if (bundle) refreshReportsPageComplete(bundle);
+  });
+};
+
+window.bootMessagesPageComplete = () => {
+  requireAuth().then(bundle => {
+    if (bundle) refreshMessagesPageComplete(bundle);
+  });
+};
+
+window.bootLessonPlansPageComplete = () => {
+  requireAuth().then(bundle => {
+    if (bundle) refreshLessonPlansPageComplete(bundle);
+  });
+};
 
 
 /* =========================
