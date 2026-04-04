@@ -1,62 +1,64 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>My Portfolio</title>
-<link rel="stylesheet" href="/assets/css/styles.css">
-
-<style>
-/* 🔥 modern portfolio styling */
-.portfolio-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.portfolio-form textarea {
-  min-height: 120px;
-}
-
-.portfolio-card {
-  padding: 16px;
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-}
-
-.portfolio-feed {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 20px;
-}
-
-.tag {
-  padding: 4px 10px;
-  border-radius: 10px;
-  font-size: 12px;
-  background: #eef3ff;
-}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Learning Journey</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <style>
+    /* fallback styles – ensure the grid layout works */
+    .portfolio-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 768px) {
+      .portfolio-grid { grid-template-columns: 1fr; }
+    }
+    .portfolio-form textarea {
+      min-height: 100px;
+    }
+    .portfolio-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .portfolio-card {
+      background: var(--surface, #fff);
+      border-radius: 20px;
+      padding: 1.2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border: 1px solid var(--border, #eaeef5);
+      transition: 0.2s;
+    }
+    .tag {
+      display: inline-block;
+      background: #f0f4ff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-right: 8px;
+    }
+    .feeling-badge {
+      background: #fff3e0;
+      color: #b45f06;
+    }
+    .file-preview {
+      margin-top: 12px;
+    }
+    .empty-feed {
+      text-align: center;
+      padding: 2rem;
+      background: #fafcff;
+      border-radius: 20px;
+      color: #6b7280;
+    }
+  </style>
 </head>
-
 <body data-role="student" data-page="portfolio">
-
-<div id="app-shell">
-
-<main class="content">
-
-  <div class="topbar">
-    <h2>My Portfolio</h2>
-    <p>Track your growth, challenges, and achievements</p>
-  </div>
-
-  <div id="page-content"></div>
-
-</main>
-</div>
-
-<script type="module" src="/assets/js/pages.js"></script>
+  <div id="app-shell"></div> <!-- your sidebar & topbar will be injected here -->
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

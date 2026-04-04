@@ -381,6 +381,7 @@ async function ensureStudentMirror(user, profile) {
   await batch.commit();
 }
 
+
 /* =========================
    LESSON PLANS
 ========================= */
@@ -1219,7 +1220,6 @@ async function submitStudentPortfolio({ user, profile }) {
 
   });
 }
-
 
 async function refreshStudentPortfolioPage(bundle) {
   const { user, profile } = bundle;
@@ -2272,93 +2272,93 @@ async function loadStudentPortfolio(studentUid) {
   const snap = await getDocs(
     query(collection(db, 'portfolio'), where('studentId', '==', studentUid))
   );
-
   return snap.docs
-    .map(d => ({
-      id: d.id,
-      ...d.data()
-    }))
+    .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
+
 function renderStudentPortfolioPage(items) {
-
-  const feed = items.map(item => `
-    <div class="portfolio-card">
-
-      <div style="display:flex;justify-content:space-between">
-        <span class="tag">${escapeHtml(item.type || 'Entry')}</span>
-        <small>${fmtDate(item.createdAt)}</small>
-      </div>
-
-      <h4 style="margin-top:10px">${escapeHtml(item.title || '')}</h4>
-
-      <p>${escapeHtml(item.note || '')}</p>
-
-      ${item.fileUrl ? `
-        <div style="margin-top:10px">
-          ${renderFilePreview(item.fileUrl, item.fileName)}
+  // Build the timeline cards
+  const feedHtml = items.length
+    ? items.map(item => `
+        <div class="portfolio-card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span class="tag">${escapeHtml(item.type || 'Reflection')}</span>
+              ${item.feeling ? `<span class="tag feeling-badge">😊 ${escapeHtml(item.feeling)}</span>` : ''}
+            </div>
+            <small>${fmtDate(item.createdAt)}</small>
+          </div>
+          <h4 style="margin: 12px 0 8px;">${escapeHtml(item.title || 'Untitled')}</h4>
+          <p>${escapeHtml(item.note || '')}</p>
+          ${item.fileUrl ? `
+            <div class="file-preview">
+              ${renderFilePreview(item.fileUrl, item.fileName)}
+            </div>
+          ` : ''}
         </div>
-      ` : ''}
-
-    </div>
-  `).join('');
+      `).join('')
+    : `<div class="empty-feed">✨ No entries yet – start your journey by adding one!</div>`;
 
   return `
     <div class="portfolio-grid">
-
-      <!-- LEFT: ADD ENTRY -->
+      <!-- LEFT: Add new entry -->
       <div class="card panel portfolio-form">
-
-        <h3>Add New Entry</h3>
-
+        <h3>📖 New Journal Entry</h3>
         <form id="portfolioForm" class="stack-form">
-
           <div class="form-row">
-            <label>Type</label>
-            <select id="portfolioType">
-              <option value="Achievement">Achievement</option>
-              <option value="Challenge">Challenge</option>
-              <option value="Progress">Progress</option>
-              <option value="Reflection">Reflection</option>
+            <label>Type / Tag</label>
+            <select id="portfolioType" required>
+              <option value="Achievement">🏆 Achievement</option>
+              <option value="Challenge">⚠️ Challenge</option>
+              <option value="Progress">📈 Progress</option>
+              <option value="Reflection">🤔 Reflection</option>
+              <option value="Personal">💡 Personal</option>
             </select>
           </div>
-
           <div class="form-row">
-            <label>Title</label>
+            <label>How are you feeling?</label>
+            <select id="portfolioFeeling">
+              <option value="">— Optional —</option>
+              <option value="Excited">Excited</option>
+              <option value="Struggling">Struggling</option>
+              <option value="Proud">Proud</option>
+              <option value="Curious">Curious</option>
+              <option value="Neutral">Neutral</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Title (short summary)</label>
             <input id="portfolioTitle" placeholder="What happened today?">
           </div>
-
           <div class="form-row">
-            <label>Details</label>
-            <textarea id="portfolioNote" placeholder="Explain your progress, lows, or achievements..."></textarea>
+            <label>Your reflection / notes</label>
+            <textarea id="portfolioNote" placeholder="Write your thoughts, challenges, or achievements..."></textarea>
           </div>
-
           <div class="form-row">
-            <label>Upload (image, video, pdf)</label>
-            <input id="portfolioFile" type="file">
+            <label>Upload (image, video, PDF)</label>
+            <input id="portfolioFile" type="file" accept="image/*,video/*,application/pdf">
           </div>
-
-          <button class="btn">Save Entry</button>
-
+          <div class="form-actions">
+            <button type="submit" class="btn">✨ Add to Journey</button>
+            <span id="portfolioMsg"></span>
+          </div>
         </form>
-
       </div>
 
-      <!-- RIGHT: TIMELINE -->
+      <!-- RIGHT: Timeline feed -->
       <div>
-
-        <h3>My Journey</h3>
-
-        <div class="portfolio-feed">
-          ${items.length ? feed : '<div class="empty">Start your journey 🚀</div>'}
-        </div>
-
+        <h3>🌟 My Learning Journey</h3>
+        <div class="portfolio-feed">${feedHtml}</div>
       </div>
-
     </div>
   `;
 }
+
+// attach the submission handler only once, using a flag
+let portfolioFormListenerAttached = false;
+
 
 function renderStudentPortfolio(items) {
   const rows = items.map(i => `
