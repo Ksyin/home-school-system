@@ -1,3 +1,4 @@
+<!-- student/submit-work.html - COMPLETE FIXED VERSION -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -5,14 +6,49 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Submit Work | HomeSchool System</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
+  <style>
+    /* Additional styles for better UX */
+    .submission-success {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .submission-error {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .file-preview {
+      margin-top: 8px;
+      padding: 8px;
+      background: var(--surface-2);
+      border-radius: 8px;
+    }
+    .drag-area {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .drag-area.drag-over {
+      border-color: var(--primary);
+      background: rgba(var(--primary-rgb), 0.05);
+    }
+    .selected-file {
+      margin-top: 8px;
+      font-size: 14px;
+      color: var(--primary);
+    }
+  </style>
   <meta name="description" content="Student submit work page">
 </head>
-<body
-  data-role="student"
-  data-page="submit-work"
-  data-title="Submit Work"
-  data-section="academics"
->
+<body data-role="student" data-page="submit-work" data-title="Submit Work" data-section="academics">
   <div id="app-shell">
     <main class="page-wrap">
       <section class="page-hero card">
@@ -33,7 +69,6 @@
               <p>Your current tasks and submission tools will appear here.</p>
             </div>
           </div>
-
           <div class="loading-block">
             <div class="loading-line"></div>
             <div class="loading-line short"></div>

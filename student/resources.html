@@ -1,35 +1,56 @@
+<!-- student/resources.html - COMPLETE FIXED VERSION -->
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Resources</title>
-<link rel="stylesheet" href="/assets/css/styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Learning Resources | HomeSchool System</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <style>
+    .resource-card {
+      background: var(--surface-1);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      transition: transform 0.2s;
+    }
+    .resource-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .resource-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .resource-type {
+      font-size: 12px;
+      padding: 4px 8px;
+      background: var(--primary-light);
+      border-radius: 20px;
+    }
+    .resource-description {
+      color: var(--text-secondary);
+      margin: 8px 0;
+    }
+    .resource-meta {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 8px;
+    }
+  </style>
 </head>
-
-<body data-role="student" data-page="resources">
-
-<div id="app-shell">
-
-<main class="content">
-
-  <div class="topbar">
-    <h2>Learning Resources</h2>
-    <p>Files shared by your tutor</p>
+<body data-role="student" data-page="resources" data-title="Learning Resources">
+  <div id="app-shell">
+    <main class="content">
+      <div class="topbar">
+        <h2>Learning Resources</h2>
+        <p>Files shared by your tutor</p>
+      </div>
+      <div id="page-content"></div>
+    </main>
   </div>
-
-  <div id="page-content">
-
-    <section class="card panel">
-      <h3>Resources</h3>
-      <div id="studentResources"></div>
-    </section>
-
-  </div>
-
-</main>
-</div>
-
-<script type="module" src="/assets/js/pages.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

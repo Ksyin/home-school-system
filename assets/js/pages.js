@@ -311,17 +311,52 @@ function assignmentVisibleToStudent(assignment, studentUid) {
   return false;
 }
 
-async function loadStudentAssignments(studentUid) {
-  const snap = await getDocs(collection(db, 'assignments'));
-  const allAssignments = snap.docs.map(normalizeAssignment);
 
-  return allAssignments
-    .filter(item => assignmentVisibleToStudent(item, studentUid))
-    .sort((a, b) => {
-      const aTime = a.createdAt?.seconds || 0;
-      const bTime = b.createdAt?.seconds || 0;
-      return bTime - aTime;
-    });
+async function loadStudentAssignments(studentUid) {
+  console.log('📝 Loading assignments for student:', studentUid);
+  
+  // Get student's classroom info
+  const studentDoc = await getDoc(doc(db, 'students', studentUid));
+  const studentData = studentDoc.data();
+  const classroomId = studentData?.classroomId || '';
+  
+  const assignmentsSnap = await getDocs(collection(db, 'assignments'));
+  const assignments = [];
+  
+  for (const docSnap of assignmentsSnap.docs) {
+    const assignment = { id: docSnap.id, ...docSnap.data() };
+    
+    let isVisible = false;
+    
+    // Direct assignment to student
+    if (assignment.studentId === studentUid) isVisible = true;
+    
+    // Assignment to student's classroom
+    if (assignment.classroomId === classroomId) isVisible = true;
+    
+    // Assignment to all students (published)
+    if (assignment.targetType === 'all_students' || assignment.published === true) {
+      isVisible = true;
+    }
+    
+    // Student is in assignedTo array
+    if (Array.isArray(assignment.assignedTo) && assignment.assignedTo.includes(studentUid)) {
+      isVisible = true;
+    }
+    
+    if (isVisible) {
+      assignments.push(assignment);
+    }
+  }
+  
+  assignments.sort((a, b) => {
+    const aTime = a.createdAt?.seconds || 0;
+    const bTime = b.createdAt?.seconds || 0;
+    return bTime - aTime;
+  });
+  
+  console.log(`✅ Loaded ${assignments.length} assignments for student`);
+  return assignments;
 }
 
 async function loadStudentSubmissions(studentUid) {
@@ -522,64 +557,118 @@ async function loadMessagesForTutor(tutorUid) {
 /* =========================
    RENDER: STUDENT SUBMIT WORK
 ========================= */
-
 function renderSubmitWorkPage(profile, user, assignments, submissions) {
   const studentName = getStudentDisplayName(profile, user);
-
-  const options = assignments.map(item => `
+  
+  // Create a map of submitted assignments
+  const submittedMap = new Map();
+  submissions.forEach(sub => {
+    submittedMap.set(sub.assignmentId, sub);
+  });
+  
+  // Filter out assignments that are already submitted
+  const pendingAssignments = assignments.filter(a => !submittedMap.has(a.id));
+  const completedCount = submissions.length;
+  const pendingCount = pendingAssignments.length;
+  
+  const options = pendingAssignments.map(item => `
     <option value="${escapeHtml(item.id)}">
-      ${escapeHtml(item.title || 'Untitled Assignment')} ${item.subject ? `- ${escapeHtml(item.subject)}` : ''}
+      ${escapeHtml(item.title || 'Untitled Assignment')} 
+      ${item.subject ? `- ${escapeHtml(item.subject)}` : ''}
+      ${item.dueDate ? ` (Due: ${fmtDate(item.dueDate)})` : ''}
     </option>
   `).join('');
-
+  
   const submissionRows = submissions.map(item => `
     <tr>
       <td>${escapeHtml(item.assignmentTitle || 'Assignment')}</td>
       <td>${escapeHtml(item.subject || '—')}</td>
       <td>${statusBadge(item.status || 'Submitted')}</td>
       <td>${fmtDate(item.submittedAt)}</td>
-      <td>${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">View File</a>` : '—'}</td>
+      <td>
+        ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" rel="noopener" class="btn small">📎 View</a>` : '—'}
+        ${item.fileUrl ? `<a href="${item.fileUrl}" download class="btn small ghost">⬇️ Download</a>` : ''}
+      </td>
     </tr>
   `).join('');
-
+  
   return `
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+      <div class="card stat primary" style="text-align: center;">
+        <h3 style="font-size: 32px; margin: 0;">${assignments.length}</h3>
+        <p>Total Assignments</p>
+      </div>
+      <div class="card stat success" style="text-align: center;">
+        <h3 style="font-size: 32px; margin: 0;">${completedCount}</h3>
+        <p>Completed</p>
+      </div>
+      <div class="card stat warn" style="text-align: center;">
+        <h3 style="font-size: 32px; margin: 0;">${pendingCount}</h3>
+        <p>Pending</p>
+      </div>
+    </div>
+    
     <section class="card panel">
-      <h3>Submit Assignment</h3>
-      <p>Welcome, ${escapeHtml(studentName)}. Choose an assignment, attach your work, and submit it.</p>
-
-      <form id="submissionForm" class="stack-form">
-        <div class="form-row">
-          <label for="assignmentId">Assignment</label>
-          <select id="assignmentId" name="assignmentId" required>
-            <option value="">Select assignment</option>
-            ${options}
-          </select>
+      <h3>📤 Submit Assignment</h3>
+      <p>Welcome, ${escapeHtml(studentName)}. Select an assignment, attach your work, and submit it.</p>
+      
+      ${pendingAssignments.length === 0 ? `
+        <div class="success-message" style="background: #d4edda; padding: 16px; border-radius: 8px; text-align: center;">
+          🎉 Great job! You've submitted all your assignments.
         </div>
-
-        <div class="form-row">
-          <label for="submissionNote">Message / Notes</label>
-          <textarea id="submissionNote" name="submissionNote" rows="5" placeholder="Add notes about this work"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label for="submissionFile">Attach file</label>
-          <input id="submissionFile" name="submissionFile" type="file">
-        </div>
-
-        <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button type="submit" class="btn" id="submitWorkBtn">Submit Work</button>
-          <span id="submitWorkMsg"></span>
-        </div>
-      </form>
+      ` : `
+        <form id="submissionForm" class="stack-form">
+          <div class="form-row">
+            <label for="assignmentId">Select Assignment *</label>
+            <select id="assignmentId" name="assignmentId" required>
+              <option value="">-- Choose an assignment --</option>
+              ${options}
+            </select>
+          </div>
+          
+          <div class="form-row">
+            <label for="submissionNote">Message / Notes (optional)</label>
+            <textarea id="submissionNote" name="submissionNote" rows="4" placeholder="Add any notes about your work..."></textarea>
+          </div>
+          
+          <div class="form-row">
+            <label for="submissionFile">Attach File</label>
+            <div id="dragArea" class="drag-area">
+              📁 Drag & drop your file here or click to browse
+              <input id="submissionFile" name="submissionFile" type="file" style="display: none;">
+            </div>
+            <div id="selectedFileDisplay" class="selected-file"></div>
+          </div>
+          
+          <div class="form-actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <button type="submit" class="btn" id="submitWorkBtn">📤 Submit Work</button>
+            <span id="submitWorkMsg"></span>
+          </div>
+        </form>
+      `}
     </section>
-
-    <section class="card panel" style="margin-top:18px">
-      <h3>My Previous Submissions</h3>
-      ${simpleTable(
-        ['Assignment', 'Subject', 'Status', 'Submitted', 'Attachment'],
-        submissionRows
-      )}
-    </section>
+    
+    ${submissions.length > 0 ? `
+      <section class="card panel" style="margin-top:18px">
+        <h3>📋 My Previous Submissions</h3>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Assignment</th>
+                <th>Subject</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Attachment</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${submissionRows}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ` : ''}
   `;
 }
 
@@ -1029,28 +1118,66 @@ function openFileModal(url, type, name = '') {
 ========================= */
 
 async function loadStudentResources(studentUid) {
-  const snap = await getDocs(collection(db, 'resources'));
-
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(item => {
-
-      // 🎯 DIRECT TO STUDENT
-      if (item.studentId && item.studentId === studentUid) return true;
-
-      // 🎯 CLASSROOM MATCH
-      if (item.classroomId) {
-        // get student classroom
-        // (already saved in users/students collection)
-        return true; // keep simple for now
-      }
-
-      // 🎯 GLOBAL RESOURCE
-      if (!item.studentId && !item.classroomId) return true;
-
-      return false;
-    })
-    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  console.log('📚 Loading resources for student:', studentUid);
+  
+  // First, get the student's classroom info
+  const studentDoc = await getDoc(doc(db, 'students', studentUid));
+  const studentData = studentDoc.data();
+  const classroomId = studentData?.classroomId || '';
+  const classroomName = studentData?.classroomName || '';
+  
+  console.log('🏫 Student classroom:', classroomId, classroomName);
+  
+  // Get ALL resources from Firestore
+  const resourcesSnap = await getDocs(collection(db, 'resources'));
+  
+  const resources = [];
+  
+  for (const docSnap of resourcesSnap.docs) {
+    const resource = { id: docSnap.id, ...docSnap.data() };
+    
+    // Check if this resource is visible to the student
+    let isVisible = false;
+    
+    // 1. Global resource (no restrictions)
+    if (!resource.studentId && !resource.classroomId) {
+      isVisible = true;
+    }
+    
+    // 2. Directly assigned to this student
+    if (resource.studentId === studentUid) {
+      isVisible = true;
+    }
+    
+    // 3. Assigned to student's classroom
+    if (resource.classroomId && resource.classroomId === classroomId) {
+      isVisible = true;
+    }
+    
+    // 4. Assigned by classroom name match
+    if (resource.classroomName && resource.classroomName === classroomName) {
+      isVisible = true;
+    }
+    
+    // 5. No restrictions - treat as global
+    if (!resource.studentId && !resource.classroomId && !resource.classroomName) {
+      isVisible = true;
+    }
+    
+    if (isVisible) {
+      resources.push(resource);
+    }
+  }
+  
+  // Sort by newest first
+  resources.sort((a, b) => {
+    const aTime = a.createdAt?.seconds || 0;
+    const bTime = b.createdAt?.seconds || 0;
+    return bTime - aTime;
+  });
+  
+  console.log(`✅ Loaded ${resources.length} resources for student`);
+  return resources;
 }
 
 async function loadStudentAssessments(studentUid) {
@@ -1272,25 +1399,50 @@ function renderStudentAssignmentsPage(assignments, submissions) {
 /* =========================
    RENDER: STUDENT RESOURCES
 ========================= */
-
 function renderStudentResourcesPage(resources) {
-  const rows = resources.map(item => `
-    <tr>
-      <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
-      <td>${escapeHtml(item.type || 'File')}</td>
-      <td>${escapeHtml(item.note || '—')}</td>
-      <td>${fmtDate(item.createdAt)}</td>
-      <td>${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName || item.title || 'Resource') : '—'}</td>
-    </tr>
+  if (!resources || resources.length === 0) {
+    return `
+      <section class="card panel">
+        <h3>📚 Learning Resources</h3>
+        <div class="empty-state" style="text-align: center; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+          <h4>No resources yet</h4>
+          <p>Your tutor hasn't shared any resources with you yet. Check back later!</p>
+        </div>
+      </section>
+    `;
+  }
+  
+  const resourcesHtml = resources.map(resource => `
+    <div class="resource-card">
+      <div class="resource-header">
+        <strong class="resource-title">${escapeHtml(resource.title || 'Untitled')}</strong>
+        <span class="resource-type">${escapeHtml(resource.type || 'Resource')}</span>
+      </div>
+      ${resource.note ? `<div class="resource-description">${escapeHtml(resource.note)}</div>` : ''}
+      ${resource.fileUrl ? `
+        <div class="file-preview">
+          ${renderFilePreview(resource.fileUrl, resource.fileName || resource.title)}
+        </div>
+      ` : ''}
+      <div class="resource-meta">
+        Shared: ${fmtDate(resource.createdAt)}
+        ${resource.classroomName ? ` • Classroom: ${escapeHtml(resource.classroomName)}` : ''}
+      </div>
+    </div>
   `).join('');
-
+  
   return `
     <section class="card panel">
-      <h3>Learning Resources</h3>
-      ${simpleTable(['Title', 'Type', 'Description', 'Created', 'File'], rows)}
+      <h3>📚 Learning Resources (${resources.length})</h3>
+      <p>Resources shared by your tutor appear here.</p>
+      <div style="margin-top: 20px;">
+        ${resourcesHtml}
+      </div>
     </section>
   `;
 }
+
 
 /* =========================
    RENDER: STUDENT ASSESSMENTS
@@ -1567,7 +1719,6 @@ function renderResourcesPage(resources, classrooms, students) {
 /* =========================
    ACTIONS: STUDENT SUBMIT WORK
 ========================= */
-
 async function submitStudentWork({ user, profile }) {
   const form = document.getElementById('submissionForm');
   const msg = document.getElementById('submitWorkMsg');
@@ -1579,16 +1730,16 @@ async function submitStudentWork({ user, profile }) {
     event.preventDefault();
 
     const assignmentId = form.assignmentId.value.trim();
-    const note = form.submissionNote.value.trim();
-    const file = form.submissionFile.files?.[0] || null;
+    const note = form.submissionNote?.value?.trim() || '';
+    const file = form.submissionFile?.files?.[0] || null;
 
     if (!assignmentId) {
-      msg.textContent = 'Please select an assignment.';
+      msg.innerHTML = '<span class="submission-error">Please select an assignment.</span>';
       return;
     }
 
     submitBtn.disabled = true;
-    msg.textContent = 'Submitting...';
+    msg.innerHTML = '<span class="submission-info">📤 Submitting work...</span>';
 
     try {
       const assignmentRef = doc(db, 'assignments', assignmentId);
@@ -1599,7 +1750,14 @@ async function submitStudentWork({ user, profile }) {
       }
 
       const assignment = assignmentSnap.data();
-      const upload = await uploadFile(file, `submissions/${user.uid}`);
+      
+      // Upload file to Cloudinary if provided
+      let upload = { url: '', path: '', name: '' };
+      if (file) {
+        console.log('📤 Uploading file to Cloudinary...');
+        upload = await uploadFile(file, `submissions/${user.uid}`);
+        console.log('✅ File uploaded:', upload.url);
+      }
 
       const studentName = getStudentDisplayName(profile, user);
       const submissionRef = doc(collection(db, 'submissions'));
@@ -1616,10 +1774,8 @@ async function submitStudentWork({ user, profile }) {
         note,
         fileUrl: upload.url || '',
         filePath: upload.path || '',
-        fileName: upload.name || '',
+        fileName: upload.name || file?.name || '',
         status: 'Submitted',
-        grade: assignment.grade || '',
-        feedback: '',
         submittedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -1627,8 +1783,10 @@ async function submitStudentWork({ user, profile }) {
 
       const batch = writeBatch(db);
 
+      // Save main submission
       batch.set(submissionRef, submissionPayload);
 
+      // Save submission under assignment subcollection
       batch.set(
         doc(db, 'assignments', assignmentId, 'submissions', user.uid),
         {
@@ -1640,7 +1798,7 @@ async function submitStudentWork({ user, profile }) {
           note,
           fileUrl: upload.url || '',
           filePath: upload.path || '',
-          fileName: upload.name || '',
+          fileName: upload.name || file?.name || '',
           status: 'Submitted',
           submittedAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -1648,25 +1806,7 @@ async function submitStudentWork({ user, profile }) {
         { merge: true }
       );
 
-      batch.set(
-        doc(db, 'students', user.uid, 'submissions', submissionRef.id),
-        {
-          submissionId: submissionRef.id,
-          assignmentId,
-          assignmentTitle: assignment.title || 'Untitled Assignment',
-          subject: assignment.subject || '',
-          tutorId: assignment.tutorId || assignment.createdBy || '',
-          note,
-          fileUrl: upload.url || '',
-          filePath: upload.path || '',
-          fileName: upload.name || '',
-          status: 'Submitted',
-          submittedAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        },
-        { merge: true }
-      );
-
+      // Update student record
       batch.set(
         doc(db, 'students', user.uid),
         {
@@ -1674,19 +1814,7 @@ async function submitStudentWork({ user, profile }) {
           name: studentName,
           email: user.email || '',
           role: 'student',
-          updatedAt: serverTimestamp()
-        },
-        { merge: true }
-      );
-
-      batch.set(
-        doc(db, 'users', user.uid),
-        {
-          uid: user.uid,
-          name: studentName,
-          full_name: studentName,
-          email: user.email || '',
-          role: 'student',
+          lastSubmissionAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         },
         { merge: true }
@@ -1694,25 +1822,39 @@ async function submitStudentWork({ user, profile }) {
 
       await batch.commit();
 
-      msg.textContent = 'Work submitted successfully.';
+      msg.innerHTML = '<span class="submission-success">✅ Work submitted successfully!</span>';
       form.reset();
-
-      const latestAssignments = await loadStudentAssignments(user.uid);
-      const latestSubmissions = await loadStudentSubmissions(user.uid);
-
-      document.getElementById('page-content').innerHTML = renderSubmitWorkPage(
-        profile,
-        user,
-        latestAssignments,
-        latestSubmissions
-      );
-
-      await submitStudentWork({ user, profile });
+      
+      // Clear file input
+      if (form.submissionFile) form.submissionFile.value = '';
+      
+      // Refresh the page content
+      setTimeout(async () => {
+        const latestAssignments = await loadStudentAssignments(user.uid);
+        const latestSubmissions = await loadStudentSubmissions(user.uid);
+        
+        const pageContent = document.getElementById('page-content');
+        if (pageContent) {
+          pageContent.innerHTML = renderSubmitWorkPage(
+            profile,
+            user,
+            latestAssignments,
+            latestSubmissions
+          );
+          await submitStudentWork({ user, profile });
+        }
+      }, 1500);
+      
     } catch (error) {
       console.error('Submission error:', error);
-      msg.textContent = error.message || 'Submission failed.';
+      msg.innerHTML = `<span class="submission-error">❌ ${error.message || 'Submission failed.'}</span>`;
     } finally {
       submitBtn.disabled = false;
+      setTimeout(() => {
+        if (msg.innerHTML.includes('success')) {
+          setTimeout(() => { msg.innerHTML = ''; }, 3000);
+        }
+      }, 2000);
     }
   });
 }
@@ -2154,33 +2296,100 @@ async function refreshMessagesPage(bundle) {
 ========================= */
 
 async function bootSubmitWorkPage() {
+  console.log('🚀 Booting Submit Work Page');
   const bundle = await requireAuth();
   if (!bundle) return;
-
+  
   if (bundle.profile?.role === 'student') {
     await ensureStudentMirror(bundle.user, bundle.profile);
   }
-
+  
   const { user, profile } = bundle;
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
-
-  const params = new URLSearchParams(window.location.search);
-  const forcedAssignmentId = params.get('assignmentId');
-
-  const assignments = await loadStudentAssignments(user.uid);
-  const submissions = await loadStudentSubmissions(user.uid);
-
-  pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
-
-  if (forcedAssignmentId) {
-    const select = document.getElementById('assignmentId');
-    if (select) select.value = forcedAssignmentId;
+  
+  pageContent.innerHTML = '<div class="card panel"><div class="loading-block"><div class="loading-line"></div></div></div>';
+  
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const forcedAssignmentId = params.get('assignmentId');
+    
+    const [assignments, submissions] = await Promise.all([
+      loadStudentAssignments(user.uid),
+      loadStudentSubmissions(user.uid)
+    ]);
+    
+    console.log(`📝 Assignments: ${assignments.length}, Submissions: ${submissions.length}`);
+    
+    pageContent.innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
+    
+    // Setup drag and drop for file upload
+    setupDragAndDrop();
+    
+    if (forcedAssignmentId) {
+      const select = document.getElementById('assignmentId');
+      if (select) select.value = forcedAssignmentId;
+    }
+    
+    await submitStudentWork({ user, profile });
+  } catch (error) {
+    console.error('Error loading submit work page:', error);
+    pageContent.innerHTML = `
+      <div class="card panel error">
+        <h3>Error Loading Page</h3>
+        <p>${error.message}</p>
+        <button onclick="location.reload()" class="btn">Retry</button>
+      </div>
+    `;
   }
-
-  await submitStudentWork({ user, profile });
 }
 
+function setupDragAndDrop() {
+  const dragArea = document.getElementById('dragArea');
+  const fileInput = document.getElementById('submissionFile');
+  const displayDiv = document.getElementById('selectedFileDisplay');
+  
+  if (!dragArea || !fileInput) return;
+  
+  dragArea.addEventListener('click', () => {
+    fileInput.click();
+  });
+  
+  dragArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dragArea.classList.add('drag-over');
+  });
+  
+  dragArea.addEventListener('dragleave', () => {
+    dragArea.classList.remove('drag-over');
+  });
+  
+  dragArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragArea.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      fileInput.files = files;
+      updateFileDisplay(files[0], displayDiv);
+    }
+  });
+  
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) {
+      updateFileDisplay(fileInput.files[0], displayDiv);
+    } else {
+      displayDiv.innerHTML = '';
+    }
+  });
+}
+
+function updateFileDisplay(file, displayDiv) {
+  if (!displayDiv) return;
+  const size = (file.size / 1024).toFixed(1);
+  displayDiv.innerHTML = `
+    <span style="color: var(--primary);">✅ Selected: ${escapeHtml(file.name)} (${size} KB)</span>
+  `;
+}
 async function bootLessonPlansPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
@@ -2512,18 +2721,35 @@ async function loadChildPortfolio(childId) {
   }));
 }
 async function bootStudentReportsPage() {
+  console.log('🚀 Booting Student Reports Page');
   const bundle = await requireAuth();
   if (!bundle) return;
-
-  const { user } = bundle;
-
+  
+  const { user, profile } = bundle;
+  
+  await ensureStudentMirror(user, profile);
+  
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
-
-  const reports = await loadStudentReports(user.uid);
-
-  pageContent.innerHTML = renderStudentReportsPage(reports);
+  
+  pageContent.innerHTML = '<div class="card panel"><div class="loading-block"><div class="loading-line"></div></div></div>';
+  
+  try {
+    const reports = await loadStudentReports(user.uid);
+    console.log('📄 Reports loaded:', reports.length);
+    pageContent.innerHTML = renderStudentReportsPage(reports);
+  } catch (error) {
+    console.error('Error loading reports:', error);
+    pageContent.innerHTML = `
+      <div class="card panel error">
+        <h3>Error Loading Reports</h3>
+        <p>${error.message}</p>
+        <button onclick="location.reload()" class="btn">Retry</button>
+      </div>
+    `;
+  }
 }
+
 
 
 async function loadAllPortfolios() {
@@ -2658,18 +2884,37 @@ window.AppUtil = {
 
 
 async function bootStudentResourcesPage() {
+  console.log('🚀 Booting Student Resources Page');
   const bundle = await requireAuth();
   if (!bundle) return;
-
-  const { user } = bundle;
-
+  
+  const { user, profile } = bundle;
+  
+  // Ensure student mirror exists
+  await ensureStudentMirror(user, profile);
+  
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
-
-  const resources = await loadStudentResources(user.uid);
-
-  pageContent.innerHTML = renderStudentResourcesPage(resources);
+  
+  // Show loading state
+  pageContent.innerHTML = '<div class="card panel"><div class="loading-block"><div class="loading-line"></div></div></div>';
+  
+  try {
+    const resources = await loadStudentResources(user.uid);
+    console.log('📚 Resources loaded:', resources.length);
+    pageContent.innerHTML = renderStudentResourcesPage(resources);
+  } catch (error) {
+    console.error('Error loading resources:', error);
+    pageContent.innerHTML = `
+      <div class="card panel error">
+        <h3>Error Loading Resources</h3>
+        <p>${error.message}</p>
+        <button onclick="location.reload()" class="btn">Retry</button>
+      </div>
+    `;
+  }
 }
+
 
 async function bootParentPortfolioPage() {
   const bundle = await requireAuth();

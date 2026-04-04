@@ -1,30 +1,45 @@
+<!-- student/reports.html - COMPLETE FIXED VERSION -->
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Reports</title>
-<link rel="stylesheet" href="/assets/css/styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>My Reports | HomeSchool System</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <style>
+    .report-card {
+      background: var(--surface-1);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-left: 4px solid var(--primary);
+    }
+    .report-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .report-section {
+      margin: 12px 0;
+    }
+    .report-label {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+  </style>
 </head>
-
-<body data-role="student" data-page="reports">
-
-<div id="app-shell">
-
-<main class="content">
-
-  <div class="topbar">
-    <h2>My Reports</h2>
-    <p>Performance summaries</p>
+<body data-role="student" data-page="reports" data-title="My Reports">
+  <div id="app-shell">
+    <main class="content">
+      <div class="topbar">
+        <h2>My Reports</h2>
+        <p>Performance summaries and feedback</p>
+      </div>
+      <div id="page-content"></div>
+    </main>
   </div>
-
-  <div id="page-content">
-    <div id="studentReports"></div>
-  </div>
-
-</main>
-</div>
-
-<script type="module" src="/assets/js/pages.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>
