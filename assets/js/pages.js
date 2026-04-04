@@ -2934,66 +2934,62 @@ async function bootParentPortfolioPage() {
   document.getElementById('page-content').innerHTML =
     renderParentPortfolio(items);
 }
+/* ========================= CLEAN UNIFIED PAGE ROUTER ========================= */
 
-/* =========================
-   CLEAN UNIFIED PAGE ROUTER
-========================= */
+// Remove the conflicting onAuthStateChanged that calls loadExtendedPages
+// (Delete the entire block that starts with onAuthStateChanged at the bottom)
 
 if (pageKey === 'submit-work') {
   bootSubmitWorkPage();
 } 
-else if (pageKey === 'lesson-plans') {
-  bootLessonPlansPage();
-} 
-else if (pageKey === 'learners') {
-  bootLearnersPage();
-} 
-else if (pageKey === 'classrooms') {
-  bootClassroomsPage();
-} 
+else if (pageKey === 'lesson-plans' && pageRole === 'tutor') {
+  bootLessonPlansPageComplete();    // Full version with objectives, materials
+}
+else if (pageKey === 'learners' && pageRole === 'tutor') {
+  bootLearnersPageComplete();       // Reports, comments, student history
+}
+else if (pageKey === 'classrooms' && pageRole === 'tutor') {
+  bootClassroomsPageComplete();     // Teaching mode, broadcasts, student assignment
+}
+else if (pageKey === 'assignments' && pageRole === 'tutor') {
+  bootAssignmentsPageComplete();    // Assign to specific students, grade work
+}
 else if (pageKey === 'resources') {
   if (pageRole === 'tutor') bootResourcesPage();
   else if (pageRole === 'student') bootStudentResourcesPage();
-} 
-else if (pageKey === 'messages') {
-  bootMessagesPage();   // works for both tutor & student
-} 
-
+}
+else if (pageKey === 'messages' && pageRole === 'tutor') {
+  bootMessagesPageComplete();       // Conversation threads with replies
+}
+else if (pageKey === 'reports' && pageRole === 'tutor') {
+  bootReportsPageComplete();        // Full CRUD: strengths, lows, next steps
+}
 // Student Pages
 else if (pageKey === 'assignments' && pageRole === 'student') {
   bootStudentAssignmentsPage();
-} 
+}
 else if (pageKey === 'assessments' && pageRole === 'student') {
   bootStudentAssessmentsPage();
-} 
-else if (pageKey === 'activities' && pageRole === 'student') {
-  bootStudentActivitiesPage();
-} 
+}
 else if (pageKey === 'portfolio' && pageRole === 'student') {
   bootStudentPortfolioPage();
-} 
+}
 else if (pageKey === 'reports' && pageRole === 'student') {
   bootStudentReportsPage();
-} 
-
-// Parent & Tutor
+}
+// Parent pages
 else if (pageKey === 'children' && pageRole === 'parent') {
   bootParentChildrenPage();
-} 
+}
 else if (pageKey === 'portfolio' && pageRole === 'parent') {
   bootParentPortfolioPage();
-} 
+}
 else if (pageKey === 'portfolios' && pageRole === 'tutor') {
   bootTutorPortfolios();
-} 
-
-// General
+}
 else if (pageKey === 'dashboard') {
-  bootDashboard();
-} 
-else if (pageKey === 'reports') {
-  bootReportsPage();
-} 
+  bootDashboard();   // This already handles both tutor & student dashboards
+}
 else {
   bootDefaultPage();
 }
@@ -4142,13 +4138,3 @@ window.bootLessonPlansPageComplete = () => {
 };
 
 
-/* =========================
-   FINAL AUTH HOOK – runs BOTH old + new systems
-========================= */
-onAuthStateChanged(auth, async (user) => {
-  if (!user) return;
-  const profile = await getUserProfile(user.uid);
-  if (!profile) return;
-
-  await loadExtendedPages(user, profile);
-});
