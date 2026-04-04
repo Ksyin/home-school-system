@@ -1,102 +1,387 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>HomeSchool</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
-</head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HomeSchool - Smart Learning Platform</title>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <style>
+        /* Landing Page Specific Enhancements */
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a1f44 0%, #1e3a8a 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
 
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.12) 0%, transparent 50%);
+            animation: subtleMove 25s infinite linear;
+        }
+
+        @keyframes subtleMove {
+            0% { transform: translate(0, 0); }
+            50% { transform: translate(30px, 20px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        .hero-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .hero-text h1 {
+            font-size: 3.8rem;
+            line-height: 1.1;
+            font-weight: 800;
+            letter-spacing: -2px;
+            margin-bottom: 24px;
+            animation: fadeUp 0.8s ease forwards;
+        }
+
+        .hero-text p {
+            font-size: 1.35rem;
+            color: #c8d5f5;
+            margin-bottom: 32px;
+            animation: fadeUp 0.8s ease 0.2s forwards;
+            opacity: 0;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            animation: fadeUp 0.8s ease 0.4s forwards;
+            opacity: 0;
+        }
+
+        .btn-hero {
+            padding: 16px 32px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 999px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-hero.primary {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-hero.primary:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.5);
+        }
+
+        .hero-image {
+            position: relative;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .hero-image img {
+            width: 100%;
+            border-radius: 24px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 120px 24px;
+            background: var(--bg);
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.8rem;
+            margin-bottom: 20px;
+            font-family: Georgia, serif;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            max-width: 1200px;
+            margin: 60px auto 0;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: var(--radius);
+            padding: 40px 28px;
+            box-shadow: var(--shadow);
+            transition: all 0.4s ease;
+            text-align: center;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-12px);
+            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.15);
+        }
+
+        .feature-icon {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+        }
+
+        /* Stats */
+        .stats {
+            background: linear-gradient(135deg, #0b1730, #1e3a8a);
+            color: white;
+            padding: 80px 24px;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .stat-number {
+            font-size: 3.2rem;
+            font-weight: 800;
+            color: #60a5fa;
+        }
+
+        /* Footer */
+        footer.landing-footer {
+            background: #0a1428;
+            color: #94a3b8;
+            padding: 80px 24px 40px;
+            text-align: center;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-25px); }
+        }
+
+        .nav-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            z-index: 1000;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+    </style>
+</head>
 <body>
 
-<div class="auth-wrap">
-<div class="auth-card card">
+    <!-- Top Navigation -->
+    <nav class="nav-bar">
+        <div style="max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;">
+            <div class="brand" style="margin:0;">
+                <div class="brand-badge">H</div>
+                <div>
+                    <h1 style="font-size:24px;margin:0;">HomeSchool</h1>
+                </div>
+            </div>
+            
+            <div style="display:flex;gap:24px;align-items:center;">
+                <a href="#features" style="color:var(--text);font-weight:500;">Features</a>
+                <a href="#for-who" style="color:var(--text);font-weight:500;">For Whom</a>
+                <a href="/login.html" class="btn secondary" style="padding:10px 24px;">Login</a>
+                <a href="/register.html" class="btn primary-btn" style="padding:10px 24px;">Get Started Free</a>
+            </div>
+        </div>
+    </nav>
 
-<!-- LEFT SIDE -->
-<div class="auth-aside">
+    <!-- HERO SECTION -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-text">
+                <h1>Learning that connects.<br>Growth that lasts.</h1>
+                <p>
+                    A modern platform where tutors, students, and parents collaborate in real time. 
+                    Structured lessons, meaningful feedback, and visible progress — all in one beautiful place.
+                </p>
+                
+                <div class="cta-buttons">
+                    <a href="/register.html" class="btn btn-hero primary">Start Teaching & Learning Today</a>
+                    <a href="/login.html" class="btn btn-hero secondary modern-outline" style="background:transparent;border:2px solid white;color:white;">Watch Demo</a>
+                </div>
 
-<div class="brand">
-<div class="brand-badge">H</div>
+                <div style="margin-top:40px;display:flex;gap:32px;align-items:center;color:#c8d5f5;">
+                    <div>✅ Trusted by tutors & families</div>
+                    <div>🔒 Secure & private</div>
+                </div>
+            </div>
 
-<div>
-<h1>HomeSchool</h1>
-<p>
-Smarter learning. Connected growth.
-</p>
-</div>
-</div>
+            <div class="hero-image">
+                <img src="https://picsum.photos/id/1015/800/620" alt="HomeSchool Platform Dashboard" 
+                     style="border: 12px solid rgba(255,255,255,0.15);">
+            </div>
+        </div>
+    </section>
 
-<h2 class="auth-title">
-A unified platform for modern learning
-</h2>
+    <!-- FEATURES -->
+    <section id="features" class="features">
+        <div style="max-width:1200px;margin:0 auto;">
+            <h2 class="section-title">Everything you need for better learning</h2>
+            <p style="text-align:center;font-size:1.25rem;color:var(--muted);max-width:700px;margin:0 auto 60px;">
+                Powerful tools designed for real homeschooling success
+            </p>
 
-<p class="auth-sub">
-Empowering tutors, students, and parents with real-time collaboration, structured learning, and meaningful progress tracking.
-</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📚</div>
+                    <h3>Smart Lesson Planning</h3>
+                    <p>Create rich lesson plans with objectives, materials, and attachments. Publish instantly for your students.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <h3>Assignments & Submissions</h3>
+                    <p>Assign work, receive submissions with files, and give timely feedback in one place.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Progress Tracking</h3>
+                    <p>Beautiful portfolios, reports, and real-time insights into every learner’s journey.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👨‍👩‍👧</div>
+                    <h3>Parent Portal</h3>
+                    <p>Parents can view their child’s work, portfolio, and academic growth anytime.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <h3>Seamless Communication</h3>
+                    <p>Direct messaging between tutors, students, and parents — no more missed updates.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏫</div>
+                    <h3>Classroom Management</h3>
+                    <p>Organize students into classrooms and deliver targeted resources effortlessly.</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="list modern-list">
+    <!-- STATS -->
+    <section class="stats">
+        <div class="stats-grid">
+            <div>
+                <div class="stat-number">500+</div>
+                <p>Active Learners</p>
+            </div>
+            <div>
+                <div class="stat-number">1200+</div>
+                <p>Assignments Completed</p>
+            </div>
+            <div>
+                <div class="stat-number">98%</div>
+                <p>Parent Satisfaction</p>
+            </div>
+            <div>
+                <div class="stat-number">24/7</div>
+                <p>Real-time Access</p>
+            </div>
+        </div>
+    </section>
 
-<div class="list-item glass">
-📘 Structured lesson delivery and learning resources
-</div>
+    <!-- WHO IS IT FOR -->
+    <section id="for-who" style="padding:120px 24px;background:#f8fbff;">
+        <div style="max-width:1100px;margin:0 auto;text-align:center;">
+            <h2 class="section-title" style="color:#0f172a;">Built for everyone in the learning journey</h2>
+            
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:40px;margin-top:60px;">
+                <div class="card panel" style="text-align:left;">
+                    <h3 style="color:#1e40af;">👨‍🏫 Tutors & Teachers</h3>
+                    <p>Streamline lesson planning, grading, and communication. Focus more on teaching, less on admin.</p>
+                </div>
+                <div class="card panel" style="text-align:left;">
+                    <h3 style="color:#15803d;">👩‍🎓 Students</h3>
+                    <p>Submit work easily, track your own growth, and reflect through beautiful portfolios.</p>
+                </div>
+                <div class="card panel" style="text-align:left;">
+                    <h3 style="color:#b45309;">👨‍👩‍👧 Parents</h3>
+                    <p>Stay connected. See exactly what your child is learning and how they’re progressing.</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="list-item glass">
-📊 Real-time student progress and engagement tracking
-</div>
+    <!-- FINAL CTA -->
+    <section style="padding:100px 24px;background:linear-gradient(135deg,#2563eb,#1e40af);color:white;text-align:center;">
+        <div style="max-width:800px;margin:0 auto;">
+            <h2 style="font-size:2.8rem;margin-bottom:20px;">Ready to transform learning?</h2>
+            <p style="font-size:1.3rem;opacity:0.95;margin-bottom:40px;">
+                Join thousands of families and educators building better learning experiences.
+            </p>
+            <a href="/register.html" class="btn btn-hero primary" style="font-size:1.25rem;padding:18px 48px;">
+                Create Your Free Account
+            </a>
+            <p style="margin-top:20px;opacity:0.8;">No credit card required • Takes less than 60 seconds</p>
+        </div>
+    </section>
 
-<div class="list-item glass">
-👨‍👩‍👧 Parent visibility into academic and personal growth
-</div>
+    <!-- FOOTER -->
+    <footer class="landing-footer">
+        <div style="max-width:1200px;margin:0 auto;">
+            <div class="brand" style="justify-content:center;margin-bottom:30px;">
+                <div class="brand-badge" style="background:#60a5fa;">H</div>
+                <h1 style="color:white;font-size:28px;">HomeSchool</h1>
+            </div>
+            
+            <p style="margin-bottom:40px;">Smarter learning. Connected growth.</p>
+            
+            <div style="display:flex;gap:40px;justify-content:center;flex-wrap:wrap;margin-bottom:60px;">
+                <a href="#" style="color:#94a3b8;">Features</a>
+                <a href="#" style="color:#94a3b8;">For Tutors</a>
+                <a href="#" style="color:#94a3b8;">For Parents</a>
+                <a href="#" style="color:#94a3b8;">For Students</a>
+                <a href="/login.html" style="color:#94a3b8;">Login</a>
+            </div>
+            
+            <small>&copy; 2026 HomeSchool. All rights reserved.</small>
+        </div>
+    </footer>
 
-</div>
+    <script>
+        // Simple scroll animation trigger
+        function animateOnScroll() {
+            const cards = document.querySelectorAll('.feature-card');
+            cards.forEach((card, index) => {
+                const rect = card.getBoundingClientRect();
+                if (rect.top < window.innerHeight * 0.85) {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }
+            });
+        }
 
-</div>
-
-<!-- RIGHT SIDE -->
-<div class="auth-main">
-
-<h2 class="auth-title main-title">
-Welcome back
-</h2>
-
-<p class="help">
-Access your personalized dashboard or create an account to begin.
-</p>
-
-<div class="stack" style="margin-top:24px">
-
-<a class="btn primary-btn" href="/login.html">Login</a>
-
-<a class="btn secondary modern-outline" href="/register.html">
-Create Account
-</a>
-
-</div>
-
-<div class="list modern-list soft" style="margin-top:28px">
-
-<div class="list-item">
-✔ Track assignments, reports, and learning activity
-</div>
-
-<div class="list-item">
-✔ Continuous communication across all roles
-</div>
-
-<div class="list-item">
-✔ Organized academic and personal development tracking
-</div>
-
-<div class="list-item">
-✔ Secure and role-based access system
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
+        window.addEventListener('scroll', animateOnScroll);
+        window.addEventListener('load', animateOnScroll);
+    </script>
 </body>
 </html>
