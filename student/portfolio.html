@@ -3,62 +3,60 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Learning Journey</title>
+  <title>My Learning Journey | HomeSchool</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
   <style>
-    /* fallback styles – ensure the grid layout works */
     .portfolio-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      grid-template-columns: 1fr 2fr;
+      gap: 28px;
     }
-    @media (max-width: 768px) {
+    @media (max-width: 900px) {
       .portfolio-grid { grid-template-columns: 1fr; }
     }
-    .portfolio-form textarea {
-      min-height: 100px;
+    .portfolio-card {
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
     }
+    .tag {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .feeling-badge { background: #fff3e0; color: #b45309; }
     .portfolio-feed {
       display: flex;
       flex-direction: column;
       gap: 20px;
-      margin-top: 20px;
-    }
-    .portfolio-card {
-      background: var(--surface, #fff);
-      border-radius: 20px;
-      padding: 1.2rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      border: 1px solid var(--border, #eaeef5);
-      transition: 0.2s;
-    }
-    .tag {
-      display: inline-block;
-      background: #f0f4ff;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      margin-right: 8px;
-    }
-    .feeling-badge {
-      background: #fff3e0;
-      color: #b45f06;
-    }
-    .file-preview {
-      margin-top: 12px;
     }
     .empty-feed {
       text-align: center;
-      padding: 2rem;
-      background: #fafcff;
+      padding: 60px 20px;
+      color: var(--muted);
+      background: #f8fbff;
       border-radius: 20px;
-      color: #6b7280;
     }
   </style>
 </head>
-<body data-role="student" data-page="portfolio">
-  <div id="app-shell"></div> <!-- your sidebar & topbar will be injected here -->
+<body 
+  data-role="student" 
+  data-page="portfolio"
+  data-title="My Portfolio"
+  data-description="Track your academic and personal growth">
+  
+  <div id="app-shell" class="page-shell"></div>
+
+  <noscript>
+    <div class="card" style="margin:24px;">JavaScript is required.</div>
+  </noscript>
+
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
   <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

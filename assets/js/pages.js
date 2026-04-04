@@ -2690,6 +2690,10 @@ async function bootParentPortfolioPage() {
     renderParentPortfolio(items);
 }
 
+/* =========================
+   CLEAN UNIFIED PAGE ROUTER
+========================= */
+
 if (pageKey === 'submit-work') {
   bootSubmitWorkPage();
 } 
@@ -2707,11 +2711,10 @@ else if (pageKey === 'resources') {
   else if (pageRole === 'student') bootStudentResourcesPage();
 } 
 else if (pageKey === 'messages') {
-  // One handler for both tutor and student messages
-  bootMessagesPage();
+  bootMessagesPage();   // works for both tutor & student
 } 
 
-// ====================== STUDENT PAGES ======================
+// Student Pages
 else if (pageKey === 'assignments' && pageRole === 'student') {
   bootStudentAssignmentsPage();
 } 
@@ -2728,20 +2731,18 @@ else if (pageKey === 'reports' && pageRole === 'student') {
   bootStudentReportsPage();
 } 
 
-// ====================== PARENT PAGES ======================
+// Parent & Tutor
 else if (pageKey === 'children' && pageRole === 'parent') {
   bootParentChildrenPage();
 } 
 else if (pageKey === 'portfolio' && pageRole === 'parent') {
   bootParentPortfolioPage();
 } 
-
-// ====================== TUTOR PAGES ======================
 else if (pageKey === 'portfolios' && pageRole === 'tutor') {
   bootTutorPortfolios();
 } 
 
-// ====================== GENERAL / FALLBACK ======================
+// General
 else if (pageKey === 'dashboard') {
   bootDashboard();
 } 
@@ -2751,6 +2752,10 @@ else if (pageKey === 'reports') {
 else {
   bootDefaultPage();
 }
+
+/* =========================
+   EXTENDED MODERN PAGES (optional overrides)
+========================= */
 
 /* =====================================================
    EXTENSION: NEW PAGE SYSTEM (DO NOT REMOVE OLD CODE)
@@ -2969,11 +2974,8 @@ async function loadExtendedPages(user, profile) {
 ========================= */
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
-
   const profile = await getUserProfile(user.uid);
   if (!profile) return;
 
-  // This allows loadExtendedPages() to override content on certain pages
-  // if you want newer UI for dashboard, assignments (tutor), settings, etc.
   await loadExtendedPages(user, profile);
 });
