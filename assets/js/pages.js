@@ -1363,38 +1363,21 @@ async function refreshStudentPortfolioPage(bundle) {
    RENDER: STUDENT ASSIGNMENTS
 ========================= */
 
+// Render Student Assignments Page
 function renderStudentAssignmentsPage(assignments, submissions) {
-  const submittedMap = new Map(
-    submissions.map(item => [item.assignmentId, item])
-  );
-
-  const rows = assignments.map(item => {
-    const submission = submittedMap.get(item.id);
-
-    return `
-      <tr>
-        <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
-        <td>${escapeHtml(item.subject || '—')}</td>
-        <td>${escapeHtml(item.description || 'No instructions')}</td>
-        <td>${item.dueDate ? fmtDate(item.dueDate) : '—'}</td>
-        <td>${submission ? statusBadge(submission.status || 'Submitted') : statusBadge('Pending')}</td>
-        <td>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <a class="btn" href="/student/submit-work.html?assignmentId=${encodeURIComponent(item.id)}">Do Task</a>
-            ${submission?.fileUrl ? `<a class="btn ghost" href="${submission.fileUrl}" target="_blank" rel="noopener">My File</a>` : ''}
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
-  return `
-    <section class="card panel">
-      <h3>My Assignments</h3>
-      ${simpleTable(['Title', 'Subject', 'Instructions', 'Due', 'Status', 'Action'], rows)}
-    </section>
-  `;
+  const submittedIds = new Set(submissions.map(s => s.assignmentId));
+  const rows = assignments.map(item => `
+    <tr>
+      <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
+      <td>${escapeHtml(item.subject || '—')}</td>
+      <td>${fmtDate(item.dueDate)}</td>
+      <td>${submittedIds.has(item.id) ? statusBadge('Submitted') : statusBadge('Pending')}</td>
+      <td>${!submittedIds.has(item.id) ? `<a href="/student/submit-work.html?assignmentId=${item.id}" class="btn small">Submit</a>` : '<span class="badge success">✓ Done</span>'}</td>
+    </tr>
+  `).join('');
+  return `<section class="card panel"><h3>📝 My Assignments</h3>${simpleTable(['Title', 'Subject', 'Due Date', 'Status', 'Action'], rows)}</section>`;
 }
+
 
 /* =========================
    RENDER: STUDENT RESOURCES
@@ -1448,23 +1431,17 @@ function renderStudentResourcesPage(resources) {
    RENDER: STUDENT ASSESSMENTS
 ========================= */
 
-function renderStudentAssessmentsPage(items) {
-  const rows = items.map(item => `
+function renderStudentAssessmentsPage(assessments) {
+  const rows = assessments.map(item => `
     <tr>
-      <td><strong>${escapeHtml(item.title || item.name || 'Assessment')}</strong></td>
+      <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
       <td>${escapeHtml(item.subject || '—')}</td>
-      <td>${escapeHtml(item.score || item.grade || '—')}</td>
-      <td>${escapeHtml(item.feedback || item.comment || '—')}</td>
-      <td>${fmtDate(item.createdAt)}</td>
+      <td>${escapeHtml(item.type || 'Quiz')}</td>
+      <td>${fmtDate(item.date)}</td>
+      <td>${item.scores?.[item.studentId] ? item.scores[item.studentId] + '/' + (item.maxScore || 100) : 'Not graded'}</td>
     </tr>
   `).join('');
-
-  return `
-    <section class="card panel">
-      <h3>My Assessments</h3>
-      ${simpleTable(['Title', 'Subject', 'Score', 'Feedback', 'Created'], rows)}
-    </section>
-  `;
+  return `<section class="card panel"><h3>📊 My Assessments</h3>${simpleTable(['Title', 'Subject', 'Type', 'Date', 'Score'], rows)}</section>`;
 }
 
 /* =========================
@@ -3213,6 +3190,384 @@ async function loadExtendedPages(user, profile) {
       break;
   }
 }
+// Load tutor's assessments
+async function loadTutorAssessments(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'assessments'), where('tutorId', '==', tutorUid))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+// Load tutor's attendance records
+async function loadTutorAttendance(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'attendance'), where('tutorId', '==', tutorUid))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+}
+
+// Load submissions for a specific assignment
+async function loadSubmissionsForAssignment(assignmentId) {
+  const snap = await getDocs(
+    collection(db, 'assignments', assignmentId, 'submissions')
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Load student's visible assignments (for student portal)
+async function loadStudentVisibleAssignments(studentUid) {
+  const studentDoc = await getDoc(doc(db, 'students', studentUid));
+  const studentData = studentDoc.data();
+  const classroomId = studentData?.classroomId || '';
+
+  const snap = await getDocs(collection(db, 'assignments'));
+  const assignments = [];
+
+  for (const docSnap of snap.docs) {
+    const assignment = { id: docSnap.id, ...docSnap.data() };
+    
+    if (assignment.assignedTo?.includes(studentUid)) {
+      assignments.push(assignment);
+    } else if (assignment.classroomId === classroomId) {
+      assignments.push(assignment);
+    } else if (!assignment.assignedTo && !assignment.classroomId && assignment.status === 'Published') {
+      assignments.push(assignment);
+    }
+  }
+  return assignments.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+// Load student's visible assessments
+async function loadStudentVisibleAssessments(studentUid) {
+  const studentDoc = await getDoc(doc(db, 'students', studentUid));
+  const studentData = studentDoc.data();
+  const classroomId = studentData?.classroomId || '';
+
+  const snap = await getDocs(collection(db, 'assessments'));
+  const assessments = [];
+
+  for (const docSnap of snap.docs) {
+    const assessment = { id: docSnap.id, ...docSnap.data() };
+    
+    if (assessment.assignedTo?.includes(studentUid)) {
+      assessments.push(assessment);
+    } else if (assessment.classroomId === classroomId) {
+      assessments.push(assessment);
+    } else if (!assessment.assignedTo && !assessment.classroomId && assessment.status === 'Published') {
+      assessments.push(assessment);
+    }
+  }
+  return assessments.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
+// Render Assignments Page (Tutor)
+function renderAssignmentsPage(assignments, students) {
+  const rowsHtml = assignments.map(assignment => `
+    <tr>
+      <td><strong>${escapeHtml(assignment.title || 'Untitled')}</strong></td>
+      <td>${escapeHtml(assignment.subject || '—')}</td>
+      <td>${fmtDate(assignment.dueDate)}</td>
+      <td>${statusBadge(assignment.status || 'Draft')}</td>
+      <td>${assignment.assignedTo?.length || 0} students</td>
+      <td>
+        <button class="btn small view-submissions-btn" data-id="${assignment.id}">📋 Submissions</button>
+        <button class="btn small danger delete-assignment-btn" data-id="${assignment.id}">🗑️ Delete</button>
+      </td>
+    </tr>
+    <tr class="submissions-row" id="submissions-${assignment.id}" style="display:none;">
+      <td colspan="6"><div class="submissions-container" data-id="${assignment.id}"><div class="loading-submissions">Loading...</div></div></td>
+    </tr>
+  `).join('');
+
+  const studentOptions = students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)}</option>`).join('');
+
+  return `
+    <section class="card panel">
+      <h3>📝 Create New Assignment</h3>
+      <form id="assignmentForm" class="stack-form">
+        <div class="form-row"><label>Title *</label><input id="assignTitle" required></div>
+        <div class="form-row"><label>Subject</label><input id="assignSubject"></div>
+        <div class="form-row"><label>Instructions</label><textarea id="assignDescription" rows="4"></textarea></div>
+        <div class="form-row"><label>Due Date</label><input id="assignDueDate" type="date"></div>
+        <div class="form-row"><label>Assign to Students</label><select id="assignStudents" multiple size="6">${studentOptions}</select><small>Ctrl/Cmd to select multiple</small></div>
+        <button type="submit" class="btn primary">Create Assignment</button><span id="assignMsg"></span>
+      </form>
+    </section>
+    <section class="card panel"><h3>📋 Your Assignments (${assignments.length})</h3>${simpleTable(['Title', 'Subject', 'Due Date', 'Status', 'Students', 'Actions'], rowsHtml)}</section>
+  `;
+}
+
+
+
+// Render Assessments Page (Tutor)
+function renderAssessmentsPage(assessments, students) {
+  const rowsHtml = assessments.map(assessment => `
+    <tr>
+      <td><strong>${escapeHtml(assessment.title || 'Untitled')}</strong></td>
+      <td>${escapeHtml(assessment.subject || '—')}</td>
+      <td>${escapeHtml(assessment.type || 'Quiz')}</td>
+      <td>${fmtDate(assessment.date)}</td>
+      <td>${statusBadge(assessment.status || 'Draft')}</td>
+      <td>
+        <button class="btn small grade-assessment-btn" data-id="${assessment.id}">📊 Grade</button>
+        <button class="btn small danger delete-assessment-btn" data-id="${assessment.id}">🗑️ Delete</button>
+      </td>
+    </tr>
+  `).join('');
+
+  const studentOptions = students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)}</option>`).join('');
+
+  return `
+    <section class="card panel">
+      <h3>📊 Create New Assessment</h3>
+      <form id="assessmentForm" class="stack-form">
+        <div class="form-row"><label>Title *</label><input id="assessTitle" required></div>
+        <div class="form-row"><label>Subject</label><input id="assessSubject"></div>
+        <div class="form-row"><label>Type</label><select id="assessType"><option>Quiz</option><option>Exam</option><option>Project</option></select></div>
+        <div class="form-row"><label>Date</label><input id="assessDate" type="date"></div>
+        <div class="form-row"><label>Max Score</label><input id="assessMaxScore" type="number" value="100"></div>
+        <div class="form-row"><label>Assign to Students</label><select id="assessStudents" multiple size="6">${studentOptions}</select></div>
+        <button type="submit" class="btn primary">Create Assessment</button><span id="assessMsg"></span>
+      </form>
+    </section>
+    <section class="card panel"><h3>📋 Your Assessments (${assessments.length})</h3>${simpleTable(['Title', 'Subject', 'Type', 'Date', 'Status', 'Actions'], rowsHtml)}</section>
+  `;
+}
+function renderStudentDashboardPage(assignments, submissions, messages) {
+  const pendingCount = assignments.length - submissions.length;
+  return `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+      <div class="card stat primary"><h3>${assignments.length}</h3><p>Assignments</p></div>
+      <div class="card stat success"><h3>${submissions.length}</h3><p>Completed</p></div>
+      <div class="card stat warn"><h3>${pendingCount}</h3><p>Pending</p></div>
+    </div>
+    <div class="card panel"><h3>📬 Recent Messages</h3>${messages.slice(0,5).map(m => `<div class="list-item"><strong>${escapeHtml(m.subject)}</strong><small>${fmtDate(m.createdAt)}</small></div>`).join('') || '<div class="empty">No messages</div>'}</div>
+  `;
+}
+
+// Render Tutor Dashboard
+function renderTutorDashboardPage(students, assignments, assessments, submissions) {
+  return `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+      <div class="card stat primary"><h3>${students.length}</h3><p>Students</p></div>
+      <div class="card stat success"><h3>${assignments.length}</h3><p>Assignments</p></div>
+      <div class="card stat info"><h3>${assessments.length}</h3><p>Assessments</p></div>
+      <div class="card stat warn"><h3>${submissions.length}</h3><p>Submissions</p></div>
+    </div>
+    <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div class="card panel"><h3>Recent Assignments</h3>${assignments.slice(0,5).map(a => `<div class="list-item"><strong>${escapeHtml(a.title)}</strong><small>Due: ${fmtDate(a.dueDate)}</small></div>`).join('') || '<div class="empty">No assignments</div>'}</div>
+      <div class="card panel"><h3>Recent Assessments</h3>${assessments.slice(0,5).map(a => `<div class="list-item"><strong>${escapeHtml(a.title)}</strong><small>${fmtDate(a.date)}</small></div>`).join('') || '<div class="empty">No assessments</div>'}</div>
+    </div>
+  `;
+}
+
+async function setupAssignmentsPage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const students = await loadAllStudents();
+  const assignments = await loadTutorAssignments(user.uid);
+  pageContent.innerHTML = renderAssignmentsPage(assignments, students);
+
+  document.getElementById('assignmentForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('assignTitle').value.trim();
+    const assignedTo = Array.from(document.getElementById('assignStudents').selectedOptions).map(opt => opt.value);
+    if (!title || assignedTo.length === 0) { document.getElementById('assignMsg').textContent = 'Title and at least one student required'; return; }
+    await setDoc(doc(collection(db, 'assignments')), {
+      tutorId: user.uid, tutorName: profile?.name || user.email, title, subject: document.getElementById('assignSubject').value,
+      description: document.getElementById('assignDescription').value, dueDate: document.getElementById('assignDueDate').value,
+      assignedTo, status: 'Published', createdAt: serverTimestamp()
+    });
+    document.getElementById('assignMsg').innerHTML = '✅ Created!';
+    setTimeout(() => location.reload(), 1500);
+  });
+
+  document.querySelectorAll('.delete-assignment-btn').forEach(btn => {
+    btn.addEventListener('click', async () => { if (confirm('Delete?')) { await deleteDoc(doc(db, 'assignments', btn.dataset.id)); location.reload(); } });
+  });
+
+  document.querySelectorAll('.view-submissions-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = document.getElementById(`submissions-${btn.dataset.id}`);
+      if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+        const subs = await loadSubmissionsForAssignment(btn.dataset.id);
+        const container = row.querySelector('.submissions-container');
+        container.innerHTML = subs.length ? `<table class="table"><thead><tr><th>Student</th><th>File</th><th>Submitted</th></tr></thead><tbody>${subs.map(s => `<tr><td>${escapeHtml(s.studentName)}</td><td>${s.fileUrl ? `<a href="${s.fileUrl}" target="_blank">View</a>` : '—'}</td><td>${fmtDate(s.submittedAt)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No submissions</div>';
+      } else { row.style.display = 'none'; }
+    });
+  });
+}
+
+async function setupAssessmentsPage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const students = await loadAllStudents();
+  const assessments = await loadTutorAssessments(user.uid);
+  pageContent.innerHTML = renderAssessmentsPage(assessments, students);
+
+  document.getElementById('assessmentForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('assessTitle').value.trim();
+    const assignedTo = Array.from(document.getElementById('assessStudents').selectedOptions).map(opt => opt.value);
+    if (!title || assignedTo.length === 0) { document.getElementById('assessMsg').textContent = 'Title and students required'; return; }
+    await setDoc(doc(collection(db, 'assessments')), {
+      tutorId: user.uid, tutorName: profile?.name || user.email, title, subject: document.getElementById('assessSubject').value,
+      type: document.getElementById('assessType').value, date: document.getElementById('assessDate').value,
+      maxScore: parseInt(document.getElementById('assessMaxScore').value) || 100, assignedTo, scores: {}, status: 'Published', createdAt: serverTimestamp()
+    });
+    document.getElementById('assessMsg').innerHTML = '✅ Created!';
+    setTimeout(() => location.reload(), 1500);
+  });
+
+  document.querySelectorAll('.delete-assessment-btn').forEach(btn => {
+    btn.addEventListener('click', async () => { if (confirm('Delete?')) { await deleteDoc(doc(db, 'assessments', btn.dataset.id)); location.reload(); } });
+  });
+
+  document.querySelectorAll('.grade-assessment-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const assessment = assessments.find(a => a.id === btn.dataset.id);
+      const scoresHtml = (assessment?.assignedTo || []).map(async sid => {
+        const s = await getDoc(doc(db, 'users', sid));
+        return `<div><label>${escapeHtml(s.data()?.full_name || sid)}</label><input type="number" id="score-${sid}" placeholder="Score/${assessment.maxScore}"></div>`;
+      });
+      const modal = document.createElement('div'); modal.className = 'modal'; modal.style.display = 'flex';
+      modal.innerHTML = `<div class="modal-content"><span class="modal-close">&times;</span><h3>Grade: ${escapeHtml(assessment.title)}</h3><form id="gradeForm">${(await Promise.all(scoresHtml)).join('')}<button type="submit">Save</button></form></div>`;
+      document.body.appendChild(modal);
+      modal.querySelector('.modal-close').onclick = () => modal.remove();
+      document.getElementById('gradeForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const scores = {};
+        (assessment?.assignedTo || []).forEach(sid => { const val = document.getElementById(`score-${sid}`)?.value; if (val) scores[sid] = parseFloat(val); });
+        await updateDoc(doc(db, 'assessments', assessment.id), { scores, status: 'Graded' });
+        modal.remove(); location.reload();
+      });
+    });
+  });
+}
+
+async function setupAttendancePage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const students = await loadAllStudents();
+  const records = await loadTutorAttendance(user.uid);
+  pageContent.innerHTML = renderAttendancePage(records, students);
+
+  document.getElementById('attendanceForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const today = new Date().toISOString().split('T')[0];
+    const batch = writeBatch(db);
+    document.querySelectorAll('.attendance-status').forEach(select => {
+      batch.set(doc(collection(db, 'attendance')), { tutorId: user.uid, studentId: select.dataset.student, date: today, status: select.value, createdAt: serverTimestamp() });
+    });
+    await batch.commit();
+    document.getElementById('attendanceMsg').innerHTML = '✅ Saved!';
+    setTimeout(() => location.reload(), 1500);
+  });
+}
+
+async function setupStudentAssignmentsPage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const [assignments, submissions] = await Promise.all([loadStudentVisibleAssignments(user.uid), loadStudentSubmissions(user.uid)]);
+  pageContent.innerHTML = renderStudentAssignmentsPage(assignments, submissions);
+}
+async function setupStudentAssessmentsPage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const assessments = await loadStudentVisibleAssessments(user.uid);
+  assessments.forEach(a => a.studentId = user.uid);
+  pageContent.innerHTML = renderStudentAssessmentsPage(assessments);
+}
+
+async function setupStudentDashboardPage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const [assignments, submissions, messagesSnap] = await Promise.all([loadStudentVisibleAssignments(user.uid), loadStudentSubmissions(user.uid), getDocs(query(collection(db, 'messages'), where('studentId', '==', user.uid)))]);
+  const messages = messagesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  pageContent.innerHTML = renderStudentDashboardPage(assignments, submissions, messages);
+}
+
+async function setupTutorDashboardPage(user, profile) {
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+  const [students, assignments, assessments, submissionsSnap] = await Promise.all([loadAllStudents(), loadTutorAssignments(user.uid), loadTutorAssessments(user.uid), getDocs(collection(db, 'submissions'))]);
+  pageContent.innerHTML = renderTutorDashboardPage(students, assignments, assessments, submissionsSnap.docs.map(d => d.data()));
+}
+
+async function bootPage() {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  const { user, profile } = bundle;
+
+  if (profile?.role === 'tutor') {
+    switch (pageKey) {
+      case 'assignments': await setupAssignmentsPage(user, profile); break;
+      case 'assessments': await setupAssessmentsPage(user, profile); break;
+      case 'attendance': await setupAttendancePage(user, profile); break;
+      case 'dashboard': await setupTutorDashboardPage(user, profile); break;
+      default: document.getElementById('page-content').innerHTML = `<div class="card panel"><h3>${escapeHtml(pageTitle)}</h3><p>Page ready.</p></div>`;
+    }
+  } else if (profile?.role === 'student') {
+    switch (pageKey) {
+      case 'assignments': await setupStudentAssignmentsPage(user, profile); break;
+      case 'assessments': await setupStudentAssessmentsPage(user, profile); break;
+      case 'dashboard': await setupStudentDashboardPage(user, profile); break;
+      default: document.getElementById('page-content').innerHTML = `<div class="card panel"><h3>${escapeHtml(pageTitle)}</h3><p>Page ready.</p></div>`;
+    }
+  }
+}
+
+// Call bootPage
+bootPage();
+
+// Render Attendance Page (Tutor)
+function renderAttendancePage(attendanceRecords, students) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  const studentRows = students.map(student => {
+    const todayRecord = attendanceRecords.find(r => r.studentId === student.id && r.date === today);
+    const status = todayRecord?.status || 'Not Recorded';
+    return `
+      <tr>
+        <td>${escapeHtml(student.full_name || student.name || student.email)}</td>
+        <td><select class="attendance-status" data-student="${student.id}">
+          <option value="Present" ${status === 'Present' ? 'selected' : ''}>✅ Present</option>
+          <option value="Absent" ${status === 'Absent' ? 'selected' : ''}>❌ Absent</option>
+          <option value="Late" ${status === 'Late' ? 'selected' : ''}>⏰ Late</option>
+          <option value="Excused" ${status === 'Excused' ? 'selected' : ''}>📝 Excused</option>
+        </select></td>
+      </tr>
+    `;
+  }).join('');
+
+  const historyHtml = attendanceRecords.slice(0, 20).map(record => `
+    <tr><td>${escapeHtml(record.studentName || 'Student')}</td><td>${fmtDate(record.date)}</td><td>${statusBadge(record.status)}</td></tr>
+  `).join('');
+
+  return `
+    <section class="card panel">
+      <h3>📅 Today's Attendance (${today})</h3>
+      <form id="attendanceForm">
+        <div class="table-wrap"><table class="table"><thead><tr><th>Student</th><th>Status</th></tr></thead><tbody>${studentRows}</tbody></table></div>
+        <button type="submit" class="btn primary">💾 Save Attendance</button><span id="attendanceMsg"></span>
+      </form>
+    </section>
+    <section class="card panel"><h3>📋 Attendance History</h3>${simpleTable(['Student', 'Date', 'Status'], historyHtml)}</section>
+  `;
+}
+
+
+
+async function loadTutorAssignments(tutorUid) {
+  const snap = await getDocs(
+    query(collection(db, 'assignments'), where('tutorId', '==', tutorUid))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
+
 
 /* =========================
    FINAL AUTH HOOK – runs BOTH old + new systems
