@@ -2690,80 +2690,65 @@ async function bootParentPortfolioPage() {
     renderParentPortfolio(items);
 }
 
-/* =========================
-   OLD PAGE ROUTER (still used for legacy/special pages)
-========================= */
 if (pageKey === 'submit-work') {
   bootSubmitWorkPage();
-
-} else if (pageKey === 'lesson-plans') {
+} 
+else if (pageKey === 'lesson-plans') {
   bootLessonPlansPage();
-
-} else if (pageKey === 'learners') {
+} 
+else if (pageKey === 'learners') {
   bootLearnersPage();
-
-} else if (pageKey === 'classrooms') {
+} 
+else if (pageKey === 'classrooms') {
   bootClassroomsPage();
-
-} else if (pageKey === 'resources' && pageRole === 'tutor') {
-  bootResourcesPage();
-
-} else if (pageKey === 'resources' && pageRole === 'student') {
-  bootStudentResourcesPage();
-
-} else if (pageKey === 'assignments' && pageRole === 'student') {
-  bootStudentAssignmentsPage();
-
-} else if (pageKey === 'assessments' && pageRole === 'student') {
-  bootStudentAssessmentsPage();
-
-} else if (pageKey === 'activities' && pageRole === 'student') {
-  bootStudentActivitiesPage();
-
-} else if (pageKey === 'messages' && pageRole === 'student') {
-  bootStudentMessagesPage();
-
-} else if (pageKey === 'messages') {
+} 
+else if (pageKey === 'resources') {
+  if (pageRole === 'tutor') bootResourcesPage();
+  else if (pageRole === 'student') bootStudentResourcesPage();
+} 
+else if (pageKey === 'messages') {
+  // One handler for both tutor and student messages
   bootMessagesPage();
+} 
 
-
-// =========================
-// 🎓 STUDENT
-// =========================
-} else if (pageKey === 'portfolio' && pageRole === 'student') {
+// ====================== STUDENT PAGES ======================
+else if (pageKey === 'assignments' && pageRole === 'student') {
+  bootStudentAssignmentsPage();
+} 
+else if (pageKey === 'assessments' && pageRole === 'student') {
+  bootStudentAssessmentsPage();
+} 
+else if (pageKey === 'activities' && pageRole === 'student') {
+  bootStudentActivitiesPage();
+} 
+else if (pageKey === 'portfolio' && pageRole === 'student') {
   bootStudentPortfolioPage();
-
-} else if (pageKey === 'reports' && pageRole === 'student') {
+} 
+else if (pageKey === 'reports' && pageRole === 'student') {
   bootStudentReportsPage();
+} 
 
-
-// =========================
-// 👨‍👩‍👧 PARENT
-// =========================
-} else if (pageKey === 'children' && pageRole === 'parent') {
-  bootParentChildrenPage();   // 🔥 MISSING FIX
-
-} else if (pageKey === 'portfolio' && pageRole === 'parent') {
+// ====================== PARENT PAGES ======================
+else if (pageKey === 'children' && pageRole === 'parent') {
+  bootParentChildrenPage();
+} 
+else if (pageKey === 'portfolio' && pageRole === 'parent') {
   bootParentPortfolioPage();
+} 
 
-
-// =========================
-// 👨‍🏫 TUTOR
-// =========================
-} else if (pageKey === 'portfolios' && pageRole === 'tutor') {
+// ====================== TUTOR PAGES ======================
+else if (pageKey === 'portfolios' && pageRole === 'tutor') {
   bootTutorPortfolios();
+} 
 
-
-// =========================
-// GENERAL
-// =========================
-} else if (pageKey === 'reports') {
-  bootReportsPage();
-
-} else if (pageKey === 'dashboard') {
+// ====================== GENERAL / FALLBACK ======================
+else if (pageKey === 'dashboard') {
   bootDashboard();
-
-} else {
+} 
+else if (pageKey === 'reports') {
+  bootReportsPage();
+} 
+else {
   bootDefaultPage();
 }
 
@@ -2988,7 +2973,7 @@ onAuthStateChanged(auth, async (user) => {
   const profile = await getUserProfile(user.uid);
   if (!profile) return;
 
-  // 1. Old system: page-specific boot functions already ran via the if/else above
-  // 2. New system: unified modern renderer — overrides content for known new pages
+  // This allows loadExtendedPages() to override content on certain pages
+  // if you want newer UI for dashboard, assignments (tutor), settings, etc.
   await loadExtendedPages(user, profile);
 });
