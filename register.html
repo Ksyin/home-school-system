@@ -1,101 +1,193 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>Register</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Join HomeSchool</title>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <style>
+        /* Reuse same styles as login for consistency */
+        .auth-wrap {
+            background: linear-gradient(135deg, #eff5ff, #f0f4ff);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-card {
+            max-width: 980px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            overflow: hidden;
+            border-radius: 24px;
+            box-shadow: 0 25px 70px rgba(15, 23, 42, 0.15);
+            animation: fadeUp 0.7s ease;
+        }
+
+        .auth-aside {
+            background: linear-gradient(135deg, #0a1f44, #1e3a8a);
+            color: white;
+            padding: 60px 50px;
+            position: relative;
+        }
+
+        .auth-aside::before {
+            content: '';
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            background: rgba(255,255,255,0.08);
+            filter: blur(90px);
+            top: -80px;
+            left: -80px;
+            border-radius: 50%;
+        }
+
+        .auth-main {
+            padding: 60px 50px;
+            background: white;
+        }
+
+        .nav-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            z-index: 1000;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .btn-modern {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 16px;
+            margin-top: 12px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-modern:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(37, 99, 235, 0.4);
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
+<body data-auth-page="public">
 
-<body data-auth-page='public'>
+    <!-- Fixed Navigation -->
+    <nav class="nav-bar">
+        <div style="max-width:1200px; margin:0 auto; display:flex; justify-content:space-between; align-items:center;">
+            <a href="/" class="brand-small">
+                <div class="brand-badge">H</div>
+                <h1 style="font-size:22px; margin:0; font-weight:800;">HomeSchool</h1>
+            </a>
+            <a href="/login.html" class="btn secondary" style="padding:10px 24px;">Login</a>
+        </div>
+    </nav>
 
-<div class="auth-wrap">
-<div class="auth-card card">
+    <div class="auth-wrap">
+        <div class="auth-card card">
 
-<div class="auth-aside">
+            <!-- Left Side -->
+            <div class="auth-aside">
+                <div class="brand" style="margin-bottom:40px;">
+                    <div class="brand-badge">H</div>
+                    <div>
+                        <h1 style="color:white; font-size:28px;">HomeSchool</h1>
+                        <p style="color:#b7c7ee; margin:4px 0 0; font-size:14px;">Join the community</p>
+                    </div>
+                </div>
 
-<h1 class="auth-title">Create an account</h1>
+                <h1 class="auth-title" style="font-size:42px; line-height:1.2; margin-bottom:20px;">
+                    Start your journey
+                </h1>
+                <p class="auth-sub" style="font-size:1.15rem; opacity:0.95;">
+                    Create an account and connect with tutors, students, and parents in one powerful platform.
+                </p>
 
-<p class="auth-sub">
-Join the HomeSchool platform and start your personalized learning experience.
-</p>
+                <div class="list modern-list" style="margin-top:50px;">
+                    <div class="list-item glass">📖 Structured lesson planning</div>
+                    <div class="list-item glass">📤 Easy assignment submission</div>
+                    <div class="list-item glass">📊 Real-time progress tracking</div>
+                </div>
+            </div>
 
-<div class="list" style="margin-top:24px">
+            <!-- Right Side - Form -->
+            <div class="auth-main">
+                <h2 class="auth-title main-title" style="margin-bottom:8px;">Create Account</h2>
+                <p style="color:var(--muted); margin-bottom:24px;">Join thousands of learners and educators</p>
 
-<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
-Tutors guide and support student learning journeys
-</div>
+                <div id="notice" class="notice" style="margin-bottom:20px;">
+                    Fill in your details to get started.
+                </div>
 
-<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
-Students build their academic and personal growth portfolios
-</div>
+                <form id="registerForm" class="form-grid">
+                    <div>
+                        <label>Full Name</label>
+                        <input name="fullName" required placeholder="John Doe">
+                    </div>
 
-<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
-Parents stay connected and track progress in real time
-</div>
+                    <div>
+                        <label>Email Address</label>
+                        <input type="email" name="email" required placeholder="you@example.com">
+                    </div>
 
-</div>
+                    <div class="form-grid two">
+                        <div>
+                            <label>Phone (optional)</label>
+                            <input name="phone" placeholder="+254 700 000 000">
+                        </div>
+                        <div>
+                            <label>Role</label>
+                            <select name="role" required>
+                                <option value="parent">Parent</option>
+                                <option value="tutor">Tutor</option>
+                                <option value="student">Student</option>
+                            </select>
+                        </div>
+                    </div>
 
-</div>
+                    <div>
+                        <label>Password</label>
+                        <input type="password" name="password" minlength="6" required>
+                    </div>
 
-<div class="auth-main">
+                    <div id="tutorCodeField" style="display:none;">
+                        <label>Access Code (Tutors only)</label>
+                        <input name="accessCode" placeholder="Enter tutor access code">
+                    </div>
 
-<h2 class="auth-title" style="color:#162033">Register</h2>
+                    <button type="submit" class="btn btn-modern">Create My Account</button>
+                </form>
 
-<div id="notice" class="notice">
-Fill in your details to get started.
-</div>
+                <div class="row" style="margin-top:24px; font-size:14px; text-align:center;">
+                    <a href="/login.html" style="color:var(--primary);">Already have an account? Sign in</a>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<form id="registerForm" class="form-grid" style="margin-top:16px">
+    <script type="module" src="/assets/js/auth.js"></script>
 
-<div>
-<label>Full name</label>
-<input name="fullName" required>
-</div>
-
-<div>
-<label>Email</label>
-<input type="email" name="email" required>
-</div>
-
-<div>
-<label>Phone</label>
-<input name="phone">
-</div>
-
-<div>
-<label>Password</label>
-<input type="password" name="password" minlength="6" required>
-</div>
-
-<div>
-<label>Role</label>
-<select name="role">
-<option value="parent">Parent</option>
-<option value="tutor">Tutor</option>
-<option value="student">Student</option>
-</select>
-</div>
-
-<div>
-<label>Access code (tutor only)</label>
-<input name="accessCode" placeholder="Only required for tutors">
-</div>
-
-<button type="submit">Create account</button>
-
-</form>
-
-<div class="row" style="margin-top:16px">
-<a href="/login.html">Already have an account? Login</a>
-</div>
-
-</div>
-
-</div>
-</div>
-
-<script type='module' src='/assets/js/auth.js'></script>
-
+    <script>
+        // Show/hide tutor access code field
+        document.querySelector('select[name="role"]').addEventListener('change', function() {
+            const codeField = document.getElementById('tutorCodeField');
+            codeField.style.display = this.value === 'tutor' ? 'block' : 'none';
+        });
+    </script>
 </body>
 </html>

@@ -1,79 +1,179 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>Login</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login • HomeSchool</title>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <style>
+        .auth-wrap {
+            background: linear-gradient(135deg, #eff5ff, #f0f4ff);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-card {
+            max-width: 980px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            overflow: hidden;
+            border-radius: 24px;
+            box-shadow: 0 25px 70px rgba(15, 23, 42, 0.15);
+            animation: fadeUp 0.7s ease;
+        }
+
+        .auth-aside {
+            background: linear-gradient(135deg, #0a1f44, #1e3a8a);
+            color: white;
+            padding: 60px 50px;
+            position: relative;
+        }
+
+        .auth-aside::before {
+            content: '';
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            background: rgba(255,255,255,0.08);
+            filter: blur(90px);
+            top: -80px;
+            left: -80px;
+            border-radius: 50%;
+        }
+
+        .auth-main {
+            padding: 60px 50px;
+            background: white;
+        }
+
+        .nav-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            z-index: 1000;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand-small {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-small .brand-badge {
+            width: 36px;
+            height: 36px;
+            font-size: 18px;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-grid > div {
+            margin-bottom: 18px;
+        }
+
+        .btn-modern {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 16px;
+            margin-top: 12px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-modern:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(37, 99, 235, 0.4);
+        }
+    </style>
 </head>
+<body data-auth-page="public">
 
-<body data-auth-page='public'>
+    <!-- Fixed Navigation -->
+    <nav class="nav-bar">
+        <div style="max-width:1200px; margin:0 auto; display:flex; justify-content:space-between; align-items:center;">
+            <a href="/" class="brand-small">
+                <div class="brand-badge">H</div>
+                <h1 style="font-size:22px; margin:0; font-weight:800;">HomeSchool</h1>
+            </a>
+            <a href="/register.html" class="btn secondary" style="padding:10px 24px;">Create Account</a>
+        </div>
+    </nav>
 
-<div class="auth-wrap">
-<div class="auth-card card">
+    <div class="auth-wrap">
+        <div class="auth-card card">
 
-<div class="auth-aside">
+            <!-- Left Side - Visual -->
+            <div class="auth-aside">
+                <div class="brand" style="margin-bottom:40px;">
+                    <div class="brand-badge">H</div>
+                    <div>
+                        <h1 style="color:white; font-size:28px;">HomeSchool</h1>
+                        <p style="color:#b7c7ee; margin:4px 0 0; font-size:14px;">Smarter Learning</p>
+                    </div>
+                </div>
 
-<h1 class="auth-title">Welcome back</h1>
+                <h1 class="auth-title" style="font-size:42px; line-height:1.2; margin-bottom:20px;">
+                    Welcome back
+                </h1>
+                <p class="auth-sub" style="font-size:1.15rem; opacity:0.95;">
+                    Sign in to continue your learning journey with tutors, students, and parents.
+                </p>
 
-<p class="auth-sub">
-Sign in to access your personalized dashboard and continue your learning journey.
-</p>
+                <div class="list modern-list" style="margin-top:50px;">
+                    <div class="list-item glass">👨‍👩‍👧 Parents track real-time progress</div>
+                    <div class="list-item glass">📚 Tutors manage lessons & assignments</div>
+                    <div class="list-item glass">📈 Students build their growth portfolio</div>
+                </div>
+            </div>
 
-<div class="list" style="margin-top:24px">
+            <!-- Right Side - Form -->
+            <div class="auth-main">
+                <h2 class="auth-title main-title" style="margin-bottom:8px;">Login</h2>
+                <p style="color:var(--muted); margin-bottom:24px;">Enter your credentials to access your dashboard</p>
 
-<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
-Parents monitor progress and stay informed
-</div>
+                <div id="notice" class="notice" style="margin-bottom:20px;">
+                    Welcome back! Please sign in.
+                </div>
 
-<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
-Tutors manage lessons, assignments, and student growth
-</div>
+                <form id="loginForm" class="form-grid">
+                    <div>
+                        <label>Email Address</label>
+                        <input type="email" name="email" required placeholder="you@example.com">
+                    </div>
 
-<div class="list-item" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)">
-Students access tasks, submit work, and track achievements
-</div>
+                    <div>
+                        <label>Password</label>
+                        <input type="password" name="password" required>
+                    </div>
 
-</div>
+                    <button type="submit" class="btn btn-modern">Sign In</button>
+                </form>
 
-</div>
+                <div class="row" style="margin-top:24px; font-size:14px;">
+                    <a href="/forgot-password.html" style="color:var(--primary);">Forgot your password?</a>
+                    <span class="right">
+                        <a href="/register.html" style="color:var(--primary);">Create new account →</a>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<div class="auth-main">
-
-<h2 class="auth-title" style="color:#162033">Login</h2>
-
-<div id="notice" class="notice">
-Enter your details to continue.
-</div>
-
-<form id="loginForm" class="form-grid" style="margin-top:16px">
-
-<div>
-<label>Email</label>
-<input type="email" name="email" required>
-</div>
-
-<div>
-<label>Password</label>
-<input type="password" name="password" required>
-</div>
-
-<button type="submit">Login</button>
-
-</form>
-
-<div class="row" style="margin-top:16px">
-<a href="/forgot-password.html">Forgot password?</a>
-<span class="right"></span>
-<a href="/register.html">Create account</a>
-</div>
-
-</div>
-
-</div>
-</div>
-
-<script type='module' src='/assets/js/auth.js'></script>
-
+    <script type="module" src="/assets/js/auth.js"></script>
 </body>
 </html>
