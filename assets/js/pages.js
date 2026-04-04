@@ -2711,6 +2711,18 @@ if (pageKey === 'submit-work') {
 } else if (pageKey === 'resources' && pageRole === 'student') {
   bootStudentResourcesPage();
 
+} else if (pageKey === 'assignments' && pageRole === 'student') {
+  bootStudentAssignmentsPage();
+
+} else if (pageKey === 'assessments' && pageRole === 'student') {
+  bootStudentAssessmentsPage();
+
+} else if (pageKey === 'activities' && pageRole === 'student') {
+  bootStudentActivitiesPage();
+
+} else if (pageKey === 'messages' && pageRole === 'student') {
+  bootStudentMessagesPage();
+
 } else if (pageKey === 'messages') {
   bootMessagesPage();
 
