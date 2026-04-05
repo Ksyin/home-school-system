@@ -46,49 +46,43 @@ const pageRole = document.body.dataset.role || '';
 const pageKey = document.body.dataset.page || '';
 const pageTitle = document.body.dataset.title || 'HomeSchool';
 const pageDescription = document.body.dataset.description || '';
+
 const navMap = {
   parent: [
-    ['🏠 Dashboard', '/parent/dashboard.html', '🏠'],
-    ['👨‍👧‍👦 My Children', '/parent/children.html', '👧'],
-    
-    // ── Full Access to Tutor Content (No restrictions for parents) ──
-    ['🗓️ Lesson Plans', '/tutor/lesson-plans.html', '🗓️'],
-    ['📚 All Resources', '/tutor/resources.html', '📚'],
-    ['📝 Assignments', '/tutor/assignments.html', '📝'],
-    ['📊 Assessments', '/tutor/assessments.html', '📊'],
-    ['🗂️ All Portfolios', '/tutor/portfolios.html', '🗂️'],
-    ['💬 Messages', '/tutor/messages.html', '💬'],
-    
-    // Parent-specific
-    ['📅 Attendance', '/parent/attendance.html', '📅'],
-    ['📋 Reports', '/parent/messages.html', '📄'],
-    ['⚙️ Settings', '/parent/settings.html', '⚙️']
-  ],
-
-  tutor: [
-    ['🏠 Dashboard', '/tutor/dashboard.html', '🏠'],
-    ['🏫 Classrooms', '/tutor/classrooms.html', '🏫'],
-    ['👦 Learners', '/tutor/learners.html', '👦'],
-    ['📝 Assignments', '/tutor/assignments.html', '📝'],
-    ['📊 Assessments', '/tutor/assessments.html', '📊'],
-    ['🗓️ Lesson Plans', '/tutor/lesson-plans.html', '🗓️'],
-    ['📄 Reports & Comments', '/tutor/reports.html', '📄'],
-    ['📚 Resources', '/tutor/resources.html', '📚'],
-    ['💬 Messages', '/tutor/messages.html', '💬'],
-    ['⚙️ Settings', '/tutor/settings.html', '⚙️']
-  ],
-
-  student: [
-    ['🏠 Dashboard', '/student/dashboard.html', '🏠'],
-    ['📝 Assignments', '/student/assignments.html', '📝'],
-    ['📤 Submit Work', '/student/submit-work.html', '📤'],
-    ['📊 Assessments', '/student/assessments.html', '📊'],
-    ['🗂️ Portfolio', '/student/portfolio.html', '🗂️'],
-    ['📚 Resources', '/student/resources.html', '📚'],
-    ['💬 Messages & Reports', '/student/messages.html', '💬'],
-    ['⚙️ Settings', '/student/settings.html', '⚙️']
-  ]
+  ['Dashboard', '/parent/dashboard.html', ''],
+  ['Children', '/parent/children.html', ''],
+  ['Assignments', '/parent/assignments.html', ''],
+  ['Assessments', '/parent/assessments.html', ''],
+  ['Portfolio', '/parent/portfolio.html', ''],
+  ['Attendance', '/parent/attendance.html', ''],
+  ['Reports & Messages', '/parent/messages.html', ''],
+  ['Resources', '/parent/resources.html', ''],
+  ['Settings', '/parent/settings.html', '']
+],
+ tutor: [
+  ['Dashboard', '/tutor/dashboard.html', ''],
+  ['Classrooms', '/tutor/classrooms.html', ''],
+  ['Learners', '/tutor/learners.html', ''],
+  ['Assignments', '/tutor/assignments.html', ''],
+  ['Assessments', '/tutor/assessments.html', ''],
+  ['Lesson Plans', '/tutor/lesson-plans.html', ''],
+  ['Reports & Comments', '/tutor/reports.html', ''],
+  ['Resources', '/tutor/resources.html', ''],
+  ['Messages', '/tutor/messages.html', ''],
+  ['Settings', '/tutor/settings.html', '']
+],
+student: [
+  ['Dashboard', '/student/dashboard.html', ''],
+  ['Assignments', '/student/assignments.html', ''],
+  ['Submit Work', '/student/submit-work.html', ''],
+  ['Assessments', '/student/assessments.html', ''],
+  ['Portfolio', '/student/portfolio.html', ''],
+  ['Resources', '/student/resources.html', ''],
+  ['Messages & Reports', '/student/messages.html', ''],
+  ['Settings', '/student/settings.html', '']
+]
 };
+
 
 
 
