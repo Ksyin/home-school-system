@@ -3,16 +3,51 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dashboard | HomeSchool System</title>
+  <title>Dashboard</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
 </head>
 <body
   data-role="tutor"
   data-page="dashboard"
   data-title="Dashboard"
-  data-description="Overview of learning, tasks, and performance"
+  data-description="Overview of learning, tasks, resources, portfolios, and performance."
 >
-  <div id="app-shell" class="page-shell"></div>
+  <div id="app-shell" class="page-shell">
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Overview of learning, tasks, resources, portfolios, and performance.</p>
+        </div>
+      </div>
+
+      <div id="page-content">
+        <section class="card panel" style="margin-bottom:18px">
+          <h3>Dashboard Loading</h3>
+          <p>Preparing live tutor analytics, recent student activity, classroom summaries, portfolio signals, and reporting snapshots.</p>
+        </section>
+
+        <section style="display:flex;gap:16px;flex-wrap:wrap">
+          <section class="card panel" style="min-width:200px;flex:1">
+            <h3>Students</h3>
+            <p>Loading learner count...</p>
+          </section>
+          <section class="card panel" style="min-width:200px;flex:1">
+            <h3>Assignments</h3>
+            <p>Loading task flow...</p>
+          </section>
+          <section class="card panel" style="min-width:200px;flex:1">
+            <h3>Attendance</h3>
+            <p>Loading daily records...</p>
+          </section>
+          <section class="card panel" style="min-width:200px;flex:1">
+            <h3>Portfolios</h3>
+            <p>Loading evidence timeline...</p>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
 
   <script type="module" src="/assets/js/pages.js"></script>
 </body>
