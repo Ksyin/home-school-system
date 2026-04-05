@@ -201,6 +201,7 @@ async function getUserProfile(uid) {
   if (!userDoc.exists()) return null;
   return userDoc.data();
 }
+
 async function requireAuth() {
   return new Promise((resolve) => {
     onAuthStateChanged(auth, async (user) => {
@@ -215,8 +216,7 @@ async function requireAuth() {
         return;
       }
 
-      // 🔥 UPDATED: Parents can now view Tutor & Student pages automatically
-      if (pageRole && profile.role !== pageRole && profile.role !== 'parent') {
+      if (pageRole && profile.role !== pageRole) {
         location.href = '/unauthorized.html';
         return;
       }
@@ -1606,6 +1606,9 @@ function getStudentAttendanceStatus() {
   };
 }
 
+/* =========================
+   NEW: Parent Dashboard Render
+========================= */
 function renderParentDashboard(children, profile) {
   if (!children.length) {
     return `
@@ -1617,7 +1620,7 @@ function renderParentDashboard(children, profile) {
   }
 
   const childCards = children.map(child => `
-    <div class="card panel list-item hover-card" style="margin-bottom:16px;transition:all 0.3s ease;">
+    <div class="card panel list-item" style="margin-bottom:16px">
       <div class="row">
         <div>
           <strong>${escapeHtml(child.full_name || child.name)}</strong><br>
@@ -1634,17 +1637,11 @@ function renderParentDashboard(children, profile) {
   `).join('');
 
   return `
-    <section class="card panel welcome-card hover-card" style="transition:all 0.3s ease;">
+    <section class="card panel">
       <h3>👨‍👧‍👦 Family Dashboard</h3>
       <p>Tracking ${children.length} children • Latest activity across all kids</p>
     </section>
     <div class="stack">${childCards}</div>
-
-    <div style="margin-top:24px;text-align:center">
-      <a href="/tutor/lesson-plans.html" class="btn ghost">📅 View All Lesson Plans</a>
-      <a href="/tutor/resources.html" class="btn ghost">📚 View All Resources</a>
-      <a href="/tutor/portfolios.html" class="btn ghost">🗂️ View All Portfolios</a>
-    </div>
   `;
 }
 
@@ -3040,153 +3037,123 @@ async function loadExtendedPages(user, profile) {
   if (!pageContent) return;
 
   switch (pageKey) {
-    case 'dashboard': {
-  if (pageRole === 'student') {
-    // === MODERN STUDENT DASHBOARD ===
-    const [assignments, submissions, resources, reports, portfolioItems] = await Promise.all([
-      loadStudentAssignments(user.uid),
-      loadStudentSubmissions(user.uid),
-      loadStudentResources(user.uid),
-      loadStudentReports(user.uid),
-      loadStudentPortfolio(user.uid)
-    ]);
+      case 'dashboard': {
+      if (pageRole === 'student') {
+        // === STUDENT MODERN DASHBOARD ===
+        const [assignments, submissions, resources, reports, portfolioItems] = await Promise.all([
+          loadStudentAssignments(user.uid),
+          loadStudentSubmissions(user.uid),
+          loadStudentResources(user.uid),
+          loadStudentReports(user.uid),
+          loadStudentPortfolio(user.uid)
+        ]);
 
-    const att = getStudentAttendanceStatus();
+        const att = getStudentAttendanceStatus();
 
-    pageContent.innerHTML = `
-      <div class="stats-grid modern-stats">
-        <div class="card stat primary hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">📋</div>
-          <h3>${assignments.length}</h3>
-          <p>Assignments</p>
-        </div>
-        <div class="card stat success hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">✅</div>
-          <h3>${submissions.length}</h3>
-          <p>Completed</p>
-        </div>
-        <div class="card stat warn hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">⏳</div>
-          <h3>${Math.max(0, assignments.length - submissions.length)}</h3>
-          <p>Pending</p>
-        </div>
-        <div class="card stat success hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">📅</div>
-          <h3>${att.rate}%</h3>
-          <p>Attendance<br><small>Today: ${att.status} • ${att.today}</small></p>
-        </div>
-        <div class="card stat hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">📚</div>
-          <h3>${resources.length}</h3>
-          <p>Resources</p>
-        </div>
-      </div>
-
-      <section class="card panel welcome-card hover-card" style="margin-top:24px;transition:all 0.3s ease;">
-        <h3>Welcome back, ${escapeHtml(profile?.full_name || profile?.name || 'Student')} 👋</h3>
-        <p>You have <strong>${portfolioItems.length}</strong> reflections this month. Keep shining! 🌟</p>
-      </section>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
-        <div class="card panel hover-card" style="transition:all 0.3s ease;">
-          <h3>📋 Recent Assignments</h3>
-          ${assignments.slice(0, 4).map(a => `
-            <div class="list-item modern-list">
-              <strong>${escapeHtml(a.title || 'Untitled')}</strong>
-              <small>${a.subject ? escapeHtml(a.subject) : ''} • Due ${fmtDate(a.dueDate)}</small>
-            </div>
-          `).join('') || '<p class="empty">No assignments yet</p>'}
-        </div>
-
-        <div class="card panel hover-card" style="transition:all 0.3s ease;">
-          <h3>🌟 Portfolio Highlights</h3>
-          ${portfolioItems.slice(0, 3).map(item => `
-            <div class="list-item modern-list">
-              <span class="badge">${escapeHtml(item.type || 'Reflection')}</span>
-              <strong>${escapeHtml(item.title || item.note?.substring(0, 60) || 'Entry')}</strong>
-            </div>
-          `).join('') || '<p class="empty">No entries yet – start your journey!</p>'}
-          <a href="/student/portfolio.html" class="btn ghost" style="margin-top:12px">View full portfolio →</a>
-        </div>
-      </div>
-
-      <div class="top-actions" style="margin-top:32px">
-        <button onclick="location.href='/student/submit-work.html'" class="btn primary-btn">📤 Submit Assignment</button>
-        <button onclick="location.href='/student/resources.html'" class="btn secondary">📚 Browse Resources</button>
-        <button onclick="location.href='/student/messages.html'" class="btn ghost">💬 Messages</button>
-      </div>
-    `;
-
-  } 
-  else if (pageRole === 'parent') {
-    // === MODERN PARENT DASHBOARD (sees everything) ===
-    const children = await loadParentChildren(user.uid);
-    pageContent.innerHTML = renderParentDashboard(children, profile); // already updated below
-  } 
-  else {
-    // === MODERN TUTOR DASHBOARD ===
-    const [students, assignmentsSnap, submissionsSnap, classrooms, lessonPlans] = await Promise.all([
-      loadAllStudents(),
-      getDocs(query(collection(db, 'assignments'), where('tutorId', '==', user.uid))),
-      getDocs(query(collection(db, 'submissions'), where('tutorId', '==', user.uid))),
-      loadClassrooms(user.uid),
-      loadTutorLessonPlans(user.uid)
-    ]);
-
-    pageContent.innerHTML = `
-      <div class="stats-grid modern-stats">
-        <div class="card stat primary hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">👦</div><h3>${students.length}</h3><p>Learners</p>
-        </div>
-        <div class="card stat success hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">📝</div><h3>${assignmentsSnap.size}</h3><p>Assignments</p>
-        </div>
-        <div class="card stat warn hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">📤</div><h3>${submissionsSnap.size}</h3><p>Submissions</p>
-        </div>
-        <div class="card stat hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">🏫</div><h3>${classrooms.length}</h3><p>Classrooms</p>
-        </div>
-        <div class="card stat hover-card" style="transition:all 0.3s ease;">
-          <div class="stat-icon">🗓️</div><h3>${lessonPlans.length}</h3><p>Lesson Plans</p>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:24px">
-        <div class="card panel hover-card" style="transition:all 0.3s ease;">
-          <h3>Recent Activity</h3>
-          <div id="recentActivity" class="stack gap-3"></div>
-        </div>
-        <div class="card panel hover-card" style="transition:all 0.3s ease;">
-          <h3>Quick Actions</h3>
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <button onclick="location.href='/tutor/assignments.html'" class="btn">📝 New Assignment</button>
-            <button onclick="location.href='/tutor/lesson-plans.html'" class="btn">🗓️ New Lesson Plan</button>
-            <button onclick="location.href='/tutor/classrooms.html'" class="btn">🏫 Manage Classrooms</button>
-            <button onclick="location.href='/tutor/learners.html'" class="btn">👦 Assign Students</button>
+        pageContent.innerHTML = `
+          <div class="stats-grid">
+            <div class="card stat primary"><h3>${assignments.length}</h3><p>Assignments</p></div>
+            <div class="card stat success"><h3>${submissions.length}</h3><p>Completed</p></div>
+            <div class="card stat warn"><h3>${Math.max(0, assignments.length - submissions.length)}</h3><p>Pending</p></div>
+            <div class="card stat success"><h3>${att.rate}%</h3><p>Attendance<br><small>Today: ${att.status} • ${att.today}</small></p></div>
+            <div class="card stat"><h3>${resources.length}</h3><p>Resources</p></div>
           </div>
-        </div>
-      </div>
-    `;
 
-    // Fill recent activity (same as before but with modern look)
-    const container = document.getElementById('recentActivity');
-    if (submissionsSnap.docs.length > 0) {
-      submissionsSnap.docs.slice(0, 8).forEach(docSnap => {
-        const d = docSnap.data();
-        container.innerHTML += `
-          <div class="list-item modern-list flex between">
-            <div><strong>${escapeHtml(d.assignmentTitle || 'Submission')}</strong><br><small>by ${escapeHtml(d.studentName || 'Student')}</small></div>
-            <div class="text-right"><small>${fmtDate(d.submittedAt)}</small><br>${statusBadge(d.status)}</div>
+          <section class="card panel" style="margin-top:24px">
+            <h3>Welcome back, ${escapeHtml(profile?.full_name || profile?.name || 'Student')}!</h3>
+            <p>You have <strong>${portfolioItems.length}</strong> portfolio reflections this month. Great work! 🎉</p>
+          </section>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+            <!-- Recent Assignments -->
+            <div class="card panel">
+              <h3>📋 Recent Assignments</h3>
+              ${assignments.slice(0, 4).map(a => `
+                <div class="list-item">
+                  <strong>${escapeHtml(a.title || 'Untitled')}</strong>
+                  <small>${a.subject ? escapeHtml(a.subject) : ''} • Due ${fmtDate(a.dueDate)}</small>
+                </div>
+              `).join('') || '<p class="empty">No assignments yet</p>'}
+            </div>
+
+            <!-- Portfolio Snapshot -->
+            <div class="card panel">
+              <h3>🌟 Portfolio Highlights</h3>
+              ${portfolioItems.slice(0, 3).map(item => `
+                <div class="list-item">
+                  <span class="badge">${escapeHtml(item.type || 'Reflection')}</span>
+                  <strong>${escapeHtml(item.title || item.note?.substring(0, 60) || 'Entry')}</strong>
+                </div>
+              `).join('') || '<p class="empty">No entries yet – start your journey!</p>'}
+              <a href="/student/portfolio.html" class="btn ghost" style="margin-top:12px">View full portfolio →</a>
+            </div>
+          </div>
+
+          <div class="top-actions" style="margin-top:32px">
+            <button onclick="location.href='/student/submit-work.html'" class="btn primary-btn">📤 Submit Assignment</button>
+            <button onclick="location.href='/student/resources.html'" class="btn secondary">📚 Browse Resources</button>
+            <button onclick="location.href='/student/messages.html'" class="btn ghost">💬 Messages & Reports</button>
           </div>
         `;
-      });
-    } else {
-      container.innerHTML = '<p class="empty">No recent submissions yet.</p>';
+      } 
+      else if (pageRole === 'parent') {
+        // === PARENT DASHBOARD ===
+        const children = await loadParentChildren(user.uid);
+        pageContent.innerHTML = renderParentDashboard(children, profile);
+      } 
+      else {
+        // === TUTOR DASHBOARD (enhanced modern version) ===
+        const [students, assignmentsSnap, submissionsSnap, classrooms] = await Promise.all([
+          loadAllStudents(),
+          getDocs(query(collection(db, 'assignments'), where('tutorId', '==', user.uid))),
+          getDocs(query(collection(db, 'submissions'), where('tutorId', '==', user.uid))),
+          loadClassrooms(user.uid)
+        ]);
+
+        pageContent.innerHTML = `
+          <div class="stats-grid">
+            <div class="card stat primary"><h3>${students.length}</h3><p>Learners</p></div>
+            <div class="card stat success"><h3>${assignmentsSnap.size}</h3><p>Assignments</p></div>
+            <div class="card stat warn"><h3>${submissionsSnap.size}</h3><p>Submissions</p></div>
+            <div class="card stat"><h3>${classrooms.length}</h3><p>Classrooms</p></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:24px">
+            <div class="card panel">
+              <h3>Recent Activity</h3>
+              <div id="recentActivity" class="stack gap-3"></div>
+            </div>
+            <div class="card panel">
+              <h3>Quick Actions</h3>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <button onclick="location.href='/tutor/assignments.html'" class="btn">📝 New Assignment</button>
+                <button onclick="location.href='/tutor/lesson-plans.html'" class="btn">📅 New Lesson Plan</button>
+                <button onclick="location.href='/tutor/classrooms.html'" class="btn">🏫 Manage Classrooms</button>
+                <button onclick="location.href='/tutor/learners.html'" class="btn">👦 Assign Students</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Fill recent activity
+        const container = document.getElementById('recentActivity');
+        if (submissionsSnap.docs.length > 0) {
+          submissionsSnap.docs.slice(0, 8).forEach(docSnap => {
+            const d = docSnap.data();
+            container.innerHTML += `
+              <div class="list-item flex between">
+                <div><strong>${escapeHtml(d.assignmentTitle || 'Submission')}</strong><br><small>by ${escapeHtml(d.studentName || 'Student')}</small></div>
+                <div class="text-right"><small>${fmtDate(d.submittedAt)}</small><br>${statusBadge(d.status)}</div>
+              </div>
+            `;
+          });
+        } else {
+          container.innerHTML = '<p class="empty">No recent submissions yet.</p>';
+        }
+      }
+      break;
     }
-  }
-  break;
-}
+
      /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
         /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
     case 'assignments': {
