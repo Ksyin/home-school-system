@@ -359,89 +359,7 @@ async function loadStudentAssignments(studentUid) {
   return assignments;
 }
 
-/* =========================
-   UPDATED: Tutor Assignments – supports classroom targeting
-========================= */
-async function bootTutorAssignmentsPage(bundle) {
-  const { user, profile } = bundle;
-  const pageContent = document.getElementById('page-content');
-  if (!pageContent) return;
 
-  const classrooms = await loadClassrooms(user.uid);
-  const assignmentsSnap = await getDocs(query(collection(db, 'assignments'), where('tutorId', '==', user.uid)));
-
-  let classroomOptions = classrooms.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  if (classroomOptions) classroomOptions = `<option value="">All students</option>` + classroomOptions;
-
-  pageContent.innerHTML = `
-    <section class="card panel">
-      <h3>Create Assignment (visible to students in selected classroom)</h3>
-      <form id="assignmentForm" class="stack-form">
-        <div class="form-row"><label>Title *</label><input name="title" required></div>
-        <div class="form-row"><label>Subject</label><input name="subject"></div>
-        <div class="form-row">
-          <label>Target Classroom</label>
-          <select name="classroomId">${classroomOptions}</select>
-        </div>
-        <div class="form-row"><label>Description</label><textarea name="description" rows="4"></textarea></div>
-        <button type="submit" class="btn primary">Create Assignment</button>
-        <span id="assignMsg"></span>
-      </form>
-    </section>
-
-    <section class="card panel" style="margin-top:24px">
-      <h3>Your Assignments (${assignmentsSnap.size})</h3>
-      <div id="assignmentList"></div>
-    </section>
-  `;
-
-  const list = document.getElementById('assignmentList');
-  if (assignmentsSnap.empty) {
-    list.innerHTML = '<p class="empty">No assignments yet.</p>';
-  } else {
-    assignmentsSnap.forEach(docSnap => {
-      const d = docSnap.data();
-      list.innerHTML += `
-        <div class="list-item flex between">
-          <div><strong>${escapeHtml(d.title)}</strong><br><small>${escapeHtml(d.subject || '')} ${d.classroomId ? '• Classroom' : ''}</small></div>
-          <button class="btn danger small" data-id="${docSnap.id}">Delete</button>
-        </div>
-      `;
-    });
-  }
-
-  document.getElementById('assignmentForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const msg = document.getElementById('assignMsg');
-    const classroomId = f.classroomId.value || null;
-
-    try {
-      await setDoc(doc(collection(db, 'assignments')), {
-        tutorId: user.uid,
-        tutorName: profile?.full_name || user.email,
-        title: f.title.value.trim(),
-        subject: f.subject.value.trim(),
-        description: f.description.value.trim(),
-        classroomId,
-        targetType: classroomId ? 'classroom' : 'all_students',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      msg.innerHTML = '✅ Assignment created! Students in the classroom will see it immediately.';
-      setTimeout(() => location.reload(), 1500);
-    } catch (err) {
-      msg.textContent = 'Error: ' + err.message;
-    }
-  });
-
-  list.addEventListener('click', async (e) => {
-    if (e.target.dataset.id && confirm('Delete assignment?')) {
-      await deleteDoc(doc(db, 'assignments', e.target.dataset.id));
-      location.reload();
-    }
-  });
-}
 
 /* =========================
    NEW: Modern Tutor Dashboard (Coursera-style)
@@ -3029,21 +2947,8 @@ else if (pageKey === 'portfolios' && pageRole === 'tutor') {
 } 
 
 // General
-// General
 else if (pageKey === 'dashboard') {
-  const bundle = await requireAuth();
-  if (!bundle) return;
-
-  if (bundle.profile?.role === 'student') {
-    await ensureStudentMirror(bundle.user, bundle.profile);
-    await refreshStudentDashboard(bundle);
-  } else {
-    await bootModernTutorDashboard(bundle);   // ← Modern dashboard
-  }
-} 
-else if (pageKey === 'assignments' && pageRole === 'tutor') {
-  const bundle = await requireAuth();
-  if (bundle) await bootTutorAssignmentsPage(bundle);
+  bootDashboard();
 } 
 else if (pageKey === 'reports') {
   bootReportsPage();
@@ -3051,6 +2956,7 @@ else if (pageKey === 'reports') {
 else {
   bootDefaultPage();
 }
+
 /* =========================
    EXTENDED MODERN PAGES (optional overrides)
 ========================= */
@@ -3065,7 +2971,7 @@ async function loadExtendedPages(user, profile) {
   if (!pageContent) return;
 
   switch (pageKey) {
-    /* ================= MODERN DASHBOARD ================= */
+    /* ================= DASHBOARD ================= */
     case 'dashboard': {
       const students = await loadAllStudents();
       const assignmentsSnap = await getDocs(
@@ -3074,15 +2980,14 @@ async function loadExtendedPages(user, profile) {
       const submissionsSnap = await getDocs(
         query(collection(db, 'submissions'), where('tutorId', '==', user.uid))
       );
-      const classrooms = await loadClassrooms(user.uid);
 
       pageContent.innerHTML = `
-        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
-          <div class="card stat primary">
-            <h3>${students.length}</h3>
-            <p>Total Learners</p>
-          </div>
+        <div class="grid cols-3 gap-4" style="margin-bottom:24px;">
           <div class="card stat success">
+            <h3>${students.length}</h3>
+            <p>Total Students</p>
+          </div>
+          <div class="card stat primary">
             <h3>${assignmentsSnap.size}</h3>
             <p>Assignments Created</p>
           </div>
@@ -3090,26 +2995,11 @@ async function loadExtendedPages(user, profile) {
             <h3>${submissionsSnap.size}</h3>
             <p>Total Submissions</p>
           </div>
-          <div class="card stat">
-            <h3>${classrooms.length}</h3>
-            <p>Classrooms</p>
-          </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px;">
-          <div class="card panel">
-            <h3>Recent Activity (last 10 submissions)</h3>
-            <div id="recentActivity" class="stack gap-3"></div>
-          </div>
-          <div class="card panel">
-            <h3>Quick Teaching Actions</h3>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-              <button onclick="location.href='/tutor/assignments.html'" class="btn">📝 New Assignment</button>
-              <button onclick="location.href='/tutor/lesson-plans.html'" class="btn">📅 New Lesson Plan</button>
-              <button onclick="location.href='/tutor/classrooms.html'" class="btn">🏫 Manage Classrooms</button>
-              <button onclick="location.href='/tutor/learners.html'" class="btn">👦 Assign Students to Classrooms</button>
-            </div>
-          </div>
+        <div class="card panel">
+          <h3>Recent Activity (last 10 submissions)</h3>
+          <div id="recentActivity" class="stack gap-3"></div>
         </div>
       `;
 
@@ -3136,30 +3026,20 @@ async function loadExtendedPages(user, profile) {
       break;
     }
 
-    /* ================= UPDATED ASSIGNMENTS (with classroom targeting) ================= */
+    /* ================= ASSIGNMENTS (tutor only for now) ================= */
     case 'assignments': {
       if (pageRole !== 'tutor') {
         pageContent.innerHTML = '<div class="card panel"><p>This page is only available for tutors.</p></div>';
         break;
       }
 
-      const classrooms = await loadClassrooms(user.uid);
       const snap = await getDocs(
         query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
       );
 
-      // Classroom options for targeting
-      let classroomOptions = classrooms.map(c => 
-        `<option value="${c.id}">${escapeHtml(c.name)}</option>`
-      ).join('');
-      if (classroomOptions) {
-        classroomOptions = `<option value="">All Students (or select classroom below)</option>` + classroomOptions;
-      }
-
       pageContent.innerHTML = `
         <section class="card panel">
           <h3>Create New Assignment</h3>
-          <p>Select a classroom so students assigned to it see the assignment automatically.</p>
           <form id="assignmentForm" class="stack-form">
             <div class="form-row">
               <label>Title</label>
@@ -3168,10 +3048,6 @@ async function loadExtendedPages(user, profile) {
             <div class="form-row">
               <label>Subject</label>
               <input name="subject" placeholder="Mathematics">
-            </div>
-            <div class="form-row">
-              <label>Target Classroom (Key Relationship Link)</label>
-              <select name="classroomId">${classroomOptions}</select>
             </div>
             <div class="form-row">
               <label>Description / Instructions</label>
@@ -3185,7 +3061,7 @@ async function loadExtendedPages(user, profile) {
         </section>
 
         <section class="card panel" style="margin-top:24px;">
-          <h3>Your Assignments (${snap.size}) — Tutor sees everything</h3>
+          <h3>Your Assignments (${snap.size})</h3>
           <div id="assignmentList" class="stack gap-3"></div>
         </section>
       `;
@@ -3200,7 +3076,7 @@ async function loadExtendedPages(user, profile) {
             <div class="list-item flex between">
               <div>
                 <strong>${escapeHtml(d.title || 'Untitled')}</strong>
-                <div><small>${escapeHtml(d.subject || '—')} ${d.classroomId ? '• Classroom targeted' : ''}</small></div>
+                <div><small>${escapeHtml(d.subject || '—')}</small></div>
               </div>
               <div>
                 <button class="btn danger small" data-id="${docSnap.id}">Delete</button>
@@ -3214,7 +3090,6 @@ async function loadExtendedPages(user, profile) {
         e.preventDefault();
         const f = e.target;
         const msg = document.getElementById('assignMsg');
-        const classroomId = f.classroomId.value || null;
 
         try {
           await setDoc(doc(collection(db, 'assignments')), {
@@ -3223,14 +3098,12 @@ async function loadExtendedPages(user, profile) {
             title: f.title.value.trim(),
             subject: f.subject.value.trim(),
             description: f.description.value.trim(),
-            classroomId: classroomId,
-            targetType: classroomId ? 'classroom' : 'all_students',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           });
-          msg.textContent = '✅ Assignment created! Students in the selected classroom will see it immediately.';
+          msg.textContent = 'Assignment created!';
           msg.className = 'success';
-          setTimeout(() => location.reload(), 1500);
+          setTimeout(() => location.reload(), 1200);
         } catch (err) {
           msg.textContent = 'Error: ' + err.message;
           msg.className = 'danger';
