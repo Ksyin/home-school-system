@@ -198,9 +198,8 @@ async function getUserProfile(uid) {
 }
 
 // ============================================
-// AUTHENTICATION & SHELL SETUP
+// UPDATED AUTH & SHELL SETUP
 // ============================================
-
 async function requireAuth() {
   return new Promise((resolve) => {
     onAuthStateChanged(auth, async (user) => {
@@ -215,6 +214,7 @@ async function requireAuth() {
         return;
       }
 
+      // Role Protection
       if (pageRole && profile.role !== pageRole) {
         location.href = '/unauthorized.html';
         return;
@@ -226,12 +226,13 @@ async function requireAuth() {
         return;
       }
 
+      // Inject Sidebar and Topbar into the Shell
       shell.innerHTML = `
         ${sidebar({ ...profile, email: user.email })}
         <main class="content">
           ${uiHeader({ ...profile, email: user.email })}
           <div id="page-content"></div>
-          <footer class="page-foot">HomeSchool student system</footer>
+          <footer class="page-foot">HomeSchool System</footer>
         </main>
       `;
 
@@ -247,6 +248,40 @@ async function requireAuth() {
     });
   });
 }
+
+// ============================================
+// REVISED ROUTER
+// ============================================
+const routeMap = {
+  student: {
+    'dashboard': bootStudentDashboard,
+    'assignments': bootStudentAssignmentsPage,
+    'assessments': bootStudentAssessmentsPage,
+    'portfolio': bootStudentPortfolioPage,
+    'resources': bootStudentResourcesPage,
+    'messages': bootStudentMessagesPage,
+    'reports': bootStudentReportsPage,
+    'activities': bootStudentActivitiesPage
+  },
+  tutor: {
+    'dashboard': bootTutorDashboard,
+    'assignments': bootTutorAssignmentsPage,
+    'assessments': bootTutorAssessmentsPage,
+    'learners': bootLearnersPage,
+    'classrooms': bootClassroomsPage,
+    'resources': bootResourcesPage
+  }
+};
+
+async function initRouter() {
+  const { user, profile } = await requireAuth(); // Wait for auth and shell injection
+  
+  if (pageRole && pageKey && routeMap[pageRole] && routeMap[pageRole][pageKey]) {
+    await routeMap[pageRole][pageKey](user, profile); // Pass user/profile to boot functions
+  }
+}
+
+initRouter();
 
 async function uploadFile(file, folder = 'uploads') {
   if (!file) {
@@ -1846,6 +1881,37 @@ async function bootReportsPage() {
   });
 }
 
+
+async function bootTutorAssignmentsPage() {
+  const container = document.getElementById('main-content'); // Ensure this ID exists in your HTML
+  container.innerHTML = '<h2>Loading Assignments...</h2>';
+
+  try {
+    const assignments = await getAssignments(); // Using the function from your snippet
+    
+    if (assignments.length === 0) {
+      container.innerHTML = '<h2>No assignments found.</h2>';
+      return;
+    }
+
+    let html = '<h1>Assignments</h1><div class="grid">';
+    assignments.forEach(asn => {
+      html += `
+        <div class="card">
+          <h3>${asn.title || 'Untitled'}</h3>
+          <p>Status: ${asn.status}</p>
+        </div>`;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+  } catch (error) {
+    console.error("Failed to load assignments:", error);
+    container.innerHTML = '<p style="color: red;">Error loading data.</p>';
+  }
+}
+
+
 async function bootDefaultPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
@@ -1893,15 +1959,7 @@ const routeMap = {
   }
 };
 
-async function initRouter() {
-  if (pageRole && pageKey && routeMap[pageRole] && routeMap[pageRole][pageKey]) {
-    await routeMap[pageRole][pageKey]();
-  } else {
-    await bootDefaultPage();
-  }
-}
 
-initRouter();
 
 // ============================================
 // GLOBALS
