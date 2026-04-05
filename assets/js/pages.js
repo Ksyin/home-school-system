@@ -1,6 +1,6 @@
 // ============================================
 // COMPLETE PAGES.JS - FULL VERSION
-// Preserves ALL original functionality with fixes
+// Preserves ALL original functionality with fixes integrated
 // Map-based routing implemented
 // ============================================
 
@@ -356,7 +356,7 @@ async function ensureStudentMirror(user, profile) {
 }
 
 // ============================================
-// LESSON PLANS
+// LESSON PLANS & DATA LOADERS
 // ============================================
 
 function normalizeLessonPlan(docSnap) {
@@ -1402,7 +1402,7 @@ async function bootSubmitWorkPage() {
 }
 
 // ============================================
-// BOOT FUNCTIONS - TUTOR
+// BOOT FUNCTIONS - TUTOR (FIXES INTEGRATED HERE)
 // ============================================
 
 async function bootTutorDashboard() {
@@ -1425,7 +1425,12 @@ async function bootTutorAssignmentsPage() {
   if (!bundle || bundle.profile?.role !== 'tutor') return;
   
   const { user, profile } = bundle;
-  const [assignments, classrooms, students] = await Promise.all([loadTutorAssignments(user.uid), loadClassrooms(user.uid), loadAllStudents()]);
+  const [assignments, classrooms, students] = await Promise.all([
+    loadTutorAssignments(user.uid), 
+    loadClassrooms(user.uid), 
+    loadAllStudents()
+  ]);
+  
   document.getElementById('page-content').innerHTML = renderTutorAssignmentsPage(assignments, classrooms, students);
   
   const targetSelect = document.getElementById('assignTarget');
@@ -1516,7 +1521,11 @@ async function bootTutorAssessmentsPage() {
   if (!bundle || bundle.profile?.role !== 'tutor') return;
   
   const { user, profile } = bundle;
-  const [assessments, students] = await Promise.all([loadTutorAssessments(user.uid), loadAllStudents()]);
+  const [assessments, students] = await Promise.all([
+    loadTutorAssessments(user.uid), 
+    loadAllStudents()
+  ]);
+  
   document.getElementById('page-content').innerHTML = renderTutorAssessmentsPage(assessments, students);
   
   const form = document.getElementById('assessmentForm');
@@ -1638,6 +1647,7 @@ async function bootLearnersPage() {
   const { user } = bundle;
   const students = await loadAllStudents();
   const notes = await loadLearnerNotes(user.uid);
+  
   document.getElementById('page-content').innerHTML = renderLearnersPage(students, notes);
   
   const form = document.getElementById('learnerNoteForm');
