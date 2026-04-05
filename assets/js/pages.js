@@ -2000,121 +2000,494 @@ function renderParentGrowthPage(children, growthNotesByChild) {
 
 
 
-
-
-// ============================================
-// PARENT BOOT FUNCTIONS - ADD THESE TO pages.js
-// ============================================
-
-async function bootParentDashboard() {
+async function bootParentSuperDashboard() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
+  const { user, profile } = bundle;
   
-  // Load all data for all children in parallel
-  const [assignmentsByChild, assessmentsByChild, attendanceByChild, alerts] = await Promise.all([
-    loadAllChildrenAssignments(children),
-    loadAllChildrenAssessments(children),
-    loadAllChildrenAttendance(children),
-    loadParentAlerts(user.uid)
+  // Load ALL data from the entire system
+  const [allStudents, allTutors, allAssignments, allAssessments, allSubmissions, allAttendance, allResources, allPortfolios, allReports, allMessages] = await Promise.all([
+    loadAllUsersByRole('student'),
+    loadAllUsersByRole('tutor'),
+    loadAllAssignments(),
+    loadAllAssessments(),
+    loadAllSubmissions(),
+    loadAllAttendance(),
+    loadAllResources(),
+    loadAllPortfolios(),
+    loadAllReports(),
+    loadAllMessages()
   ]);
   
-  document.getElementById('page-content').innerHTML = renderParentDashboard(
-    children, assignmentsByChild, assessmentsByChild, attendanceByChild, alerts
-  );
+  // Calculate stats
+  const totalStudents = allStudents.length;
+  const totalTutors = allTutors.length;
+  const totalAssignments = allAssignments.length;
+  const totalAssessments = allAssessments.length;
+  const pendingAssignments = allAssignments.filter(a => a.status !== 'Submitted' && a.status !== 'Completed').length;
+  const pendingAssessments = allAssessments.filter(a => a.status !== 'Graded').length;
+  
+  // Calculate subject performance across all students
+  const subjectPerformance = {};
+  allAssessments.forEach(a => {
+    if (a.subject && a.score && a.maxScore) {
+      if (!subjectPerformance[a.subject]) {
+        subjectPerformance[a.subject] = { total: 0, count: 0 };
+      }
+      subjectPerformance[a.subject].total += (a.score / a.maxScore) * 100;
+      subjectPerformance[a.subject].count++;
+    }
+  });
+  
+  const subjectsHtml = Object.entries(subjectPerformance).map(([subject, data]) => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between">
+        <strong>${escapeHtml(subject)}</strong>
+        <span>${Math.round(data.total / data.count)}%</span>
+      </div>
+      <div class="progress-bar"><div style="width:${data.total / data.count}%;background:#3498db;height:8px;border-radius:4px"></div></div>
+    </div>
+  `).join('');
+  
+  // Recent activity feed
+  const recentActivities = [
+    ...allAssignments.slice(0, 5).map(a => ({ type: 'Assignment', title: a.title, date: a.createdAt, studentName: a.studentName })),
+    ...allAssessments.slice(0, 5).map(a => ({ type: 'Assessment', title: a.title, date: a.createdAt, studentName: a.studentName })),
+    ...allSubmissions.slice(0, 5).map(s => ({ type: 'Submission', title: s.assignmentTitle, date: s.submittedAt, studentName: s.studentName }))
+  ].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0)).slice(0, 10);
+  
+  const activityHtml = recentActivities.map(a => `
+    <div style="padding:10px;border-bottom:1px solid #eee;">
+      <span class="badge">${escapeHtml(a.type)}</span>
+      <strong>${escapeHtml(a.title)}</strong> - ${escapeHtml(a.studentName || '—')}
+      <small style="float:right">${fmtDate(a.date)}</small>
+    </div>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <style>
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 24px; }
+      .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+      .stat-number { font-size: 32px; font-weight: bold; margin: 0; color: #2c3e50; }
+      .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+      @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
+      .progress-bar { background: #ecf0f1; border-radius: 4px; overflow: hidden; }
+    </style>
+    
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-number">${totalStudents}</div><p>Students</p></div>
+      <div class="stat-card"><div class="stat-number">${totalTutors}</div><p>Tutors</p></div>
+      <div class="stat-card"><div class="stat-number">${totalAssignments}</div><p>Assignments</p></div>
+      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingAssignments}</div><p>Pending</p></div>
+      <div class="stat-card"><div class="stat-number">${totalAssessments}</div><p>Assessments</p></div>
+      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingAssessments}</div><p>Un-graded</p></div>
+    </div>
+    
+    <div class="dashboard-grid">
+      <div class="card panel">
+        <h3>📊 System-Wide Performance</h3>
+        ${subjectsHtml || '<p class="empty">No assessment data yet</p>'}
+      </div>
+      <div class="card panel">
+        <h3>🔄 Recent Activity Feed</h3>
+        ${activityHtml || '<p class="empty">No recent activity</p>'}
+      </div>
+    </div>
+    
+    <div class="card panel" style="margin-top:24px;">
+      <h3>👥 All Students</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+        ${allStudents.map(s => `
+          <div style="padding:12px;background:#f8f9fa;border-radius:8px;">
+            <strong>${escapeHtml(s.full_name || s.name || s.email)}</strong>
+            <br><small>Classroom: ${escapeHtml(s.classroomName || 'Not assigned')}</small>
+            <br><small>Email: ${escapeHtml(s.email || '—')}</small>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    
+    <div class="card panel" style="margin-top:24px;">
+      <h3>👨‍🏫 All Tutors</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+        ${allTutors.map(t => `
+          <div style="padding:12px;background:#f8f9fa;border-radius:8px;">
+            <strong>${escapeHtml(t.full_name || t.name || t.email)}</strong>
+            <br><small>Email: ${escapeHtml(t.email || '—')}</small>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
-async function bootParentAssignmentsPage() {
+async function bootParentAllStudentsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const [assignmentsByChild, submissionsByChild] = await Promise.all([
-    loadAllChildrenAssignments(children),
-    loadAllChildrenSubmissions(children)
+  const allStudents = await loadAllUsersByRole('student');
+  const allTutors = await loadAllUsersByRole('tutor');
+  const allClassrooms = await loadAllClassrooms();
+  const allNotes = await loadAllStudentNotes();
+  
+  // Group notes by student
+  const notesByStudent = {};
+  allNotes.forEach(note => {
+    if (!notesByStudent[note.studentId]) notesByStudent[note.studentId] = [];
+    notesByStudent[note.studentId].push(note);
+  });
+  
+  const studentsHtml = allStudents.map(student => {
+    const studentNotes = notesByStudent[student.id] || [];
+    const latestNote = studentNotes[0]?.comment || 'No comments yet';
+    const classroom = allClassrooms.find(c => c.id === student.classroomId);
+    
+    return `
+      <div class="student-card" style="background:white;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h3 style="margin:0">${escapeHtml(student.full_name || student.name || student.email)}</h3>
+            <p style="margin:4px 0;color:#666;">${escapeHtml(student.email || '—')}</p>
+          </div>
+          <div>
+            <span class="badge ${classroom ? 'success' : 'warn'}">${escapeHtml(classroom?.name || student.classroomName || 'Not assigned')}</span>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:20px;flex-wrap:wrap;">
+          <span>📚 Grade: ${escapeHtml(student.grade_level || '—')}</span>
+          <span>📝 Comments: ${studentNotes.length}</span>
+        </div>
+        <div style="margin-top:12px;background:#f8f9fa;padding:12px;border-radius:8px;">
+          <strong>Latest comment:</strong><br>${escapeHtml(latestNote)}
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn small ghost view-student-details" data-id="${student.id}" data-name="${escapeHtml(student.full_name || student.name)}">View Full Details →</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card"><div class="stat-number">${allStudents.length}</div><p>Total Students</p></div>
+      <div class="stat-card"><div class="stat-number">${allTutors.length}</div><p>Total Tutors</p></div>
+      <div class="stat-card"><div class="stat-number">${allClassrooms.length}</div><p>Classrooms</p></div>
+      <div class="stat-card"><div class="stat-number">${allNotes.length}</div><p>Total Comments</p></div>
+    </div>
+    <div class="card panel">
+      <h3>👥 All Students in System</h3>
+      <p>Complete list of all registered students across all classrooms and tutors.</p>
+      ${studentsHtml || '<p class="empty">No students registered yet</p>'}
+    </div>
+  `;
+}
+
+async function bootParentAllAssignmentsPage() {
+  const bundle = await requireAuth();
+  if (!bundle || bundle.profile?.role !== 'parent') return;
+  
+  const [allAssignments, allSubmissions, allStudents] = await Promise.all([
+    loadAllAssignments(),
+    loadAllSubmissions(),
+    loadAllUsersByRole('student')
   ]);
   
-  document.getElementById('page-content').innerHTML = renderParentAssignmentsPage(
-    children, assignmentsByChild, submissionsByChild
-  );
+  // Map submissions by assignmentId
+  const submissionsByAssignment = {};
+  allSubmissions.forEach(sub => {
+    if (!submissionsByAssignment[sub.assignmentId]) submissionsByAssignment[sub.assignmentId] = [];
+    submissionsByAssignment[sub.assignmentId].push(sub);
+  });
+  
+  // Map student names
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  const rows = allAssignments.map(a => {
+    const submissions = submissionsByAssignment[a.id] || [];
+    const submittedCount = submissions.length;
+    const studentName = a.studentName || studentMap[a.studentId] || (a.targetType === 'all_students' ? 'All Students' : a.classroomName || '—');
+    
+    return `
+      <div class="card panel" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+          <div>
+            <h4>${escapeHtml(a.title)}</h4>
+            <p><strong>Target:</strong> ${escapeHtml(studentName)}</p>
+          </div>
+          <div>
+            <span class="badge ${a.status === 'Active' ? 'success' : 'warn'}">${escapeHtml(a.status || 'Active')}</span>
+            <small style="display:block;">Due: ${fmtDate(a.dueDate)}</small>
+          </div>
+        </div>
+        <p>${escapeHtml(a.description || 'No description')}</p>
+        <div style="margin-top:12px;background:#f8f9fa;padding:12px;border-radius:8px;">
+          <strong>📋 Submissions (${submittedCount}):</strong>
+          ${submissions.length ? submissions.map(s => `
+            <div style="padding:8px;border-bottom:1px solid #eee;">
+              ${escapeHtml(s.studentName)} - ${fmtDate(s.submittedAt)}
+              ${s.fileUrl ? `<a href="${s.fileUrl}" target="_blank" class="btn small ghost">View File</a>` : ''}
+            </div>
+          `).join('') : '<p class="empty" style="margin:8px 0 0;">No submissions yet</p>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card"><div class="stat-number">${allAssignments.length}</div><p>Total Assignments</p></div>
+      <div class="stat-card"><div class="stat-number">${allSubmissions.length}</div><p>Total Submissions</p></div>
+      <div class="stat-card"><div class="stat-number">${allAssignments.filter(a => a.status !== 'Submitted').length}</div><p>Pending</p></div>
+    </div>
+    <div class="card panel">
+      <h3>📝 All Assignments in System</h3>
+      ${rows || '<p class="empty">No assignments created yet</p>'}
+    </div>
+  `;
 }
 
-async function bootParentAssessmentsPage() {
+async function bootParentAllAssessmentsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const assessmentsByChild = await loadAllChildrenAssessments(children);
+  const [allAssessments, allStudents] = await Promise.all([
+    loadAllAssessments(),
+    loadAllUsersByRole('student')
+  ]);
   
-  document.getElementById('page-content').innerHTML = renderParentAssessmentsPage(
-    children, assessmentsByChild
-  );
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  const rows = allAssessments.map(a => `
+    <div class="card panel" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h4>${escapeHtml(a.title)}</h4>
+          <p><strong>Student:</strong> ${escapeHtml(a.studentName || studentMap[a.studentId] || '—')}</p>
+          <p><strong>Subject:</strong> ${escapeHtml(a.subject || '—')}</p>
+        </div>
+        <div style="text-align:right;">
+          <span class="badge ${a.status === 'Graded' ? 'success' : 'warn'}">${escapeHtml(a.status || 'Pending')}</span>
+          ${a.score ? `<div><strong>Score:</strong> ${a.score}/${a.maxScore || '—'} (${Math.round((a.score/(a.maxScore||1))*100)}%)</div>` : ''}
+          <small>${fmtDate(a.createdAt)}</small>
+        </div>
+      </div>
+      ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ''}
+      ${a.feedback ? `<div style="margin-top:12px;background:#f0f7ff;padding:12px;border-radius:8px;"><strong>📝 Feedback:</strong> ${escapeHtml(a.feedback)}</div>` : ''}
+    </div>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card"><div class="stat-number">${allAssessments.length}</div><p>Total Assessments</p></div>
+      <div class="stat-card"><div class="stat-number">${allAssessments.filter(a => a.status === 'Graded').length}</div><p>Graded</p></div>
+      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${allAssessments.filter(a => a.status !== 'Graded').length}</div><p>Pending Grading</p></div>
+    </div>
+    <div class="card panel">
+      <h3>📊 All Assessments in System</h3>
+      ${rows || '<p class="empty">No assessments created yet</p>'}
+    </div>
+  `;
 }
 
-async function bootParentAttendancePage() {
+async function bootParentAllAttendancePage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const attendanceByChild = await loadAllChildrenAttendance(children);
+  const [allAttendance, allStudents] = await Promise.all([
+    loadAllAttendance(),
+    loadAllUsersByRole('student')
+  ]);
   
-  document.getElementById('page-content').innerHTML = renderParentAttendancePage(
-    children, attendanceByChild
-  );
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  // Group by student for summary
+  const summaryByStudent = {};
+  allAttendance.forEach(record => {
+    const studentId = record.studentId;
+    if (!summaryByStudent[studentId]) {
+      summaryByStudent[studentId] = { present: 0, absent: 0, late: 0, total: 0 };
+    }
+    const status = sentenceCase(record.status);
+    if (status === 'Present') summaryByStudent[studentId].present++;
+    else if (status === 'Absent') summaryByStudent[studentId].absent++;
+    else if (status === 'Late') summaryByStudent[studentId].late++;
+    summaryByStudent[studentId].total++;
+  });
+  
+  const summaryRows = Object.entries(summaryByStudent).map(([studentId, stats]) => `
+    <tr>
+      <td>${escapeHtml(studentMap[studentId] || studentId)}</td>
+      <td>${stats.present}</td>
+      <td>${stats.absent}</td>
+      <td>${stats.late}</td>
+      <td>${stats.total}</td>
+      <td>${stats.total ? Math.round((stats.present / stats.total) * 100) : 0}%</td>
+    </tr>
+  `).join('');
+  
+  const detailRows = allAttendance.sort((a,b) => {
+    const aDate = toMillis(a.recordDate || a.date || a.attendanceDate);
+    const bDate = toMillis(b.recordDate || b.date || b.attendanceDate);
+    return bDate - aDate;
+  }).map(record => `
+    <tr>
+      <td>${escapeHtml(studentMap[record.studentId] || record.studentId)}</td>
+      <td>${fmtDate(record.recordDate || record.date || record.attendanceDate)}</td>
+      <td>${statusBadge(sentenceCase(record.status))}</td>
+      <td>${escapeHtml(record.classroomName || record.classroom || '—')}</td>
+      <td>${escapeHtml(record.tutorName || record.recordedBy || '—')}</td>
+    </tr>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="card panel">
+      <h3>📅 Attendance Summary by Student</h3>
+      ${simpleTable(['Student', 'Present', 'Absent', 'Late', 'Total Days', 'Rate'], summaryRows)}
+    </div>
+    <div class="card panel" style="margin-top:24px;">
+      <h3>📋 Detailed Attendance Records</h3>
+      ${simpleTable(['Student', 'Date', 'Status', 'Classroom', 'Recorded By'], detailRows)}
+    </div>
+  `;
 }
 
-async function bootParentReportsPage() {
+async function bootParentAllResourcesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const reportsByChild = await loadAllChildrenReports(children);
+  const [allResources, allStudents, allTutors] = await Promise.all([
+    loadAllResources(),
+    loadAllUsersByRole('student'),
+    loadAllUsersByRole('tutor')
+  ]);
   
-  document.getElementById('page-content').innerHTML = renderParentReportsPage(
-    children, reportsByChild
-  );
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  const tutorMap = {};
+  allTutors.forEach(t => { tutorMap[t.id] = t.full_name || t.name || t.email; });
+  
+  const resourceCards = allResources.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(r => `
+    <div class="card panel" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h4>${escapeHtml(r.title)}</h4>
+          <p><strong>Shared by:</strong> ${escapeHtml(tutorMap[r.tutorId] || r.tutorName || 'Tutor')}</p>
+        </div>
+        <small>${fmtDate(r.createdAt)}</small>
+      </div>
+      ${r.note ? `<p>${escapeHtml(r.note)}</p>` : ''}
+      <div style="margin-top:8px;">
+        <span class="badge">${escapeHtml(r.type || 'Resource')}</span>
+        ${r.classroomName ? `<span class="badge">📚 ${escapeHtml(r.classroomName)}</span>` : ''}
+        ${r.studentName ? `<span class="badge">👤 ${escapeHtml(r.studentName)}</span>` : ''}
+      </div>
+      ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
+    </div>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card"><div class="stat-number">${allResources.length}</div><p>Total Resources</p></div>
+      <div class="stat-card"><div class="stat-number">${allResources.filter(r => r.fileUrl).length}</div><p>With Attachments</p></div>
+    </div>
+    <div class="card panel">
+      <h3>📚 All Learning Resources</h3>
+      ${resourceCards || '<p class="empty">No resources uploaded yet</p>'}
+    </div>
+  `;
 }
 
-async function bootParentResourcesPage() {
+async function bootParentAllMessagesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const resourcesByChild = await loadAllChildrenResources(children);
+  const [allMessages, allStudents, allTutors] = await Promise.all([
+    loadAllMessages(),
+    loadAllUsersByRole('student'),
+    loadAllUsersByRole('tutor')
+  ]);
   
-  document.getElementById('page-content').innerHTML = renderParentResourcesPage(
-    children, resourcesByChild
-  );
-}
-
-async function bootParentMessagesPage() {
-  const bundle = await requireAuth();
-  if (!bundle || bundle.profile?.role !== 'parent') return;
+  const userMap = {};
+  allStudents.forEach(s => { userMap[s.id] = { name: s.full_name || s.name || s.email, role: 'Student' }; });
+  allTutors.forEach(t => { userMap[t.id] = { name: t.full_name || t.name || t.email, role: 'Tutor' }; });
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const messages = await loadParentMessages(user.uid);
+  const messagesByConversation = {};
+  allMessages.forEach(msg => {
+    const participants = [msg.fromId, msg.toId].sort().join('-');
+    if (!messagesByConversation[participants]) messagesByConversation[participants] = [];
+    messagesByConversation[participants].push(msg);
+  });
   
-  document.getElementById('page-content').innerHTML = renderParentMessagesPage(children, messages);
+  const conversationHtml = Object.values(messagesByConversation).map(conversation => {
+    const sorted = conversation.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+    const first = sorted[0];
+    const fromName = userMap[first.fromId]?.name || first.fromName || first.fromId;
+    const toName = userMap[first.toId]?.name || first.toName || first.toId;
+    
+    return `
+      <div class="card panel" style="margin-bottom:16px;">
+        <div style="border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:8px;">
+          <strong>💬 ${escapeHtml(fromName)} → ${escapeHtml(toName)}</strong>
+          <small style="float:right">${sorted.length} messages</small>
+        </div>
+        ${sorted.slice(-3).map(msg => `
+          <div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+            <div style="display:flex;justify-content:space-between;">
+              <strong>${escapeHtml(msg.subject || 'Message')}</strong>
+              <small>${fmtDate(msg.createdAt)}</small>
+            </div>
+            <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(msg.message || msg.body || '—')}</p>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
   
-  // Setup message form handler
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card"><div class="stat-number">${allMessages.length}</div><p>Total Messages</p></div>
+      <div class="stat-card"><div class="stat-number">${Object.keys(messagesByConversation).length}</div><p>Conversations</p></div>
+    </div>
+    <div class="card panel">
+      <h3>📨 All Conversations</h3>
+      ${conversationHtml || '<p class="empty">No messages yet</p>'}
+    </div>
+    <div class="card panel" style="margin-top:24px;">
+      <h3>✉️ Send New Message</h3>
+      <form id="parentMessageForm" class="stack-form">
+        <div class="form-row">
+          <label>To (User ID or Email)</label>
+          <input type="text" id="messageToId" placeholder="Enter user ID or email" required>
+        </div>
+        <div class="form-row">
+          <label>Subject</label>
+          <input id="messageSubject" type="text" required placeholder="Subject">
+        </div>
+        <div class="form-row">
+          <label>Message</label>
+          <textarea id="messageBody" rows="4" required placeholder="Write your message..."></textarea>
+        </div>
+        <button type="submit" class="btn">Send Message</button>
+        <span id="messageMsg"></span>
+      </form>
+    </div>
+  `;
+  
   const form = document.getElementById('parentMessageForm');
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const recipientId = document.getElementById('messageRecipientId').value;
+      const toId = document.getElementById('messageToId').value;
       const subject = document.getElementById('messageSubject').value;
       const body = document.getElementById('messageBody').value;
       const msgSpan = document.getElementById('messageMsg');
       
-      if (!recipientId || !subject || !body) {
+      if (!toId || !subject || !body) {
         msgSpan.textContent = 'Please fill all fields';
         return;
       }
@@ -2124,10 +2497,9 @@ async function bootParentMessagesPage() {
       try {
         await addDoc(collection(db, 'messages'), {
           fromParent: true,
-          fromId: user.uid,
+          fromId: bundle.user.uid,
           fromName: bundle.profile?.name || bundle.profile?.full_name,
-          toId: recipientId,
-          toName: recipientId === 'tutor' ? 'Tutor' : null,
+          toId: toId,
           subject: subject,
           message: body,
           createdAt: serverTimestamp(),
@@ -2136,7 +2508,7 @@ async function bootParentMessagesPage() {
         
         msgSpan.textContent = '✅ Message sent!';
         form.reset();
-        setTimeout(() => bootParentMessagesPage(), 1500);
+        setTimeout(() => bootParentAllMessagesPage(), 1500);
       } catch (err) {
         msgSpan.textContent = 'Error: ' + err.message;
       }
@@ -2144,144 +2516,238 @@ async function bootParentMessagesPage() {
   }
 }
 
+async function bootParentAllReportsPage() {
+  const bundle = await requireAuth();
+  if (!bundle || bundle.profile?.role !== 'parent') return;
+  
+  const [allReports, allStudents] = await Promise.all([
+    loadAllReports(),
+    loadAllUsersByRole('student')
+  ]);
+  
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  const reportCards = allReports.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(r => `
+    <div class="card panel" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h4>${escapeHtml(studentMap[r.studentId] || r.studentId)} - ${escapeHtml(r.title || 'Progress Report')}</h4>
+        <small>${fmtDate(r.createdAt)}</small>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0;">
+        <div style="background:#e8f5e9;padding:12px;border-radius:8px;">
+          <strong>✅ Strengths</strong>
+          <p>${escapeHtml(r.strengths || '—')}</p>
+        </div>
+        <div style="background:#fff3e0;padding:12px;border-radius:8px;">
+          <strong>⚠️ Areas for Improvement</strong>
+          <p>${escapeHtml(r.lows || r.challenges || '—')}</p>
+        </div>
+      </div>
+      <div style="background:#f0f7ff;padding:12px;border-radius:8px;">
+        <strong>📝 Summary</strong>
+        <p>${escapeHtml(r.summary || r.comment || '—')}</p>
+      </div>
+    </div>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid"><div class="stat-card"><div class="stat-number">${allReports.length}</div><p>Total Reports</p></div></div>
+    <div class="card panel">
+      <h3>📄 All Academic Reports</h3>
+      ${reportCards || '<p class="empty">No reports generated yet</p>'}
+    </div>
+  `;
+}
+
+async function bootParentAllGrowthPage() {
+  const bundle = await requireAuth();
+  if (!bundle || bundle.profile?.role !== 'parent') return;
+  
+  const [allGrowthNotes, allStudents] = await Promise.all([
+    loadAllGrowthNotes(),
+    loadAllUsersByRole('student')
+  ]);
+  
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  const noteCards = allGrowthNotes.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(n => `
+    <div class="card panel" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span class="badge ${n.type === 'Strength' ? 'success' : (n.type === 'Challenge' ? 'danger' : 'warn')}">${escapeHtml(n.type || 'Note')}</span>
+        <small>${escapeHtml(studentMap[n.studentId] || n.studentId)} • ${fmtDate(n.createdAt)}</small>
+      </div>
+      <p style="margin-top:12px;">${escapeHtml(n.note || n.comment || '—')}</p>
+      ${n.milestone ? `<small>🎯 Milestone: ${escapeHtml(n.milestone)}</small>` : ''}
+    </div>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="card panel">
+      <h3>🌱 Growth & Development Notes</h3>
+      <p>Track social-emotional growth, behavioral observations, and developmental milestones across all students.</p>
+      ${noteCards || '<p class="empty">No growth notes recorded yet</p>'}
+    </div>
+  `;
+}
+
+async function bootParentAllPortfolioPage() {
+  const bundle = await requireAuth();
+  if (!bundle || bundle.profile?.role !== 'parent') return;
+  
+  const [allPortfolios, allStudents] = await Promise.all([
+    loadAllPortfolios(),
+    loadAllUsersByRole('student')
+  ]);
+  
+  const studentMap = {};
+  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
+  
+  // Group by student
+  const grouped = {};
+  allPortfolios.forEach(item => {
+    if (!grouped[item.studentId]) grouped[item.studentId] = [];
+    grouped[item.studentId].push(item);
+  });
+  
+  const portfolioHtml = Object.entries(grouped).map(([studentId, items]) => `
+    <section class="card panel" style="margin-bottom:20px;">
+      <h3>🌟 ${escapeHtml(studentMap[studentId] || studentId)}'s Portfolio</h3>
+      ${items.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(item => `
+        <div style="margin-top:12px;padding:12px;background:#f8f9fa;border-radius:12px;">
+          <div style="display:flex;justify-content:space-between;">
+            <span class="badge">${escapeHtml(item.type || 'Entry')}</span>
+            <small>${fmtDate(item.createdAt)}</small>
+          </div>
+          <h4 style="margin:8px 0;">${escapeHtml(item.title || 'Untitled')}</h4>
+          <p>${escapeHtml(item.note || '')}</p>
+          ${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : ''}
+        </div>
+      `).join('')}
+    </section>
+  `).join('');
+  
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid"><div class="stat-card"><div class="stat-number">${allPortfolios.length}</div><p>Total Portfolio Entries</p></div></div>
+    ${portfolioHtml || '<div class="card panel"><p class="empty">No portfolio entries yet</p></div>'}
+  `;
+}
+
 async function bootParentSettingsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
   const { user, profile } = bundle;
-  const children = await loadParentChildren(user.uid);
+  const allStudents = await loadAllUsersByRole('student');
+  const allTutors = await loadAllUsersByRole('tutor');
   
-  document.getElementById('page-content').innerHTML = renderParentSettingsPage(profile, children);
-  
-  // Setup logout button
-  const logoutBtn = document.getElementById('logoutSettingsBtn');
-  if (logoutBtn) {
-    logoutBtn.onclick = async () => {
-      await signOut(auth);
-      location.href = '/login.html';
-    };
-  }
-  
-  // Setup password change
-  const changePwdBtn = document.getElementById('changePasswordBtn');
-  if (changePwdBtn) {
-    changePwdBtn.onclick = async () => {
-      const email = prompt('Enter your email to receive password reset link:');
-      if (email) {
-        await sendPasswordResetEmail(auth, email);
-        alert('Password reset email sent!');
-      }
-    };
-  }
-  
-  // Setup notification preferences
-  const prefsForm = document.getElementById('notificationPrefsForm');
-  if (prefsForm) {
-    prefsForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const prefs = {
-        assignments: document.getElementById('notifyAssignments').checked,
-        assessments: document.getElementById('notifyAssessments').checked,
-        attendance: document.getElementById('notifyAttendance').checked,
-        messages: document.getElementById('notifyMessages').checked,
-        updatedAt: serverTimestamp()
-      };
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div class="card panel">
+        <h3>👤 Profile Information</h3>
+        <div style="padding:16px 0;">
+          <div style="margin-bottom:16px;"><strong>Name:</strong> ${escapeHtml(profile?.name || profile?.full_name || '—')}</div>
+          <div style="margin-bottom:16px;"><strong>Email:</strong> ${escapeHtml(profile?.email || '—')}</div>
+          <div style="margin-bottom:16px;"><strong>Role:</strong> ${escapeHtml(profile?.role || 'Parent')} (Supervisor)</div>
+          <div><strong>Account Created:</strong> ${fmtDate(profile?.createdAt)}</div>
+        </div>
+      </div>
       
-      await updateDoc(doc(db, 'users', user.uid), { notificationPrefs: prefs });
-      document.getElementById('prefMsg').textContent = '✅ Preferences saved!';
-      setTimeout(() => {
-        document.getElementById('prefMsg').textContent = '';
-      }, 2000);
-    });
-  }
-}
-
-async function bootParentGrowthPage() {
-  const bundle = await requireAuth();
-  if (!bundle || bundle.profile?.role !== 'parent') return;
+      <div class="card panel">
+        <h3>📊 System Statistics</h3>
+        <div style="padding:16px 0;">
+          <div style="margin-bottom:12px;"><strong>Total Students:</strong> ${allStudents.length}</div>
+          <div style="margin-bottom:12px;"><strong>Total Tutors:</strong> ${allTutors.length}</div>
+          <div><strong>Access Level:</strong> <span class="badge success">Full System Access</span></div>
+        </div>
+      </div>
+      
+      <div class="card panel">
+        <h3>🔔 Notification Preferences</h3>
+        <form id="notificationPrefsForm">
+          <div style="margin-bottom:12px;"><label><input type="checkbox" id="notifyAll" checked> All system notifications</label></div>
+          <button type="submit" class="btn small">Save Preferences</button>
+          <span id="prefMsg"></span>
+        </form>
+      </div>
+      
+      <div class="card panel">
+        <h3>🔒 Security</h3>
+        <button class="btn ghost" id="changePasswordBtn">Change Password</button>
+        <button class="btn danger" id="logoutSettingsBtn" style="margin-left:12px;">Logout</button>
+      </div>
+    </div>
+  `;
   
-  const { user } = bundle;
-  const children = await loadParentChildren(user.uid);
-  const growthNotesByChild = await loadAllChildrenGrowthNotes(children);
+  const logoutBtn = document.getElementById('logoutSettingsBtn');
+  if (logoutBtn) logoutBtn.onclick = async () => { await signOut(auth); location.href = '/login.html'; };
   
-  document.getElementById('page-content').innerHTML = renderParentGrowthPage(children, growthNotesByChild);
+  const changePwdBtn = document.getElementById('changePasswordBtn');
+  if (changePwdBtn) changePwdBtn.onclick = async () => {
+    const email = prompt('Enter your email to receive password reset link:');
+    if (email) { await sendPasswordResetEmail(auth, email); alert('Password reset email sent!'); }
+  };
 }
 
 // ============================================
-// HELPER FUNCTIONS FOR LOADING ALL CHILDREN DATA
+// LOADER FUNCTIONS - FETCH ALL DATA FROM FIRESTORE
 // ============================================
 
-async function loadAllChildrenAssignments(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    result[child.id] = await loadStudentAssignments(child.id);
-  }));
-  return result;
-}
-
-async function loadAllChildrenSubmissions(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    result[child.id] = await loadStudentSubmissions(child.id);
-  }));
-  return result;
-}
-
-async function loadAllChildrenAssessments(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    result[child.id] = await loadStudentAssessments(child.id);
-  }));
-  return result;
-}
-
-async function loadAllChildrenAttendance(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    result[child.id] = await loadStudentAttendance(child.id);
-  }));
-  return result;
-}
-
-async function loadAllChildrenReports(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    result[child.id] = await loadStudentReports(child.id);
-  }));
-  return result;
-}
-
-async function loadAllChildrenResources(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    result[child.id] = await loadStudentResources(child.id);
-  }));
-  return result;
-}
-
-async function loadAllChildrenGrowthNotes(children) {
-  const result = {};
-  await Promise.all(children.map(async (child) => {
-    const snap = await getDocs(query(collection(db, 'growth-notes'), where('studentId', '==', child.id)));
-    result[child.id] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  }));
-  return result;
-}
-
-async function loadParentAlerts(parentUid) {
-  const snap = await getDocs(query(collection(db, 'alerts'), where('parentId', '==', parentUid), orderBy('createdAt', 'desc'), limit(20)));
+async function loadAllUsersByRole(role) {
+  const snap = await getDocs(query(collection(db, 'users'), where('role', '==', role)));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-async function loadParentMessages(parentUid) {
-  const snap = await getDocs(query(collection(db, 'messages'), where('fromId', '==', parentUid)));
-  const received = await getDocs(query(collection(db, 'messages'), where('toId', '==', parentUid)));
-  return [...snap.docs.map(d => ({ ...d.data(), direction: 'sent' })), ...received.docs.map(d => ({ ...d.data(), direction: 'received' }))];
+async function loadAllAssignments() {
+  const snap = await getDocs(collection(db, 'assignments'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+async function loadAllAssessments() {
+  const snap = await getDocs(collection(db, 'assessments'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
+async function loadAllSubmissions() {
+  const snap = await getDocs(collection(db, 'submissions'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
+async function loadAllAttendance() {
+  const snap = await getDocs(collection(db, 'attendance'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
+async function loadAllResources() {
+  const snap = await getDocs(collection(db, 'resources'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllMessages() {
+  const snap = await getDocs(collection(db, 'messages'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllReports() {
+  const snap = await getDocs(collection(db, 'reports'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllGrowthNotes() {
+  const snap = await getDocs(collection(db, 'growth-notes'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllClassrooms() {
+  const snap = await getDocs(collection(db, 'classrooms'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllStudentNotes() {
+  const snap = await getDocs(collection(db, 'student-notes'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
 
 async function bootStudentDashboard() {
@@ -2994,17 +3460,17 @@ const routeMap = {
     'reports': bootReportsPage
   },
   parent: {
-   'dashboard': bootParentDashboard,
-    'children': bootParentChildrenPage,
-    'portfolio': bootParentPortfolioPage,
-    'assignments':bootParentAssignmentsPage,
-    'assessments': bootParentAssessmentsPage,
-    'attendance': bootParentAttendancePage,
-    'messages': bootParentMessagesPage,
-    'resources': bootParentResourcesPage,
+    'dashboard': bootParentSuperDashboard,
+    'children': bootParentAllStudentsPage,
+    'assignments': bootParentAllAssignmentsPage,
+    'assessments': bootParentAllAssessmentsPage,
+    'attendance': bootParentAllAttendancePage,
+    'messages': bootParentAllMessagesPage,
+    'resources': bootParentAllResourcesPage,
     'settings': bootParentSettingsPage,
-    'reports': bootParentReportsPage,
-    'growth': bootParentGrowthPage
+    'reports': bootParentAllReportsPage,
+    'growth': bootParentAllGrowthPage,
+    'portfolio': bootParentAllPortfolioPage
   }
 };
 
