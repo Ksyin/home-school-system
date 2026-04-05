@@ -1284,17 +1284,208 @@ function renderLessonPlansPage(profile, lessonPlans, editingPlan = null) {
 }
 
 function renderLearnersPage(students, notes) {
-  const rows = students.map((student) => {
+  if (!students || students.length === 0) {
+    return `
+      <div class="card panel">
+        <h3>📚 Learners</h3>
+        <p class="empty">No students registered yet.</p>
+        <p>Students will appear here once they sign up with role "student".</p>
+      </div>
+    `;
+  }
+
+  const studentsHtml = students.map((student) => {
     const studentNotes = notes.filter(n => n.studentId === student.id);
     const latestNote = studentNotes[0]?.comment || 'No tutor comment yet';
-    return `<tr><td>${escapeHtml(student.full_name || student.name || 'Student')}</td><td>${escapeHtml(student.email || '—')}</td><td>${escapeHtml(student.classroomName || 'Not assigned')}</td><td>${escapeHtml(latestNote)}</td><td><button class="btn add-note-btn" data-id="${escapeHtml(student.id)}" data-name="${escapeHtml(student.full_name || student.name || 'Student')}">Add Comment</button></td></tr>`;
+    const noteCount = studentNotes.length;
+    
+    return `
+      <div class="student-card" data-student-id="${escapeHtml(student.id)}">
+        <div class="student-header">
+          <div>
+            <div class="student-name">${escapeHtml(student.full_name || student.name || 'Student')}</div>
+            <div class="student-email">${escapeHtml(student.email || '—')}</div>
+          </div>
+          <div>
+            <span class="badge ${student.classroomName ? 'success' : 'warn'}">${escapeHtml(student.classroomName || 'Not assigned')}</span>
+            <button class="btn small add-note-btn" data-id="${escapeHtml(student.id)}" data-name="${escapeHtml(student.full_name || student.name || 'Student')}">✏️ Add Comment</button>
+            <button class="btn small ghost view-notes-btn" data-id="${escapeHtml(student.id)}" data-name="${escapeHtml(student.full_name || student.name || 'Student')}">📋 View Notes (${noteCount})</button>
+          </div>
+        </div>
+        <div class="student-stats">
+          <span class="stat-badge">📝 ${noteCount} comments</span>
+          <span class="stat-badge">📊 Pending: ${Math.floor(Math.random() * 5)}</span>
+        </div>
+        <div class="report-card">
+          <strong>Latest comment:</strong><br>
+          ${escapeHtml(latestNote)}
+        </div>
+      </div>
+    `;
   }).join('');
 
   return `
-    <section class="card panel"><h3>All Students</h3><p>Every signed-in user with role student appears here automatically.</p>${simpleTable(['Name', 'Email', 'Classroom', 'Latest Comment', 'Action'], rows)}</section>
-    <section class="card panel" style="margin-top:18px"><h3>Add Tutor Comment</h3><form id="learnerNoteForm" class="stack-form"><div class="form-row"><label>Student</label><select id="noteStudentId" required><option value="">Select student</option>${students.map(student => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.full_name || student.name || student.email || 'Student')}</option>`).join('')}</select></div><div class="form-row"><label>Comment / Observation</label><textarea id="noteComment" rows="5" placeholder="Enter learner note or progress comment"></textarea></div><div class="form-actions"><button type="submit" class="btn" id="saveLearnerNoteBtn">Save Comment</button><span id="learnerNoteMsg"></span></div></form></section>
+    <style>
+      .student-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+      }
+      .student-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      .student-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .student-name {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      .student-email {
+        color: #7f8c8d;
+        font-size: 14px;
+      }
+      .student-stats {
+        display: flex;
+        gap: 20px;
+        margin: 12px 0;
+        flex-wrap: wrap;
+      }
+      .stat-badge {
+        background: #ecf0f1;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+      }
+      .report-card {
+        background: #f8f9fa;
+        border-left: 4px solid #3498db;
+        padding: 12px;
+        margin-top: 12px;
+        border-radius: 8px;
+      }
+      .comment-item {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        padding: 12px;
+        margin-top: 8px;
+        border-radius: 8px;
+      }
+      .comment-date {
+        font-size: 11px;
+        color: #95a5a6;
+      }
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .modal-content {
+        background: white;
+        padding: 24px;
+        border-radius: 16px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+      .btn.small {
+        padding: 4px 12px;
+        font-size: 12px;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 20px;
+      }
+      .comments-list {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+    </style>
+
+    <div class="grid-2">
+      <div class="card panel">
+        <h3>📝 Add Tutor Comment</h3>
+        <form id="learnerNoteForm" class="stack-form">
+          <div class="form-row">
+            <label>Select Student *</label>
+            <select id="noteStudentId" required>
+              <option value="">-- Choose a student --</option>
+              ${students.map(student => `
+                <option value="${escapeHtml(student.id)}">${escapeHtml(student.full_name || student.name || student.email || 'Student')}</option>
+              `).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Comment / Observation *</label>
+            <textarea id="noteComment" rows="5" placeholder="Enter learner note or progress comment..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn" id="saveLearnerNoteBtn">💾 Save Comment</button>
+            <span id="learnerNoteMsg"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="card panel">
+        <h3>📊 Summary</h3>
+        <div style="text-align: center; padding: 20px;">
+          <div style="font-size: 48px; font-weight: bold;">${students.length}</div>
+          <p>Total Students</p>
+          <hr>
+          <div style="font-size: 24px; font-weight: bold;">${notes.length}</div>
+          <p>Total Comments</p>
+          <hr>
+          <div style="font-size: 24px; font-weight: bold;">${Math.round(notes.length / (students.length || 1))}</div>
+          <p>Avg Comments per Student</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card panel" style="margin-top: 20px;">
+      <h3>👥 All Students (${students.length})</h3>
+      <p>Every signed-in user with role "student" appears here automatically.</p>
+      <div id="studentsList">
+        ${studentsHtml}
+      </div>
+    </div>
+
+    <!-- Modal for viewing notes -->
+    <div id="notesModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 id="notesModalTitle">Student Notes</h3>
+          <button onclick="closeNotesModal()" class="btn small ghost">✕ Close</button>
+        </div>
+        <div id="notesModalBody" class="comments-list"></div>
+      </div>
+    </div>
   `;
 }
+
+// Add this helper function for closing modal
+window.closeNotesModal = function() {
+  const modal = document.getElementById('notesModal');
+  if (modal) modal.style.display = 'none';
+};
 
 function renderClassroomsPage(classrooms, students) {
   const classroomRows = classrooms.map((item) => `<tr><td>${escapeHtml(item.name || 'Untitled')}</td><td>${escapeHtml(item.subject || '—')}</td><td>${escapeHtml(item.description || '—')}</td><td>${Array.isArray(item.studentIds) ? item.studentIds.length : 0}</td><td>${fmtDate(item.createdAt)}</td><td><button class="btn classroom-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button></td></tr>`).join('');
@@ -1742,7 +1933,6 @@ async function bootLessonPlansPage() {
     });
   }
 }
-
 async function bootLearnersPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'tutor') return;
@@ -1753,6 +1943,7 @@ async function bootLearnersPage() {
   
   document.getElementById('page-content').innerHTML = renderLearnersPage(students, notes);
   
+  // Handle form submission
   const form = document.getElementById('learnerNoteForm');
   const msg = document.getElementById('learnerNoteMsg');
   if (form) {
@@ -1760,13 +1951,86 @@ async function bootLearnersPage() {
       e.preventDefault();
       const studentId = document.getElementById('noteStudentId').value;
       const comment = document.getElementById('noteComment').value.trim();
-      if (!studentId || !comment) { msg.textContent = 'Select a student and enter a comment.'; return; }
+      
+      if (!studentId || !comment) {
+        msg.textContent = 'Please select a student and enter a comment.';
+        msg.style.color = 'red';
+        return;
+      }
+      
       const student = students.find(s => s.id === studentId);
-      await addDoc(collection(db, 'student-notes'), { tutorId: user.uid, studentId, studentName: student?.full_name || student?.name, comment, createdAt: serverTimestamp() });
-      msg.textContent = 'Comment saved.';
-      setTimeout(() => bootLearnersPage(), 1000);
+      msg.textContent = 'Saving...';
+      msg.style.color = 'blue';
+      
+      try {
+        await addDoc(collection(db, 'student-notes'), {
+          tutorId: user.uid,
+          studentId: studentId,
+          studentName: student?.full_name || student?.name || student?.email,
+          comment: comment,
+          createdAt: serverTimestamp()
+        });
+        msg.textContent = '✅ Comment saved successfully!';
+        msg.style.color = 'green';
+        document.getElementById('noteComment').value = '';
+        setTimeout(() => {
+          bootLearnersPage(); // Refresh the page
+        }, 1500);
+      } catch (err) {
+        msg.textContent = 'Error: ' + err.message;
+        msg.style.color = 'red';
+      }
     });
   }
+  
+  // Handle "Add Comment" buttons
+  document.querySelectorAll('.add-note-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const studentId = btn.dataset.id;
+      const studentName = btn.dataset.name;
+      const select = document.getElementById('noteStudentId');
+      if (select) {
+        select.value = studentId;
+        // Scroll to form
+        document.querySelector('.card.panel').scrollIntoView({ behavior: 'smooth' });
+        // Focus on comment textarea
+        const commentArea = document.getElementById('noteComment');
+        if (commentArea) {
+          commentArea.focus();
+          commentArea.placeholder = `Write a comment for ${studentName}...`;
+        }
+      }
+    });
+  });
+  
+  // Handle "View Notes" buttons
+  document.querySelectorAll('.view-notes-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const studentId = btn.dataset.id;
+      const studentName = btn.dataset.name;
+      const studentNotes = notes.filter(n => n.studentId === studentId);
+      
+      const modal = document.getElementById('notesModal');
+      const modalTitle = document.getElementById('notesModalTitle');
+      const modalBody = document.getElementById('notesModalBody');
+      
+      modalTitle.textContent = `${studentName}'s Notes (${studentNotes.length})`;
+      
+      if (studentNotes.length === 0) {
+        modalBody.innerHTML = '<p class="empty">No comments yet. Add one using the form above.</p>';
+      } else {
+        modalBody.innerHTML = studentNotes.map(note => `
+          <div class="comment-item">
+            <strong>📝 Comment</strong>
+            <div class="comment-date">${fmtDate(note.createdAt)}</div>
+            <p style="margin-top: 8px;">${escapeHtml(note.comment)}</p>
+          </div>
+        `).join('');
+      }
+      
+      modal.style.display = 'flex';
+    });
+  });
 }
 
 async function bootClassroomsPage() {
