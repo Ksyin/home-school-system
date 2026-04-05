@@ -1918,46 +1918,6 @@ async function bootDefaultPage() {
   document.getElementById('page-content').innerHTML = `<section class="card panel"><h3>${escapeHtml(pageTitle)}</h3><p>This page is connected successfully.</p><p>Role: ${escapeHtml(bundle.profile?.role)}</p><p>Email: ${escapeHtml(bundle.user?.email)}</p></section>`;
 }
 
-// ============================================
-// PAGE ROUTER
-// ============================================
-
-const routeMap = {
-  student: {
-    'dashboard': bootStudentDashboard,
-    'assignments': bootStudentAssignmentsPage,
-    'assessments': bootStudentAssessmentsPage,
-    'resources': bootStudentResourcesPage,
-    'portfolio': bootStudentPortfolioPage,
-    'submit-work': bootSubmitWorkPage,
-    'messages': bootStudentMessagesPage,
-    'reports': bootStudentReportsPage,
-    'activities': bootStudentActivitiesPage
-  },
-  tutor: {
-    'dashboard': bootTutorDashboard,
-    'assignments': bootTutorAssignmentsPage,
-    'assessments': bootTutorAssessmentsPage,
-    'resources': bootResourcesPage,
-    'portfolio': bootTutorPortfolios,
-    'lesson-plans': bootLessonPlansPage,
-    'learners': bootLearnersPage,
-    'classrooms': bootClassroomsPage,
-    'messages': bootMessagesPage,
-    'reports': bootReportsPage
-  },
-  parent: {
-    'dashboard': bootParentDashboard,
-    'children': bootParentChildrenPage,
-    'portfolio': bootParentPortfolioPage,
-    'assignments': bootDefaultPage,
-    'assessments': bootDefaultPage,
-    'attendance': bootDefaultPage,
-    'messages': bootDefaultPage,
-    'resources': bootDefaultPage,
-    'settings': bootDefaultPage
-  }
-};
 
 
 
