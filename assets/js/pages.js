@@ -84,97 +84,7 @@ student: [
 };
 
 
-async function bootParentDashboard(bundle) {
-  const { user } = bundle;
-  const pageContent = document.getElementById('page-content');
 
-  const childrenSnap = await getDocs(
-    query(collection(db, 'students'), where('parentId', '==', user.uid))
-  );
-
-  const children = childrenSnap.docs.map(d => d.data());
-
-  pageContent.innerHTML = `
-    <div class="stats-grid">
-      <div class="card stat primary">
-        <h3>${children.length}</h3>
-        <p>Children</p>
-      </div>
-      <div class="card stat success">
-        <h3>${Math.floor(Math.random()*10)}</h3>
-        <p>Completed Tasks</p>
-      </div>
-      <div class="card stat warn">
-        <h3>${Math.floor(Math.random()*5)}</h3>
-        <p>Pending Tasks</p>
-      </div>
-      <div class="card stat">
-        <h3>Active</h3>
-        <p>Weekly Status</p>
-      </div>
-    </div>
-
-    <div class="card panel">
-      <h3>👧 Children Overview</h3>
-      ${
-        children.map(c => `
-          <div class="list-item">
-            <strong>${escapeHtml(c.name)}</strong>
-            <small>${escapeHtml(c.classroomName || 'No class')}</small>
-          </div>
-        `).join('')
-      }
-    </div>
-  `;
-}
-
-
-async function bootStudentDashboard(bundle) {
-  const { user, profile } = bundle;
-  const pageContent = document.getElementById('page-content');
-
-  const assignments = await loadStudentAssignments(user.uid);
-  const submissionsSnap = await getDocs(
-    query(collection(db, 'submissions'), where('studentId', '==', user.uid))
-  );
-
-  const completed = submissionsSnap.size;
-  const total = assignments.length;
-  const pending = total - completed;
-
-  pageContent.innerHTML = `
-    <div class="stats-grid">
-      <div class="card stat primary">
-        <h3>${total}</h3>
-        <p>Total Tasks</p>
-      </div>
-      <div class="card stat success">
-        <h3>${completed}</h3>
-        <p>Completed</p>
-      </div>
-      <div class="card stat warn">
-        <h3>${pending}</h3>
-        <p>Pending</p>
-      </div>
-      <div class="card stat">
-        <h3>${Math.floor(Math.random() * 100)}%</h3>
-        <p>Engagement</p>
-      </div>
-    </div>
-
-    <div class="card panel">
-      <h3>📌 Upcoming Assignments</h3>
-      ${
-        assignments.slice(0, 5).map(a => `
-          <div class="list-item">
-            <strong>${escapeHtml(a.title)}</strong>
-            <small>${fmtDate(a.dueDate)}</small>
-          </div>
-        `).join('') || '<p class="empty">No assignments yet</p>'
-      }
-    </div>
-  `;
-}
 
 
 
@@ -454,8 +364,8 @@ async function loadStudentAssignments(studentUid) {
 /* =========================
    NEW: Modern Tutor Dashboard (Coursera-style)
 ========================= */
-async function bootModernTutorDashboard(bundle) { 
-  const { user } = bundle;
+async function bootModernTutorDashboard(bundle) {
+  const { user, profile } = bundle;
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
@@ -466,187 +376,48 @@ async function bootModernTutorDashboard(bundle) {
     loadClassrooms(user.uid)
   ]);
 
-  const assignments = assignmentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const submissions = submissionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  /* =========================
-     NEEDS GRADING
-  ========================= */
-  const needsGrading = submissions.filter(s => 
-    (s.status || '').toLowerCase() === 'submitted'
-  );
-
-  /* =========================
-     MAP SUBMISSIONS
-  ========================= */
-  const submittedMap = new Map();
-
-  submissions.forEach(s => {
-    if (!submittedMap.has(s.assignmentId)) {
-      submittedMap.set(s.assignmentId, new Set());
-    }
-    submittedMap.get(s.assignmentId).add(s.studentId);
-  });
-
-  /* =========================
-     MISSING + LATE
-  ========================= */
-  let missingCount = 0;
-  let lateCount = 0;
-
-  const now = Date.now();
-
-  assignments.forEach(a => {
-    const assignedStudents = a.studentIds || a.assignedTo || [];
-    const submittedStudents = submittedMap.get(a.id) || new Set();
-
-    assignedStudents.forEach(studentId => {
-      if (!submittedStudents.has(studentId)) {
-        missingCount++;
-
-        // ⚠️ LATE CHECK
-        if (a.dueDate) {
-          const due = new Date(a.dueDate).getTime();
-          if (due < now) lateCount++;
-        }
-      }
-    });
-  });
-
-  /* =========================
-     📊 CLASSROOM BREAKDOWN
-  ========================= */
-  const classroomStats = {};
-
-  assignments.forEach(a => {
-    const classId = a.classroomId || 'Unassigned';
-
-    if (!classroomStats[classId]) {
-      classroomStats[classId] = {
-        total: 0,
-        submitted: 0
-      };
-    }
-
-    classroomStats[classId].total++;
-
-    const subs = submissions.filter(s => s.assignmentId === a.id);
-    if (subs.length > 0) {
-      classroomStats[classId].submitted++;
-    }
-  });
-
-  /* =========================
-     🧠 AI INSIGHTS
-  ========================= */
-  let insights = [];
-
-  Object.entries(classroomStats).forEach(([classId, stat]) => {
-    const rate = stat.total ? (stat.submitted / stat.total) * 100 : 0;
-
-    if (rate < 50) {
-      insights.push(`⚠️ Low completion in class ${classId} (${Math.floor(rate)}%)`);
-    }
-  });
-
-  if (lateCount > 0) {
-    insights.push(`⚠️ ${lateCount} late submissions detected`);
-  }
-
-  if (needsGrading.length > 5) {
-    insights.push(`📝 You have ${needsGrading.length} items to grade`);
-  }
-
-  /* =========================
-     UI
-  ========================= */
   pageContent.innerHTML = `
     <div class="stats-grid">
       <div class="card stat primary"><h3>${students.length}</h3><p>Learners</p></div>
-      <div class="card stat success"><h3>${assignments.length}</h3><p>Assignments</p></div>
-      <div class="card stat warn"><h3>${submissions.length}</h3><p>Submissions</p></div>
+      <div class="card stat success"><h3>${assignmentsSnap.size}</h3><p>Assignments</p></div>
+      <div class="card stat warn"><h3>${submissionsSnap.size}</h3><p>Submissions</p></div>
       <div class="card stat"><h3>${classrooms.length}</h3><p>Classrooms</p></div>
-
-      <div class="card stat danger clickable" onclick="location.href='/tutor/assessments.html'">
-        <h3>${needsGrading.length}</h3>
-        <p>Needs Grading 🔴</p>
-      </div>
-
-      <div class="card stat warn">
-        <h3>${missingCount}</h3>
-        <p>Missing Submissions</p>
-      </div>
-
-      <div class="card stat danger">
-        <h3>${lateCount}</h3>
-        <p>Late Students</p>
-      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:24px">
-
       <div class="card panel">
         <h3>Recent Activity</h3>
-        <div id="recentActivity"></div>
+        <div id="recentActivity" class="stack gap-3"></div>
       </div>
-
       <div class="card panel">
         <h3>Quick Actions</h3>
         <div style="display:flex;flex-direction:column;gap:12px">
           <button onclick="location.href='/tutor/assignments.html'" class="btn">📝 New Assignment</button>
           <button onclick="location.href='/tutor/lesson-plans.html'" class="btn">📅 New Lesson Plan</button>
           <button onclick="location.href='/tutor/classrooms.html'" class="btn">🏫 Manage Classrooms</button>
+          <button onclick="location.href='/tutor/learners.html'" class="btn">👦 Assign Students</button>
         </div>
       </div>
-    </div>
-
-    <!-- 📊 CLASSROOM BREAKDOWN -->
-    <div class="card panel" style="margin-top:24px">
-      <h3>📊 Classroom Performance</h3>
-      ${
-        Object.entries(classroomStats).map(([id, stat]) => {
-          const rate = stat.total ? Math.floor((stat.submitted / stat.total) * 100) : 0;
-          return `
-            <div class="list-item flex between">
-              <strong>${escapeHtml(id)}</strong>
-              <span>${rate}% completion</span>
-            </div>
-          `;
-        }).join('')
-      }
-    </div>
-
-    <!-- 🧠 INSIGHTS -->
-    <div class="card panel" style="margin-top:24px">
-      <h3>🧠 Insights</h3>
-      ${
-        insights.length 
-        ? insights.map(i => `<div class="list-item">${i}</div>`).join('')
-        : '<p class="empty">Everything looks good ✅</p>'
-      }
     </div>
   `;
 
-  /* =========================
-     RECENT ACTIVITY
-  ========================= */
+  // Fill recent activity
   const container = document.getElementById('recentActivity');
-
-  submissions.slice(0, 8).forEach(d => {
-    container.innerHTML += `
-      <div class="list-item flex between">
-        <div>
-          <strong>${escapeHtml(d.assignmentTitle || 'Submission')}</strong><br>
-          <small>${escapeHtml(d.studentName || '')}</small>
+  if (submissionsSnap.docs.length > 0) {
+    submissionsSnap.docs.slice(0, 8).forEach(docSnap => {
+      const d = docSnap.data();
+      container.innerHTML += `
+        <div class="list-item flex between">
+          <div><strong>${escapeHtml(d.assignmentTitle || 'Submission')}</strong><br><small>by ${escapeHtml(d.studentName || 'Student')}</small></div>
+          <div class="text-right"><small>${fmtDate(d.submittedAt)}</small><br>${statusBadge(d.status)}</div>
         </div>
-        <div>
-          <small>${fmtDate(d.submittedAt)}</small><br>
-          ${statusBadge(d.status)}
-        </div>
-      </div>
-    `;
-  });
+      `;
+    });
+  } else {
+    container.innerHTML = '<p class="empty">No recent submissions yet.</p>';
+  }
 }
+
 /* =========================
    STUDENT AUTO MIRROR
 ========================= */
@@ -3116,117 +2887,61 @@ async function bootParentPortfolioPage() {
    CLEAN UNIFIED PAGE ROUTER
 ========================= */
 
-/* =========================
-   ROLE-BASED PAGE ROUTER (FIXED)
-========================= */
-
-// ===== DASHBOARD (MOST IMPORTANT) =====
-if (pageKey === 'dashboard') {
-  if (pageRole === 'student') {
-    bootStudentDashboard(bundle);
-  } 
-  else if (pageRole === 'tutor') {
-    bootModernTutorDashboard(bundle);
-  } 
-  else if (pageRole === 'parent') {
-    bootParentDashboard(bundle);
-  }
-}
-
-/* =========================
-   SHARED / GLOBAL PAGES
-========================= */
+if (pageKey === 'submit-work') {
+  bootSubmitWorkPage();
+} 
+else if (pageKey === 'lesson-plans') {
+  bootLessonPlansPage();
+} 
+else if (pageKey === 'learners') {
+  bootLearnersPage();
+} 
+else if (pageKey === 'classrooms') {
+  bootClassroomsPage();
+} 
+else if (pageKey === 'resources') {
+  if (pageRole === 'tutor') bootResourcesPage();
+  else if (pageRole === 'student') bootStudentResourcesPage();
+} 
 else if (pageKey === 'messages') {
-  bootMessagesPage(); // unified system
-}
+  bootMessagesPage();   // works for both tutor & student
+} 
 
-/* =========================
-   STUDENT PAGES
-========================= */
-else if (pageRole === 'student') {
+// Student Pages
+else if (pageKey === 'assignments' && pageRole === 'student') {
+  bootStudentAssignmentsPage();
+} 
+else if (pageKey === 'assessments' && pageRole === 'student') {
+  bootStudentAssessmentsPage();
+} 
+else if (pageKey === 'activities' && pageRole === 'student') {
+  bootStudentActivitiesPage();
+} 
+else if (pageKey === 'portfolio' && pageRole === 'student') {
+  bootStudentPortfolioPage();
+} 
+else if (pageKey === 'reports' && pageRole === 'student') {
+  bootStudentReportsPage();
+} 
 
-  if (pageKey === 'assignments') {
-    bootStudentAssignmentsPage();
-  } 
-  else if (pageKey === 'submit-work') {
-    bootSubmitWorkPage();
-  } 
-  else if (pageKey === 'assessments') {
-    bootStudentAssessmentsPage();
-  } 
-  else if (pageKey === 'portfolio') {
-    bootStudentPortfolioPage();
-  } 
-  else if (pageKey === 'resources') {
-    bootStudentResourcesPage();
-  } 
-  else if (pageKey === 'reports') {
-    bootStudentReportsPage(); // optional if not merged
-  }
-}
+// Parent & Tutor
+else if (pageKey === 'children' && pageRole === 'parent') {
+  bootParentChildrenPage();
+} 
+else if (pageKey === 'portfolio' && pageRole === 'parent') {
+  bootParentPortfolioPage();
+} 
+else if (pageKey === 'portfolios' && pageRole === 'tutor') {
+  bootTutorPortfolios();
+} 
 
-/* =========================
-   TUTOR PAGES
-========================= */
-else if (pageRole === 'tutor') {
-
-  if (pageKey === 'lesson-plans') {
-    bootLessonPlansPage();
-  } 
-  else if (pageKey === 'learners') {
-    bootLearnersPage();
-  } 
-  else if (pageKey === 'classrooms') {
-    bootClassroomsPage();
-  } 
-  else if (pageKey === 'assignments') {
-    bootTutorAssignmentsPage(); // 🔥 YOU NEED THIS
-  } 
-  else if (pageKey === 'assessments') {
-    bootTutorAssessmentsPage(); // 🔥 YOU NEED THIS
-  } 
-  else if (pageKey === 'resources') {
-    bootResourcesPage();
-  } 
-  else if (pageKey === 'portfolios') {
-    bootTutorPortfolios();
-  } 
-  else if (pageKey === 'reports') {
-    bootTutorReportsPage(); // 🔥 better than generic
-  }
-}
-
-/* =========================
-   PARENT PAGES
-========================= */
-else if (pageRole === 'parent') {
-
-  if (pageKey === 'children') {
-    bootParentChildrenPage();
-  } 
-  else if (pageKey === 'assignments') {
-    bootParentAssignmentsPage();
-  } 
-  else if (pageKey === 'assessments') {
-    bootParentAssessmentsPage();
-  } 
-  else if (pageKey === 'portfolio') {
-    bootParentPortfolioPage();
-  } 
-  else if (pageKey === 'attendance') {
-    bootParentAttendancePage();
-  } 
-  else if (pageKey === 'resources') {
-    bootParentResourcesPage();
-  } 
-  else if (pageKey === 'messages') {
-    bootParentMessagesPage();
-  }
-}
-
-/* =========================
-   FALLBACK
-========================= */
+// General
+else if (pageKey === 'dashboard') {
+  bootDashboard();
+} 
+else if (pageKey === 'reports') {
+  bootReportsPage();
+} 
 else {
   bootDefaultPage();
 }
