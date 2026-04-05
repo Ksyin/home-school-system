@@ -508,24 +508,13 @@ async function loadTutorLessonPlans(tutorUid) {
 
 
 
-/* =========================
-   UPDATED: loadAllStudents (uses 'students' collection for reliable classroomId)
-========================= */
+// Safe helper - improves student loading for classroom relationship
 async function loadAllStudents() {
   const snap = await getDocs(
     query(collection(db, 'students'), where('role', '==', 'student'))
   );
-
-  return snap.docs
-    .map((d) => ({
-      id: d.id,
-      ...d.data()
-    }))
-    .sort((a, b) => {
-      const aName = (a.full_name || a.name || a.email || '').toLowerCase();
-      const bName = (b.full_name || b.name || b.email || '').toLowerCase();
-      return aName.localeCompare(bName);
-    });
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.full_name || a.name || '').localeCompare(b.full_name || b.name || ''));
 }
 
 async function loadLearnerNotes(tutorUid) {
@@ -2972,6 +2961,7 @@ async function loadExtendedPages(user, profile) {
 
   switch (pageKey) {
     /* ================= DASHBOARD ================= */
+      /* ================= MODERN DASHBOARD ================= */
     case 'dashboard': {
       const students = await loadAllStudents();
       const assignmentsSnap = await getDocs(
@@ -2980,26 +2970,42 @@ async function loadExtendedPages(user, profile) {
       const submissionsSnap = await getDocs(
         query(collection(db, 'submissions'), where('tutorId', '==', user.uid))
       );
+      const classrooms = await loadClassrooms(user.uid);
 
       pageContent.innerHTML = `
-        <div class="grid cols-3 gap-4" style="margin-bottom:24px;">
-          <div class="card stat success">
+        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+          <div class="card stat primary" style="text-align: center;">
             <h3>${students.length}</h3>
-            <p>Total Students</p>
+            <p>Total Learners</p>
           </div>
-          <div class="card stat primary">
+          <div class="card stat success" style="text-align: center;">
             <h3>${assignmentsSnap.size}</h3>
-            <p>Assignments Created</p>
+            <p>Assignments</p>
           </div>
-          <div class="card stat warn">
+          <div class="card stat warn" style="text-align: center;">
             <h3>${submissionsSnap.size}</h3>
-            <p>Total Submissions</p>
+            <p>Submissions</p>
+          </div>
+          <div class="card stat" style="text-align: center;">
+            <h3>${classrooms.length}</h3>
+            <p>Classrooms</p>
           </div>
         </div>
 
-        <div class="card panel">
-          <h3>Recent Activity (last 10 submissions)</h3>
-          <div id="recentActivity" class="stack gap-3"></div>
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+          <div class="card panel">
+            <h3>Recent Activity</h3>
+            <div id="recentActivity" class="stack gap-3"></div>
+          </div>
+          <div class="card panel">
+            <h3>Quick Actions</h3>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <button onclick="location.href='/tutor/assignments.html'" class="btn">📝 New Assignment</button>
+              <button onclick="location.href='/tutor/lesson-plans.html'" class="btn">📅 New Lesson Plan</button>
+              <button onclick="location.href='/tutor/classrooms.html'" class="btn">🏫 Manage Classrooms</button>
+              <button onclick="location.href='/tutor/learners.html'" class="btn">👦 Assign Students</button>
+            </div>
+          </div>
         </div>
       `;
 
@@ -3026,20 +3032,29 @@ async function loadExtendedPages(user, profile) {
       break;
     }
 
-    /* ================= ASSIGNMENTS (tutor only for now) ================= */
+     /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
     case 'assignments': {
       if (pageRole !== 'tutor') {
         pageContent.innerHTML = '<div class="card panel"><p>This page is only available for tutors.</p></div>';
         break;
       }
 
+      const classrooms = await loadClassrooms(user.uid);
       const snap = await getDocs(
         query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
       );
 
+      let classroomOptions = classrooms.map(c => 
+        `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+      ).join('');
+      if (classroomOptions) {
+        classroomOptions = `<option value="">All Students</option>` + classroomOptions;
+      }
+
       pageContent.innerHTML = `
         <section class="card panel">
           <h3>Create New Assignment</h3>
+          <p>Select classroom so students see it automatically.</p>
           <form id="assignmentForm" class="stack-form">
             <div class="form-row">
               <label>Title</label>
@@ -3048,6 +3063,10 @@ async function loadExtendedPages(user, profile) {
             <div class="form-row">
               <label>Subject</label>
               <input name="subject" placeholder="Mathematics">
+            </div>
+            <div class="form-row">
+              <label>Target Classroom</label>
+              <select name="classroomId">${classroomOptions}</select>
             </div>
             <div class="form-row">
               <label>Description / Instructions</label>
@@ -3090,6 +3109,7 @@ async function loadExtendedPages(user, profile) {
         e.preventDefault();
         const f = e.target;
         const msg = document.getElementById('assignMsg');
+        const classroomId = f.classroomId.value || null;
 
         try {
           await setDoc(doc(collection(db, 'assignments')), {
@@ -3098,12 +3118,14 @@ async function loadExtendedPages(user, profile) {
             title: f.title.value.trim(),
             subject: f.subject.value.trim(),
             description: f.description.value.trim(),
+            classroomId: classroomId,
+            targetType: classroomId ? 'classroom' : 'all_students',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           });
-          msg.textContent = 'Assignment created!';
+          msg.textContent = '✅ Created! Students in selected classroom will see it now.';
           msg.className = 'success';
-          setTimeout(() => location.reload(), 1200);
+          setTimeout(() => location.reload(), 1500);
         } catch (err) {
           msg.textContent = 'Error: ' + err.message;
           msg.className = 'danger';
