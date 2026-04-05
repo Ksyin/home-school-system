@@ -1,5 +1,5 @@
 // ============================================
-// COMPLETE PAGES.JS - FULL VERSION
+// COMPLETE PAGES.JS - FULL VERSION (LOAD ORDER FIXED)
 // Preserves ALL original functionality with fixes
 // Map-based routing implemented
 // ============================================
@@ -1153,9 +1153,9 @@ function renderLessonPlansTable(plans) {
       <td>${escapeHtml(item.classroomName || '—')}</td>
       <td>${fmtDate(item.plannedDate)}</td>
       <td>${statusBadge(item.status || 'Draft')}</td>
-      <td><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn plan-edit-btn" data-id="${escapeHtml(item.id)}">Edit</button><button class="btn plan-status-btn" data-id="${escapeHtml(item.id)}" data-status="${item.status === 'Published' ? 'Draft' : 'Published'}">${item.status === 'Published' ? 'Move to Draft' : 'Publish'}</button><button class="btn plan-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button>${item.attachmentUrl ? `<a class="btn" href="${item.attachmentUrl}" target="_blank">Attachment</a>` : ''}</div></td>
+      <td><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn plan-edit-btn" data-id="${escapeHtml(item.id)}">Edit</button><button class="btn plan-status-btn" data-id="${escapeHtml(item.id)}" data-status="${item.status === 'Published' ? 'Draft' : 'Published'}">${item.status === 'Published' ? 'Move to Draft' : 'Publish'}</button><button class="btn plan-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button>${item.attachmentUrl ? `<a class="btn" href="${item.attachmentUrl}" target="_blank">Attachment</a>` : ''}</div></div></td>
     </tr>
-    <tr class="details-row"><td colspan="6"><div style="padding:8px 0"><strong>Objectives:</strong> ${escapeHtml(item.objectives || '—')}<br><strong>Materials:</strong> ${escapeHtml(item.materials || '—')}<br><strong>Notes:</strong> ${escapeHtml(item.notes || '—')}</div></td></tr>
+    <tr class="details-row"><td colspan="6"><div style="padding:8px 0"><strong>Objectives:</strong> ${escapeHtml(item.objectives || '—')}<br><strong>Materials:</strong> ${escapeHtml(item.materials || '—')}<br><strong>Notes:</strong> ${escapeHtml(item.notes || '—')}</div></div></td></tr>
   `).join('');
 
   return `<section class="card panel" style="margin-top:18px"><h3>My Lesson Plans</h3>${simpleTable(['Title', 'Subject', 'Classroom', 'Date', 'Status', 'Actions'], rowsHtml)}</section>`;
@@ -1196,9 +1196,10 @@ function renderResourcesPage(resources, classrooms, students) {
       <td>${escapeHtml(item.classroomName || '—')}</td>
       <td>${escapeHtml(item.studentName || '—')}</td>
       <td>${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : '—'}</td>
-      <td>${fmtDate(item.createdAt)}</td><td><button class="btn danger resource-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button></td>
+      <td>${fmtDate(item.createdAt)}</div></td>
+      <td><button class="btn danger resource-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button></div></td>
     </tr>
-    <tr class="details-row"><td colspan="7"><div style="padding:14px;background:var(--surface-2);border-radius:12px;"><strong>Description:</strong> ${escapeHtml(item.note || 'No description')}<br>${item.fileName ? `<strong>File:</strong> ${escapeHtml(item.fileName)}` : ''}</div></td></tr>
+    <tr class="details-row"><td colspan="7"><div style="padding:14px;background:var(--surface-2);border-radius:12px;"><strong>Description:</strong> ${escapeHtml(item.note || 'No description')}<br>${item.fileName ? `<strong>File:</strong> ${escapeHtml(item.fileName)}` : ''}</div></div></div></td></tr>
   `).join('');
 
   return `
@@ -1736,6 +1737,25 @@ async function bootMessagesPage() {
   const messages = await loadMessagesForTutor(user.uid);
   const students = await loadAllStudents();
   document.getElementById('page-content').innerHTML = renderMessagesPage(messages, students);
+  
+  const form = document.getElementById('messageForm');
+  const msg = document.getElementById('messageMsg');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const studentId = document.getElementById('messageStudentId').value;
+      const subject = document.getElementById('messageSubject').value;
+      const message = document.getElementById('messageBody').value;
+      if (!studentId || !message) { msg.textContent = 'Select a student and enter a message.'; return; }
+      const student = students.find(s => s.id === studentId);
+      await addDoc(collection(db, 'messages'), {
+        tutorId: user.uid, studentId, studentName: student?.full_name || student?.name,
+        subject, message, createdAt: serverTimestamp()
+      });
+      msg.textContent = 'Message sent!';
+      setTimeout(() => bootMessagesPage(), 1000);
+    });
+  }
 }
 
 function renderMessagesPage(messages, students) {
@@ -1843,7 +1863,7 @@ async function bootDefaultPage() {
 }
 
 // ============================================
-// PAGE ROUTER
+// PAGE ROUTER (FIXED: WAITS FOR DOM CONTENT)
 // ============================================
 
 const routeMap = {
@@ -1883,15 +1903,16 @@ const routeMap = {
   }
 };
 
-async function initRouter() {
+// THIS IS THE CRITICAL FIX: Wait for the DOM to be fully loaded
+// before trying to call any of the boot functions.
+// This ensures all function declarations above are processed.
+document.addEventListener('DOMContentLoaded', async () => {
   if (pageRole && pageKey && routeMap[pageRole] && routeMap[pageRole][pageKey]) {
     await routeMap[pageRole][pageKey]();
   } else {
     await bootDefaultPage();
   }
-}
-
-initRouter();
+});
 
 // ============================================
 // GLOBALS
