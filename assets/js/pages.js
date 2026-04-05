@@ -83,9 +83,12 @@ const navMap = {
     ['Assignments', '/student/assignments.html', '📝'],
     ['Submit Work', '/student/submit-work.html', '📤'],
     ['Assessments', '/student/assessments.html', '📊'],
+    ['Activities', '/student/activities.html', '📘'],
     ['Portfolio', '/student/portfolio.html', '🗂️'],
+    ['Attendance', '/student/attendance.html', '📅'],
+    ['Reports', '/student/reports.html', '📄'],
     ['Resources', '/student/resources.html', '📚'],
-    ['Messages & Reports', '/student/messages.html', '💬'],
+    ['Messages', '/student/messages.html', '💬'],
     ['Settings', '/student/settings.html', '⚙️']
   ]
 };
@@ -117,8 +120,9 @@ function uiHeader(profile) {
 
 function sidebar(profile) {
   const items = navMap[pageRole] || [];
+  const reportsAliasPage = pageRole === 'student' && (pageKey === 'reports' || pageKey === 'report-card');
   const links = items.map(([label, href, icon]) => `
-    <a class="${href.endsWith(pageKey + '.html') ? 'active' : ''}" href="${href}">
+    <a class="${reportsAliasPage ? (href.endsWith('/student/reports.html') ? 'active' : '') : (href.endsWith(pageKey + '.html') ? 'active' : '')}" href="${href}">
       <span class="icon">${icon}</span>
       <span>${escapeHtml(label)}</span>
     </a>
@@ -158,6 +162,25 @@ function fmtDate(value) {
   } catch {
     return '—';
   }
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value === 'string') {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+  if (value?.toDate) return value.toDate().getTime();
+
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function sentenceCase(value = '', fallback = 'Pending') {
+  const normalized = String(value || '').trim();
+  if (!normalized) return fallback;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
 }
 
 function statusBadge(status = 'Pending') {
@@ -593,6 +616,23 @@ async function loadStudentReports(studentUid) {
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
+async function loadStudentAttendance(studentUid) {
+  const snap = await getDocs(
+    query(collection(db, 'attendance'), where('studentId', '==', studentUid))
+  );
+
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data()
+    }))
+    .sort((a, b) => {
+      const aTime = toMillis(a.recordDate || a.date || a.attendanceDate || a.createdAt);
+      const bTime = toMillis(b.recordDate || b.date || b.attendanceDate || b.createdAt);
+      return bTime - aTime;
+    });
+}
+
 async function loadStudentActivities(studentUid) {
   const notesSnap = await getDocs(
     query(collection(db, 'student-notes'), where('studentId', '==', studentUid))
@@ -935,7 +975,47 @@ function renderStudentReportsPage(items) {
       <small>${fmtDate(item.createdAt)}</small>
     </div>
   `).join('');
-  return `<div class="card panel"><h3>My Reports</h3>${items.length ? rows : '<div class="empty">No reports yet.</div>'}</div>`;
+  return `<div class="card panel"><h3>${escapeHtml(pageTitle || 'My Reports')}</h3>${items.length ? rows : '<div class="empty">No reports yet.</div>'}</div>`;
+}
+
+function renderStudentAttendancePage(records) {
+  const counts = records.reduce((summary, record) => {
+    const label = sentenceCase(record.status, 'Pending');
+    if (label === 'Present') summary.present += 1;
+    if (label === 'Late') summary.late += 1;
+    if (label === 'Absent') summary.absent += 1;
+    return summary;
+  }, { present: 0, late: 0, absent: 0 });
+
+  const rows = records.map((record) => {
+    const status = sentenceCase(record.status, 'Pending');
+    const recordDate = record.recordDate || record.date || record.attendanceDate || record.createdAt;
+    const notes = record.note || record.notes || '—';
+
+    return `
+      <tr>
+        <td>${fmtDate(recordDate)}</td>
+        <td>${statusBadge(status)}</td>
+        <td>${escapeHtml(record.classroomName || record.classroom || '—')}</td>
+        <td>${escapeHtml(record.tutorName || record.recordedBy || record.createdByName || '—')}</td>
+        <td>${escapeHtml(notes)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
+      <div class="card panel"><h3>${records.length}</h3><p>Total Records</p></div>
+      <div class="card panel"><h3>${counts.present}</h3><p>Present</p></div>
+      <div class="card panel"><h3>${counts.late}</h3><p>Late</p></div>
+      <div class="card panel"><h3>${counts.absent}</h3><p>Absent</p></div>
+    </div>
+    <div class="card panel">
+      <h3>${escapeHtml(pageTitle || 'Attendance')}</h3>
+      <p>Track your attendance history, punctuality, and any notes recorded with each session.</p>
+      ${records.length ? simpleTable(['Date', 'Status', 'Classroom', 'Recorded By', 'Notes'], rows) : '<div class="empty">No attendance records yet.</div>'}
+    </div>
+  `;
 }
 
 function renderStudentActivitiesPage(items) {
@@ -962,6 +1042,43 @@ function renderStudentMessagesPage(messages) {
   return `<div class="card panel"><h3>Messages from Tutor</h3>${messages.length ? rows : '<div class="empty">No messages yet.</div>'}</div>`;
 }
 
+function renderStudentSettingsPage(profile, user, studentRecord = {}) {
+  const displayName = getStudentDisplayName(profile, user);
+  const accountRows = [
+    ['Full Name', displayName],
+    ['Email', user?.email || profile?.email || '—'],
+    ['Role', sentenceCase(profile?.role, 'Student')],
+    ['Grade', profile?.grade_level || studentRecord?.grade_level || '—'],
+    ['Classroom', studentRecord?.classroomName || profile?.classroomName || 'Not assigned'],
+    ['Last Updated', fmtDate(studentRecord?.updatedAt || profile?.updatedAt || studentRecord?.createdAt)]
+  ].map(([label, value]) => `
+    <div style="display:flex;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);">
+      <strong>${escapeHtml(label)}</strong>
+      <span style="text-align:right;">${escapeHtml(value || '—')}</span>
+    </div>
+  `).join('');
+
+  return `
+    <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,0.8fr);gap:24px;">
+      <section class="card panel">
+        <h3>Student Profile</h3>
+        <p>Your account details are loaded from the shared student profile used across the portal.</p>
+        ${accountRows}
+      </section>
+      <section class="card panel">
+        <h3>Quick Access</h3>
+        <p>Use the links below to jump back into the main student workflow.</p>
+        <div style="display:grid;gap:12px;">
+          <a href="/student/assignments.html" class="btn">View Assignments</a>
+          <a href="/student/submit-work.html" class="btn ghost">Submit Work</a>
+          <a href="/student/portfolio.html" class="btn ghost">Open Portfolio</a>
+          <a href="/student/messages.html" class="btn ghost">Check Messages</a>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function renderStudentPortfolioPage(items) {
   const feedHtml = items.length ? items.map(item => `
     <div class="card panel" style="margin-bottom:12px;">
@@ -973,7 +1090,7 @@ function renderStudentPortfolioPage(items) {
       <p>${escapeHtml(item.note || '')}</p>
       ${item.fileUrl ? `<div class="file-preview">${renderFilePreview(item.fileUrl, item.fileName)}</div>` : ''}
     </div>
-  `).join('') : `<div class="empty-feed">✨ No entries yet – start your journey by adding one!</div>`;
+  `).join('') : `<div style="text-align:center;padding:60px 20px;color:var(--muted);background:#f8fbff;border-radius:20px;">✨ No entries yet – start your journey by adding one!</div>`;
 
   return `
     <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;">
@@ -988,7 +1105,7 @@ function renderStudentPortfolioPage(items) {
           <button type="submit" class="btn">✨ Add to Journey</button><span id="portfolioMsg"></span>
         </form>
       </div>
-      <div><h3>🌟 My Learning Journey</h3><div class="portfolio-feed">${feedHtml}</div></div>
+      <div><h3>🌟 My Learning Journey</h3><div style="display:flex;flex-direction:column;gap:20px;">${feedHtml}</div></div>
     </div>
   `;
 }
@@ -1222,28 +1339,16 @@ function renderParentDashboard(children, profile) {
   return `<section class="card panel"><h3>👨‍👧‍👦 Family Dashboard</h3><p>Tracking ${children.length} children • Latest activity across all kids</p></section><div class="stack">${childCards}</div>`;
 }
 
-// ============================================
-// BOOT FUNCTIONS - STUDENT
-// ============================================
-
 async function bootStudentDashboard() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user, profile } = bundle;
-  
   const [assignments, submissions, assessments, notifications, portfolioItems, resources] = await Promise.all([
-    loadStudentAssignments(user.uid),
-    loadStudentSubmissions(user.uid),
-    loadStudentAssessments(user.uid),
-    loadStudentNotifications(user.uid),
-    loadStudentPortfolio(user.uid),
-    loadStudentResources(user.uid)
+    loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid), loadStudentAssessments(user.uid),
+    loadStudentNotifications(user.uid), loadStudentPortfolio(user.uid), loadStudentResources(user.uid)
   ]);
-  
   document.getElementById('page-content').innerHTML = renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
-  
   document.querySelectorAll('.notification-item').forEach(el => {
     el.addEventListener('click', async () => {
       if (el.classList.contains('unread')) {
@@ -1255,10 +1360,10 @@ async function bootStudentDashboard() {
   });
 }
 
+
 async function bootStudentAssignmentsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
   const [assignments, submissions] = await Promise.all([loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid)]);
@@ -1268,7 +1373,6 @@ async function bootStudentAssignmentsPage() {
 async function bootStudentAssessmentsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
   const assessments = await loadStudentAssessments(user.uid);
@@ -1278,7 +1382,6 @@ async function bootStudentAssessmentsPage() {
 async function bootStudentResourcesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
   const resources = await loadStudentResources(user.uid);
@@ -1316,20 +1419,29 @@ async function bootStudentPortfolioPage() {
   }
 }
 
+
 async function bootStudentReportsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
   const reports = await loadStudentReports(user.uid);
   document.getElementById('page-content').innerHTML = renderStudentReportsPage(reports);
 }
 
+async function bootStudentAttendancePage() {
+  const bundle = await requireAuth();
+  if (!bundle || bundle.profile?.role !== 'student') return;
+  await ensureStudentMirror(bundle.user, bundle.profile);
+  const { user } = bundle;
+  const records = await loadStudentAttendance(user.uid);
+  document.getElementById('page-content').innerHTML = renderStudentAttendancePage(records);
+}
+
+
 async function bootStudentActivitiesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
   const items = await loadStudentActivities(user.uid);
@@ -1339,58 +1451,49 @@ async function bootStudentActivitiesPage() {
 async function bootStudentMessagesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
   const messages = await loadStudentMessages(user.uid);
   document.getElementById('page-content').innerHTML = renderStudentMessagesPage(messages);
 }
 
+async function bootStudentSettingsPage() {
+  const bundle = await requireAuth();
+  if (!bundle || bundle.profile?.role !== 'student') return;
+  await ensureStudentMirror(bundle.user, bundle.profile);
+  const { user, profile } = bundle;
+  const studentDoc = await getDoc(doc(db, 'students', user.uid));
+  const studentRecord = studentDoc.exists() ? studentDoc.data() : {};
+  document.getElementById('page-content').innerHTML = renderStudentSettingsPage(profile, user, studentRecord);
+}
+
 async function bootSubmitWorkPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user, profile } = bundle;
   const params = new URLSearchParams(window.location.search);
   const forcedId = params.get('assignmentId');
-  
   const [assignments, submissions] = await Promise.all([loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid)]);
-  
   document.getElementById('page-content').innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
-  
-  if (forcedId && document.getElementById('assignmentId')) {
-    document.getElementById('assignmentId').value = forcedId;
-  }
-  
+  if (forcedId && document.getElementById('assignmentId')) document.getElementById('assignmentId').value = forcedId;
   const form = document.getElementById('submissionForm');
   const msg = document.getElementById('submitWorkMsg');
   const submitBtn = document.getElementById('submitWorkBtn');
-  
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const assignmentId = document.getElementById('assignmentId').value;
       const note = document.getElementById('submissionNote')?.value || '';
       const file = document.getElementById('submissionFile').files[0];
-      
       if (!assignmentId) { msg.innerHTML = 'Please select an assignment'; return; }
-      
       if (submitBtn) submitBtn.disabled = true;
       msg.innerHTML = 'Submitting...';
-      
       try {
         const assignmentDoc = await getDoc(doc(db, 'assignments', assignmentId));
         const assignment = assignmentDoc.data();
         const upload = file ? await uploadFile(file, `submissions/${user.uid}`) : { url: '' };
-        
-        await addDoc(collection(db, 'submissions'), {
-          assignmentId, assignmentTitle: assignment?.title || 'Assignment', subject: assignment?.subject || '',
-          studentId: user.uid, studentName: getStudentDisplayName(profile, user),
-          note, fileUrl: upload.url, fileName: upload.name,
-          status: 'Submitted', submittedAt: serverTimestamp(), createdAt: serverTimestamp()
-        });
-        
+        await addDoc(collection(db, 'submissions'), { assignmentId, assignmentTitle: assignment?.title || 'Assignment', subject: assignment?.subject || '', studentId: user.uid, studentName: getStudentDisplayName(profile, user), note, fileUrl: upload.url, fileName: upload.name, status: 'Submitted', submittedAt: serverTimestamp(), createdAt: serverTimestamp() });
         msg.innerHTML = '✅ Work submitted successfully!';
         setTimeout(() => location.reload(), 1500);
       } catch (err) {
@@ -1861,12 +1964,15 @@ const routeMap = {
     'dashboard': bootStudentDashboard,
     'assignments': bootStudentAssignmentsPage,
     'assessments': bootStudentAssessmentsPage,
+    'activities': bootStudentActivitiesPage,
+    'attendance': bootStudentAttendancePage,
     'resources': bootStudentResourcesPage,
     'portfolio': bootStudentPortfolioPage,
     'submit-work': bootSubmitWorkPage,
     'messages': bootStudentMessagesPage,
     'reports': bootStudentReportsPage,
-    'activities': bootStudentActivitiesPage
+    'report-card': bootStudentReportsPage,
+    'settings': bootStudentSettingsPage
   },
   tutor: {
     'dashboard': bootTutorDashboard,

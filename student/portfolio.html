@@ -5,58 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My Learning Journey | HomeSchool</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
-  <style>
-    .portfolio-grid {
-      display: grid;
-      grid-template-columns: 1fr 2fr;
-      gap: 28px;
-    }
-    @media (max-width: 900px) {
-      .portfolio-grid { grid-template-columns: 1fr; }
-    }
-    .portfolio-card {
-      background: var(--surface);
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--border);
-    }
-    .tag {
-      display: inline-block;
-      padding: 6px 14px;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-    .feeling-badge { background: #fff3e0; color: #b45309; }
-    .portfolio-feed {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .empty-feed {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--muted);
-      background: #f8fbff;
-      border-radius: 20px;
-    }
-  </style>
 </head>
-<body 
-  data-role="student" 
+<body
+  data-role="student"
   data-page="portfolio"
   data-title="My Portfolio"
-  data-description="Track your academic and personal growth">
-  
+  data-description="Track your academic and personal growth.">
   <div id="app-shell" class="page-shell"></div>
 
   <noscript>
     <div class="card" style="margin:24px;">JavaScript is required.</div>
   </noscript>
 
-  <script type="module" src="/assets/js/firebase-config.js"></script>
-  <script type="module" src="/assets/js/auth.js"></script>
   <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>
