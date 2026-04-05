@@ -2962,6 +2962,7 @@ async function loadExtendedPages(user, profile) {
   switch (pageKey) {
     /* ================= DASHBOARD ================= */
       /* ================= MODERN DASHBOARD ================= */
+       /* ================= MODERN DASHBOARD ================= */
     case 'dashboard': {
       const students = await loadAllStudents();
       const assignmentsSnap = await getDocs(
@@ -3033,6 +3034,7 @@ async function loadExtendedPages(user, profile) {
     }
 
      /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
+        /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
     case 'assignments': {
       if (pageRole !== 'tutor') {
         pageContent.innerHTML = '<div class="card panel"><p>This page is only available for tutors.</p></div>';
@@ -3140,7 +3142,6 @@ async function loadExtendedPages(user, profile) {
       });
       break;
     }
-
     // ────────────────────────────────────────────────
     //  Placeholder / skeleton for other new pages
     //  You can expand these later
