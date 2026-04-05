@@ -121,23 +121,12 @@ function uiHeader(profile) {
 
 function sidebar(profile) {
   const items = navMap[pageRole] || [];
-  
   const links = items.map(([label, href, icon]) => `
     <a class="${href.endsWith(pageKey + '.html') ? 'active' : ''}" href="${href}">
       <span class="icon">${icon}</span>
       <span>${escapeHtml(label)}</span>
     </a>
   `).join('');
-
-  // Special title for parents (shows they have full access)
-  let navTitle = `${escapeHtml(pageRole)} portal`;
-  if (pageRole === 'parent') {
-    navTitle = '👨‍👧‍👦 Parent Portal • Full Access';
-  } else if (pageRole === 'tutor') {
-    navTitle = '👨‍🏫 Tutor Portal';
-  } else if (pageRole === 'student') {
-    navTitle = '👩‍🎓 Student Portal';
-  }
 
   return `
     <aside class="sidebar">
@@ -150,14 +139,14 @@ function sidebar(profile) {
       </div>
 
       <div class="nav-section">
-        <div class="nav-title">${navTitle}</div>
+        <div class="nav-title">${escapeHtml(pageRole)} portal</div>
         <nav class="nav">${links}</nav>
       </div>
 
       <div class="sidebar-footer">
-        <div>${escapeHtml(profile?.name || profile?.full_name || profile?.email || 'User')}</div>
+        <div>${escapeHtml(profile?.name || profile?.full_name || '')}</div>
         <small>${escapeHtml(profile?.email || '')}</small>
-        <small>Role: ${escapeHtml(profile?.role || pageRole || 'guest')}</small>
+        <small>Role: ${escapeHtml(profile?.role || pageRole)}</small>
       </div>
     </aside>
   `;
