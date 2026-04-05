@@ -1,6 +1,7 @@
 // ============================================
 // COMPLETE PAGES.JS - FULL VERSION
 // Preserves ALL original functionality with fixes
+// Map-based routing implemented
 // ============================================
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -402,7 +403,6 @@ async function loadTutorLessonPlans(tutorUid) {
     });
 }
 
-// Safe helper - improves student loading for classroom relationship
 async function loadAllStudents() {
   const snap = await getDocs(
     query(collection(db, 'users'), where('role', '==', 'student'))
@@ -1846,62 +1846,52 @@ async function bootDefaultPage() {
 // PAGE ROUTER
 // ============================================
 
-if (pageKey === 'dashboard') {
-  if (pageRole === 'student') bootStudentDashboard();
-  else if (pageRole === 'tutor') bootTutorDashboard();
-  else if (pageRole === 'parent') bootParentDashboard();
-  else bootDefaultPage();
+const routeMap = {
+  student: {
+    'dashboard': bootStudentDashboard,
+    'assignments': bootStudentAssignmentsPage,
+    'assessments': bootStudentAssessmentsPage,
+    'resources': bootStudentResourcesPage,
+    'portfolio': bootStudentPortfolioPage,
+    'submit-work': bootSubmitWorkPage,
+    'messages': bootStudentMessagesPage,
+    'reports': bootStudentReportsPage,
+    'activities': bootStudentActivitiesPage
+  },
+  tutor: {
+    'dashboard': bootTutorDashboard,
+    'assignments': bootTutorAssignmentsPage,
+    'assessments': bootTutorAssessmentsPage,
+    'resources': bootResourcesPage,
+    'portfolio': bootTutorPortfolios,
+    'lesson-plans': bootLessonPlansPage,
+    'learners': bootLearnersPage,
+    'classrooms': bootClassroomsPage,
+    'messages': bootMessagesPage,
+    'reports': bootReportsPage
+  },
+  parent: {
+    'dashboard': bootParentDashboard,
+    'children': bootParentChildrenPage,
+    'portfolio': bootParentPortfolioPage,
+    'assignments': bootDefaultPage,
+    'assessments': bootDefaultPage,
+    'attendance': bootDefaultPage,
+    'messages': bootDefaultPage,
+    'resources': bootDefaultPage,
+    'settings': bootDefaultPage
+  }
+};
+
+async function initRouter() {
+  if (pageRole && pageKey && routeMap[pageRole] && routeMap[pageRole][pageKey]) {
+    await routeMap[pageRole][pageKey]();
+  } else {
+    await bootDefaultPage();
+  }
 }
-else if (pageKey === 'assignments') {
-  if (pageRole === 'student') bootStudentAssignmentsPage();
-  else if (pageRole === 'tutor') bootTutorAssignmentsPage();
-  else bootDefaultPage();
-}
-else if (pageKey === 'assessments') {
-  if (pageRole === 'student') bootStudentAssessmentsPage();
-  else if (pageRole === 'tutor') bootTutorAssessmentsPage();
-  else bootDefaultPage();
-}
-else if (pageKey === 'resources') {
-  if (pageRole === 'student') bootStudentResourcesPage();
-  else if (pageRole === 'tutor') bootResourcesPage();
-  else bootDefaultPage();
-}
-else if (pageKey === 'portfolio') {
-  if (pageRole === 'student') bootStudentPortfolioPage();
-  else if (pageRole === 'parent') bootParentPortfolioPage();
-  else if (pageRole === 'tutor') bootTutorPortfolios();
-  else bootDefaultPage();
-}
-else if (pageKey === 'submit-work') {
-  bootSubmitWorkPage();
-}
-else if (pageKey === 'lesson-plans') {
-  bootLessonPlansPage();
-}
-else if (pageKey === 'learners') {
-  bootLearnersPage();
-}
-else if (pageKey === 'classrooms') {
-  bootClassroomsPage();
-}
-else if (pageKey === 'messages') {
-  if (pageRole === 'tutor') bootMessagesPage();
-  else if (pageRole === 'student') bootStudentMessagesPage();
-  else bootDefaultPage();
-}
-else if (pageKey === 'reports') {
-  bootReportsPage();
-}
-else if (pageKey === 'activities') {
-  bootStudentActivitiesPage();
-}
-else if (pageKey === 'children') {
-  bootParentChildrenPage();
-}
-else {
-  bootDefaultPage();
-}
+
+initRouter();
 
 // ============================================
 // GLOBALS
