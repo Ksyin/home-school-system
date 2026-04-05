@@ -3017,350 +3017,299 @@ else {
   bootDefaultPage();
 }
 
+/* =========================
+   EXTENDED MODERN PAGES (optional overrides)
+========================= */
+
+/* =====================================================
+   EXTENSION: NEW PAGE SYSTEM (DO NOT REMOVE OLD CODE)
+   Unified handler for new / modernized pages
+   ===================================================== */
+
 async function loadExtendedPages(user, profile) {
-  const shell = document.getElementById('app-shell');
-  if (!shell) return;
-
-  // 🔥 FIX: Ensure full layout (sidebar + header) is always present
-  if (!shell.querySelector('.sidebar')) {
-    shell.innerHTML = `
-      ${sidebar({ ...profile, email: user.email })}
-      <main class="content">
-        ${uiHeader({ ...profile, email: user.email })}
-        <div id="page-content"></div>
-        <footer class="page-foot">HomeSchool student system</footer>
-      </main>
-    `;
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-      logoutBtn.onclick = async () => {
-        await signOut(auth);
-        location.href = '/login.html';
-      };
-    }
-  }
-
   const pageContent = document.getElementById('page-content');
   if (!pageContent) return;
 
   switch (pageKey) {
-    /* ================= ASSIGNMENTS (Tutor) ================= */
+      case 'dashboard': {
+      if (pageRole === 'student') {
+        // === STUDENT MODERN DASHBOARD ===
+        const [assignments, submissions, resources, reports, portfolioItems] = await Promise.all([
+          loadStudentAssignments(user.uid),
+          loadStudentSubmissions(user.uid),
+          loadStudentResources(user.uid),
+          loadStudentReports(user.uid),
+          loadStudentPortfolio(user.uid)
+        ]);
+
+        const att = getStudentAttendanceStatus();
+
+        pageContent.innerHTML = `
+          <div class="stats-grid">
+            <div class="card stat primary"><h3>${assignments.length}</h3><p>Assignments</p></div>
+            <div class="card stat success"><h3>${submissions.length}</h3><p>Completed</p></div>
+            <div class="card stat warn"><h3>${Math.max(0, assignments.length - submissions.length)}</h3><p>Pending</p></div>
+            <div class="card stat success"><h3>${att.rate}%</h3><p>Attendance<br><small>Today: ${att.status} • ${att.today}</small></p></div>
+            <div class="card stat"><h3>${resources.length}</h3><p>Resources</p></div>
+          </div>
+
+          <section class="card panel" style="margin-top:24px">
+            <h3>Welcome back, ${escapeHtml(profile?.full_name || profile?.name || 'Student')}!</h3>
+            <p>You have <strong>${portfolioItems.length}</strong> portfolio reflections this month. Great work! 🎉</p>
+          </section>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+            <!-- Recent Assignments -->
+            <div class="card panel">
+              <h3>📋 Recent Assignments</h3>
+              ${assignments.slice(0, 4).map(a => `
+                <div class="list-item">
+                  <strong>${escapeHtml(a.title || 'Untitled')}</strong>
+                  <small>${a.subject ? escapeHtml(a.subject) : ''} • Due ${fmtDate(a.dueDate)}</small>
+                </div>
+              `).join('') || '<p class="empty">No assignments yet</p>'}
+            </div>
+
+            <!-- Portfolio Snapshot -->
+            <div class="card panel">
+              <h3>🌟 Portfolio Highlights</h3>
+              ${portfolioItems.slice(0, 3).map(item => `
+                <div class="list-item">
+                  <span class="badge">${escapeHtml(item.type || 'Reflection')}</span>
+                  <strong>${escapeHtml(item.title || item.note?.substring(0, 60) || 'Entry')}</strong>
+                </div>
+              `).join('') || '<p class="empty">No entries yet – start your journey!</p>'}
+              <a href="/student/portfolio.html" class="btn ghost" style="margin-top:12px">View full portfolio →</a>
+            </div>
+          </div>
+
+          <div class="top-actions" style="margin-top:32px">
+            <button onclick="location.href='/student/submit-work.html'" class="btn primary-btn">📤 Submit Assignment</button>
+            <button onclick="location.href='/student/resources.html'" class="btn secondary">📚 Browse Resources</button>
+            <button onclick="location.href='/student/messages.html'" class="btn ghost">💬 Messages & Reports</button>
+          </div>
+        `;
+      } 
+      else if (pageRole === 'parent') {
+        // === PARENT DASHBOARD ===
+        const children = await loadParentChildren(user.uid);
+        pageContent.innerHTML = renderParentDashboard(children, profile);
+      } 
+      else {
+        // === TUTOR DASHBOARD (enhanced modern version) ===
+        const [students, assignmentsSnap, submissionsSnap, classrooms] = await Promise.all([
+          loadAllStudents(),
+          getDocs(query(collection(db, 'assignments'), where('tutorId', '==', user.uid))),
+          getDocs(query(collection(db, 'submissions'), where('tutorId', '==', user.uid))),
+          loadClassrooms(user.uid)
+        ]);
+
+        pageContent.innerHTML = `
+          <div class="stats-grid">
+            <div class="card stat primary"><h3>${students.length}</h3><p>Learners</p></div>
+            <div class="card stat success"><h3>${assignmentsSnap.size}</h3><p>Assignments</p></div>
+            <div class="card stat warn"><h3>${submissionsSnap.size}</h3><p>Submissions</p></div>
+            <div class="card stat"><h3>${classrooms.length}</h3><p>Classrooms</p></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:24px">
+            <div class="card panel">
+              <h3>Recent Activity</h3>
+              <div id="recentActivity" class="stack gap-3"></div>
+            </div>
+            <div class="card panel">
+              <h3>Quick Actions</h3>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <button onclick="location.href='/tutor/assignments.html'" class="btn">📝 New Assignment</button>
+                <button onclick="location.href='/tutor/lesson-plans.html'" class="btn">📅 New Lesson Plan</button>
+                <button onclick="location.href='/tutor/classrooms.html'" class="btn">🏫 Manage Classrooms</button>
+                <button onclick="location.href='/tutor/learners.html'" class="btn">👦 Assign Students</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Fill recent activity
+        const container = document.getElementById('recentActivity');
+        if (submissionsSnap.docs.length > 0) {
+          submissionsSnap.docs.slice(0, 8).forEach(docSnap => {
+            const d = docSnap.data();
+            container.innerHTML += `
+              <div class="list-item flex between">
+                <div><strong>${escapeHtml(d.assignmentTitle || 'Submission')}</strong><br><small>by ${escapeHtml(d.studentName || 'Student')}</small></div>
+                <div class="text-right"><small>${fmtDate(d.submittedAt)}</small><br>${statusBadge(d.status)}</div>
+              </div>
+            `;
+          });
+        } else {
+          container.innerHTML = '<p class="empty">No recent submissions yet.</p>';
+        }
+      }
+      break;
+    }
+
+     /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
+        /* ================= ASSIGNMENTS WITH CLASSROOM TARGETING ================= */
     case 'assignments': {
       if (pageRole !== 'tutor') {
-        pageContent.innerHTML = '<div class="card panel"><p>This page is only for tutors.</p></div>';
+        pageContent.innerHTML = '<div class="card panel"><p>This page is only available for tutors.</p></div>';
         break;
       }
 
-      const [classrooms, students] = await Promise.all([
-        loadClassrooms(user.uid),
-        loadAllStudents()
-      ]);
+      const classrooms = await loadClassrooms(user.uid);
+      const snap = await getDocs(
+        query(collection(db, 'assignments'), where('tutorId', '==', user.uid))
+      );
 
-      const classroomOptions = classrooms.length
-        ? `<option value="">No classroom (use student list below)</option>` + classrooms.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
-        : '<option value="">No classrooms yet</option>';
-
-      const studentOptions = students.map(s => 
-        `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email || 'Student')}</option>`
+      let classroomOptions = classrooms.map(c => 
+        `<option value="${c.id}">${escapeHtml(c.name)}</option>`
       ).join('');
+      if (classroomOptions) {
+        classroomOptions = `<option value="">All Students</option>` + classroomOptions;
+      }
 
       pageContent.innerHTML = `
         <section class="card panel">
-          <h3>Create New Assignment / Task</h3>
-          <p>Students are loaded live from Firebase. Select by name — they will get a notification instantly.</p>
+          <h3>Create New Assignment</h3>
+          <p>Select classroom so students see it automatically.</p>
           <form id="assignmentForm" class="stack-form">
             <div class="form-row">
-              <label>Title *</label>
-              <input name="title" required placeholder="e.g. Algebra Worksheet #3">
+              <label>Title</label>
+              <input name="title" required placeholder="Mid-term Math Test">
             </div>
             <div class="form-row">
               <label>Subject</label>
               <input name="subject" placeholder="Mathematics">
             </div>
             <div class="form-row">
-              <label>Target Classroom (optional)</label>
+              <label>Target Classroom</label>
               <select name="classroomId">${classroomOptions}</select>
             </div>
             <div class="form-row">
-              <label>OR Select Specific Students (Ctrl/Cmd + click)</label>
-              <select name="studentIds" multiple size="10" style="width:100%; height:220px;">
-                ${studentOptions}
-              </select>
-            </div>
-            <div class="form-row">
               <label>Description / Instructions</label>
-              <textarea name="description" rows="5" placeholder="Complete all questions..."></textarea>
-            </div>
-            <div class="form-row">
-              <label>Due Date</label>
-              <input name="dueDate" type="date">
+              <textarea name="description" rows="4" placeholder="Complete all questions..."></textarea>
             </div>
             <div class="form-actions">
-              <button type="submit" class="btn primary">Create Assignment & Notify Students</button>
+              <button type="submit" class="btn primary">Create Assignment</button>
               <span id="assignMsg"></span>
             </div>
           </form>
         </section>
 
-        <section class="card panel" style="margin-top:24px">
-          <h3>Your Assignments</h3>
+        <section class="card panel" style="margin-top:24px;">
+          <h3>Your Assignments (${snap.size})</h3>
           <div id="assignmentList" class="stack gap-3"></div>
         </section>
       `;
 
-      // Load existing assignments
-      const snap = await getDocs(query(collection(db, 'assignments'), where('tutorId', '==', user.uid)));
-      const listEl = document.getElementById('assignmentList');
+      const list = document.getElementById('assignmentList');
       if (snap.empty) {
-        listEl.innerHTML = '<p class="empty">No assignments yet.</p>';
+        list.innerHTML = '<p class="empty">No assignments created yet.</p>';
       } else {
         snap.forEach(docSnap => {
           const d = docSnap.data();
-          listEl.innerHTML += `
+          list.innerHTML += `
             <div class="list-item flex between">
               <div>
-                <strong>${escapeHtml(d.title)}</strong><br>
-                <small>${escapeHtml(d.subject || '—')} • Due ${d.dueDate ? fmtDate(d.dueDate) : '—'}</small>
+                <strong>${escapeHtml(d.title || 'Untitled')}</strong>
+                <div><small>${escapeHtml(d.subject || '—')}</small></div>
               </div>
-              <button class="btn danger small" data-id="${docSnap.id}">Delete</button>
+              <div>
+                <button class="btn danger small" data-id="${docSnap.id}">Delete</button>
+              </div>
             </div>
           `;
         });
       }
 
-      // Submit handler
-      document.getElementById('assignmentForm').addEventListener('submit', async (e) => {
+      document.getElementById('assignmentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = e.target;
         const msg = document.getElementById('assignMsg');
-
-        const title = f.title.value.trim();
         const classroomId = f.classroomId.value || null;
-        const selectedStudentIds = Array.from(f.studentIds.selectedOptions).map(opt => opt.value);
-        const dueDate = f.dueDate.value || null;
 
         try {
-          const assignmentRef = doc(collection(db, 'assignments'));
-          await setDoc(assignmentRef, {
+          await setDoc(doc(collection(db, 'assignments')), {
             tutorId: user.uid,
-            tutorName: profile?.full_name || profile?.name || user.email,
-            title,
+            tutorName: profile?.name || profile?.full_name || user.email || 'Tutor',
+            title: f.title.value.trim(),
             subject: f.subject.value.trim(),
             description: f.description.value.trim(),
-            classroomId,
-            assignedTo: selectedStudentIds.length ? selectedStudentIds : null,
-            targetType: selectedStudentIds.length ? 'specific_students' : (classroomId ? 'classroom' : 'all_students'),
-            dueDate: dueDate,
-            createdAt: serverTimestamp()
+            classroomId: classroomId,
+            targetType: classroomId ? 'classroom' : 'all_students',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
           });
-
-          msg.innerHTML = '✅ Created! Students notified.';
+          msg.textContent = '✅ Created! Students in selected classroom will see it now.';
           msg.className = 'success';
-
-          // Notify students
-          let idsToNotify = selectedStudentIds;
-          if (!idsToNotify.length && classroomId) {
-            idsToNotify = await loadStudentsInClassroom(classroomId);
-          }
-          for (const sid of idsToNotify) {
-            await sendStudentNotification(
-              sid,
-              `New Assignment: ${title}`,
-              `Your tutor assigned "${title}". Check it now!`,
-              'assignment',
-              assignmentRef.id
-            );
-          }
-
           setTimeout(() => location.reload(), 1500);
         } catch (err) {
-          msg.textContent = '❌ ' + err.message;
+          msg.textContent = 'Error: ' + err.message;
           msg.className = 'danger';
         }
       });
 
-      // Delete handler
-      listEl.addEventListener('click', async (e) => {
-        if (e.target.dataset.id && confirm('Delete assignment?')) {
+      list?.addEventListener('click', async (e) => {
+        if (e.target.dataset.id && confirm('Delete this assignment?')) {
           await deleteDoc(doc(db, 'assignments', e.target.dataset.id));
           location.reload();
         }
       });
       break;
     }
+    // ────────────────────────────────────────────────
+    //  Placeholder / skeleton for other new pages
+    //  You can expand these later
+    // ────────────────────────────────────────────────
 
-    /* ================= ASSESSMENTS (Tutor) ================= */
-    case 'assessments': {
-      if (pageRole !== 'tutor') {
-        pageContent.innerHTML = '<div class="card panel"><p>This page is only for tutors.</p></div>';
-        break;
-      }
-
-      const students = await loadAllStudents();
-      const studentOptions = students.map(s => 
-        `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)}</option>`
-      ).join('');
-
-      pageContent.innerHTML = `
-        <section class="card panel">
-          <h3>Create New Assessment + Upload File</h3>
-          <p>Select students by name from Firebase — they will be notified instantly.</p>
-          <form id="assessmentForm" class="stack-form">
-            <div class="form-row">
-              <label>Title *</label>
-              <input name="title" required>
-            </div>
-            <div class="form-row">
-              <label>Subject</label>
-              <input name="subject">
-            </div>
-            <div class="form-row">
-              <label>Assign to Students *</label>
-              <select name="studentIds" multiple size="10" required style="width:100%;height:220px;">
-                ${studentOptions}
-              </select>
-            </div>
-            <div class="form-row">
-              <label>Instructions</label>
-              <textarea name="description" rows="4"></textarea>
-            </div>
-            <div class="form-row">
-              <label>Attach File (PDF, image, etc.)</label>
-              <input type="file" id="assessFile" accept=".pdf,.doc,.docx,.jpg,.png,.jpeg">
-            </div>
-            <div class="form-row">
-              <label>Due Date</label>
-              <input name="dueDate" type="date">
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn primary">Create & Upload Assessment</button>
-              <span id="assessMsg"></span>
-            </div>
-          </form>
-        </section>
-      `;
-
-      const form = document.getElementById('assessmentForm');
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const msg = document.getElementById('assessMsg');
-        const fileInput = document.getElementById('assessFile');
-        const selectedIds = Array.from(form.studentIds.selectedOptions).map(o => o.value);
-
-        let fileData = { url: '', path: '', name: '' };
-        if (fileInput.files[0]) {
-          try {
-            fileData = await uploadFile(fileInput.files[0], 'assessments');
-          } catch (err) {
-            msg.textContent = 'Upload failed: ' + err.message;
-            return;
-          }
-        }
-
-        try {
-          const ref = doc(collection(db, 'assessments'));
-          await setDoc(ref, {
-            tutorId: user.uid,
-            tutorName: profile?.full_name || profile?.name,
-            title: form.title.value.trim(),
-            subject: form.subject.value.trim(),
-            description: form.description.value.trim(),
-            dueDate: form.dueDate.value || null,
-            fileUrl: fileData.url,
-            filePath: fileData.path,
-            fileName: fileData.name,
-            assignedTo: selectedIds,
-            targetType: 'specific_students',
-            createdAt: serverTimestamp()
-          });
-
-          msg.innerHTML = '✅ Assessment created & uploaded! Students notified.';
-          msg.className = 'success';
-
-          for (const sid of selectedIds) {
-            await sendStudentNotification(
-              sid,
-              `New Assessment: ${form.title.value}`,
-              `New assessment assigned. Complete by due date.`,
-              'assessment',
-              ref.id
-            );
-          }
-
-          setTimeout(() => location.reload(), 1400);
-        } catch (err) {
-          msg.textContent = 'Error: ' + err.message;
-        }
-      });
+    case 'assessments':
+      pageContent.innerHTML = `<div class="card panel"><h3>Assessments (coming soon)</h3><p>Grade submissions here...</p></div>`;
       break;
-    }
 
-    /* ================= LEARNERS (Tutor) ================= */
-    case 'learners': {
-      if (pageRole !== 'tutor') break;
-      const students = await loadAllStudents();
-
-      let html = `<section class="card panel"><h3>All Learners (${students.length})</h3>`;
-      students.forEach(s => {
-        html += `
-          <div class="student-card">
-            <div class="student-header">
-              <div>
-                <div class="student-name">${escapeHtml(s.full_name || s.name)}</div>
-                <div class="student-email">${escapeHtml(s.email || '')}</div>
-              </div>
-            </div>
-          </div>`;
-      });
-      if (!students.length) html += '<p class="empty">No students in Firebase yet.</p>';
-      html += '</section>';
-
-      pageContent.innerHTML = html;
+    case 'attendance':
+      pageContent.innerHTML = `<div class="card panel"><h3>Attendance (coming soon)</h3><p>Record daily presence...</p></div>`;
       break;
-    }
 
-    /* ================= OTHER PAGES (keep your existing) ================= */
-    case 'dashboard':
+    case 'portfolios':
+      pageContent.innerHTML = `<div class="card panel"><h3>Student Portfolios Overview (coming soon)</h3></div>`;
+      break;
+
     case 'reports':
+      pageContent.innerHTML = `<div class="card panel"><h3>Report Cards (coming soon)</h3></div>`;
+      break;
+
     case 'settings':
-      // Your existing cases stay exactly as they were
-      // (they already work)
+      pageContent.innerHTML = `
+        <div class="card panel">
+          <h3>Profile Settings</h3>
+          <form id="settingsForm" class="stack-form">
+            <div class="form-row">
+              <label>Full Name</label>
+              <input name="full_name" value="${escapeHtml(profile?.full_name || profile?.name || '')}">
+            </div>
+            <button type="submit" class="btn primary">Update Profile</button>
+          </form>
+        </div>
+      `;
+      document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = e.target.full_name.value.trim();
+        if (name) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            full_name: name,
+            updatedAt: serverTimestamp()
+          });
+          alert('Profile updated');
+          location.reload();
+        }
+      });
       break;
 
     default:
-      // Let old boot functions handle student pages if needed
+      // Do nothing — let old boot functions handle it
       break;
   }
 }
-
-
-
-/* ====================== NEW HELPERS ====================== */
-async function loadStudentsInClassroom(classroomId) {
-  if (!classroomId) return [];
-  const q = query(collection(db, 'students'), where('classroomId', '==', classroomId));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => d.id);
-}
-
-async function sendStudentNotification(studentId, title, message, type = 'task', relatedId = null) {
-  try {
-    await setDoc(doc(collection(db, 'notifications')), {
-      studentId,
-      title,
-      message,
-      type,
-      relatedId,
-      read: false,
-      createdAt: serverTimestamp()
-    });
-    console.log(`🔔 Notification sent to student ${studentId}`);
-  } catch (err) {
-    console.error('Notification failed:', err);
-  }
-}
-
 
 /* =========================
    FINAL AUTH HOOK – runs BOTH old + new systems
