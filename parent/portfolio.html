@@ -1,26 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Child Portfolio</title>
-<link rel="stylesheet" href="/assets/css/styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Child Portfolio | HomeSchool</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="View your child's learning journey, achievements, and growth portfolio">
 </head>
+<body
+  data-role="parent"
+  data-page="portfolio"
+  data-title="Learning Portfolio"
+  data-description="Celebrate achievements, track growth milestones, and review your child's learning journey">
+  
+  <div id="app-shell" class="page-shell"></div>
 
-<body data-role="parent" data-page="portfolio">
+  <noscript>
+    <div class="card" style="margin:24px;">JavaScript is required to use this page.</div>
+  </noscript>
 
-<div id="app-shell">
-  <main class="content">
-
-    <div class="topbar">
-      <h2>Child Portfolio</h2>
-      <p>Track growth, achievements, and challenges</p>
-    </div>
-
-    <div id="page-content"></div>
-
-  </main>
-</div>
-
-<script type="module" src="/assets/js/pages.js"></script>
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

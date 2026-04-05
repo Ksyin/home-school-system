@@ -1,29 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<title>Children</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>My Children | HomeSchool</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="View and manage all your children's profiles, progress, and learning paths">
 </head>
+<body
+  data-role="parent"
+  data-page="children"
+  data-title="My Children"
+  data-description="Complete overview of each child's academic journey, progress reports, and learning activities">
+  
+  <div id="app-shell" class="page-shell"></div>
 
-<body>
+  <noscript>
+    <div class="card" style="margin:24px;">JavaScript is required to use this page.</div>
+  </noscript>
 
-<div class="container">
-<h1>My Children</h1>
-
-<div class="card">
-<h3>John Doe</h3>
-<p>Grade: 6</p>
-<p>Status: Active</p>
-</div>
-
-<div class="card">
-<h3>Mary Doe</h3>
-<p>Grade: 4</p>
-<p>Status: Active</p>
-</div>
-
-</div>
-
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

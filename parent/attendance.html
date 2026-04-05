@@ -1,35 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<title>Attendance</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Attendance | HomeSchool</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="Track attendance records for all children across all learning sessions">
 </head>
+<body
+  data-role="parent"
+  data-page="attendance"
+  data-title="Attendance Records"
+  data-description="Complete attendance history for each child including present, absent, late, and excused records">
+  
+  <div id="app-shell" class="page-shell"></div>
 
-<body>
+  <noscript>
+    <div class="card" style="margin:24px;">JavaScript is required to use this page.</div>
+  </noscript>
 
-<div class="container">
-<h1>Attendance</h1>
-
-<table>
-<tr>
-<th>Date</th>
-<th>Status</th>
-</tr>
-
-<tr>
-<td>10 Mar</td>
-<td>Present</td>
-</tr>
-
-<tr>
-<td>11 Mar</td>
-<td>Absent</td>
-</tr>
-
-</table>
-
-</div>
-
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

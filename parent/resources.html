@@ -1,22 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<title>Resources</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Learning Resources | HomeSchool</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="Access all learning materials, documents, videos, and resources shared with your children">
 </head>
+<body
+  data-role="parent"
+  data-page="resources"
+  data-title="Learning Resources"
+  data-description="Browse and access all educational materials, worksheets, videos, and documents shared with your children">
+  
+  <div id="app-shell" class="page-shell"></div>
 
-<body>
+  <noscript>
+    <div class="card" style="margin:24px;">JavaScript is required to use this page.</div>
+  </noscript>
 
-<div class="container">
-<h1>Resources</h1>
-
-<ul>
-<li>Math Notes PDF</li>
-<li>Science Video</li>
-</ul>
-
-</div>
-
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>

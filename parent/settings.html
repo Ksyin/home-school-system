@@ -1,20 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset='utf-8'>
-<title>Settings</title>
-<link rel='stylesheet' href='/assets/css/styles.css'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Settings | HomeSchool</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <meta name="description" content="Manage account settings, notification preferences, and family profile information">
 </head>
+<body
+  data-role="parent"
+  data-page="settings"
+  data-title="Account Settings"
+  data-description="Manage your profile, notification preferences, linked children, and account security">
+  
+  <div id="app-shell" class="page-shell"></div>
 
-<body>
+  <noscript>
+    <div class="card" style="margin:24px;">JavaScript is required to use this page.</div>
+  </noscript>
 
-<div class="container">
-<h1>Settings</h1>
-
-<p>Name: Parent User</p>
-<p>Email: parent@email.com</p>
-
-</div>
-
+  <script type="module" src="/assets/js/firebase-config.js"></script>
+  <script type="module" src="/assets/js/auth.js"></script>
+  <script type="module" src="/assets/js/pages.js"></script>
 </body>
 </html>
