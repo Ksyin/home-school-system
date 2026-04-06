@@ -552,12 +552,12 @@ async function updateAssessmentGrade(assessmentId, score, feedback) {
 // ============================================
 // NOTIFICATION SYSTEM
 // ============================================
-
 async function loadStudentNotifications(studentUid) {
-  const snap = await getDocs(
-    query(collection(db, 'notifications'), where('studentId', '==', studentUid), orderBy('createdAt', 'desc'), limit(20))
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const q = query(collection(db, 'notifications'), where('studentId', '==', studentUid));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
 async function markNotificationRead(notificationId) {
@@ -2344,11 +2344,24 @@ async function bootStudentDashboard() {
   if (!bundle || bundle.profile?.role !== 'student') return;
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user, profile } = bundle;
-  const [assignments, submissions, assessments, notifications, portfolioItems, resources] = await Promise.all([
-    loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid), loadStudentAssessments(user.uid),
-    loadStudentNotifications(user.uid), loadStudentPortfolio(user.uid), loadStudentResources(user.uid)
-  ]);
-  document.getElementById('page-content').innerHTML = renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
+  
+  try {
+    const [assignments, submissions, assessments, notifications, portfolioItems, resources] = await Promise.all([
+      loadStudentAssignments(user.uid),
+      loadStudentSubmissions(user.uid),
+      loadStudentAssessments(user.uid),
+      loadStudentNotifications(user.uid),
+      loadStudentPortfolio(user.uid),
+      loadStudentResources(user.uid)
+    ]);
+    document.getElementById('page-content').innerHTML = renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
+  } catch (err) {
+    console.error('Dashboard error:', err);
+    document.getElementById('page-content').innerHTML = `<div class="card panel error">⚠️ Unable to load dashboard: ${err.message}</div>`;
+    return;
+  }
+  
+  // Attach click handlers for notifications (mark as read)
   document.querySelectorAll('.notification-item').forEach(el => {
     el.addEventListener('click', async () => {
       if (el.classList.contains('unread')) {
