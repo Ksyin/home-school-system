@@ -830,86 +830,155 @@ function openFileModal(url, type, name = '') {
   document.body.appendChild(modal);
 }
 
-// ============================================
-// RENDER FUNCTIONS - STUDENT PAGES
-// ============================================
-
 function renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources) {
-  const pendingAssignments = assignments.filter(a => !submissions.find(s => s.assignmentId === a.id)).length;
+  const pendingAssignments = assignments.length - submissions.length;
   const unreadNotifications = notifications.filter(n => !n.read).length;
-  const gradedAssessments = assessments.filter(a => a.status === 'Graded').length;
-  
+  const gradedAssessments = assessments.filter(a => a.status === 'Graded' || a.score != null).length;
+
   return `
     <style>
-      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 24px; }
-      .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-      .stat-number { font-size: 32px; font-weight: bold; margin: 0; }
-      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-      @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
-      .notification-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-      .notification-item.unread { background: #f0f7ff; border-left: 3px solid #3498db; }
-      .notification-item:hover { background: #e8f0fe; }
+      .stats-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
+        gap: 20px; 
+        margin-bottom: 32px; 
+      }
+      .stat-card { 
+        background: white; 
+        border-radius: 12px; 
+        padding: 24px 20px; 
+        text-align: center; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08); 
+        transition: transform 0.2s;
+      }
+      .stat-card:hover { transform: translateY(-4px); }
+      .stat-number { 
+        font-size: 36px; 
+        font-weight: 700; 
+        margin: 0 0 8px 0; 
+        color: #2c3e50;
+      }
+      .dashboard-grid { 
+        display: grid; 
+        grid-template-columns: 1fr 1fr; 
+        gap: 24px; 
+      }
+      @media (max-width: 768px) { 
+        .dashboard-grid { grid-template-columns: 1fr; } 
+      }
+      .notification-item { 
+        padding: 14px; 
+        border-bottom: 1px solid #eee; 
+        cursor: pointer; 
+        border-radius: 8px;
+      }
+      .notification-item.unread { 
+        background: #f0f7ff; 
+        border-left: 4px solid #3498db; 
+      }
+      .notification-item:hover { background: #f8fbff; }
+      .card.panel h3 { margin-bottom: 16px; }
     </style>
-    
+
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-number">${assignments.length}</div><p>Assignments</p></div>
-      <div class="stat-card" style="background:#e8f5e9;"><div class="stat-number">${submissions.length}</div><p>Completed</p></div>
-      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingAssignments}</div><p>Pending</p></div>
-      <div class="stat-card" style="background:#e3f2fd;"><div class="stat-number">${gradedAssessments}</div><p>Graded</p></div>
-      <div class="stat-card"><div class="stat-number">${resources.length}</div><p>Resources</p></div>
+      <div class="stat-card">
+        <div class="stat-number">${assignments.length}</div>
+        <p>Total Assignments</p>
+      </div>
+      <div class="stat-card" style="background:#e8f5e9;">
+        <div class="stat-number">${submissions.length}</div>
+        <p>Submitted</p>
+      </div>
+      <div class="stat-card" style="background:#fff3e0;">
+        <div class="stat-number">${Math.max(0, pendingAssignments)}</div>
+        <p>Pending</p>
+      </div>
+      <div class="stat-card" style="background:#e3f2fd;">
+        <div class="stat-number">${gradedAssessments}</div>
+        <p>Graded Assessments</p>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">${resources.length}</div>
+        <p>Resources</p>
+      </div>
     </div>
-    
+
     <div class="dashboard-grid">
+      <!-- Notifications -->
       <div class="card panel">
-        <h3>🔔 Notifications ${unreadNotifications > 0 ? `<span class="badge">${unreadNotifications} new</span>` : ''}</h3>
+        <h3>🔔 Recent Notifications ${unreadNotifications ? `<span class="badge">${unreadNotifications} new</span>` : ''}</h3>
         <div id="notificationsList">
-          ${notifications.slice(0, 5).map(n => `
-            <div class="notification-item ${!n.read ? 'unread' : ''}" data-id="${n.id}">
-              <strong>${escapeHtml(n.title)}</strong> <small>${fmtDate(n.createdAt)}</small>
-              <p style="margin:8px 0 0;font-size:14px;">${escapeHtml(n.message)}</p>
+          ${notifications.slice(0, 6).map(n => `
+            <div class="notification-item ${!n.read ? 'unread' : ''}" data-id="${escapeHtml(n.id)}">
+              <strong>${escapeHtml(n.title)}</strong> 
+              <small style="float:right;">${fmtDate(n.createdAt)}</small>
+              <p style="margin:6px 0 0;font-size:14px;color:#555;">${escapeHtml(n.message || '')}</p>
             </div>
-          `).join('') || '<p class="empty">No notifications</p>'}
+          `).join('') || '<p class="empty">No notifications yet.</p>'}
+        </div>
+        <div style="text-align:center;margin-top:12px;">
+          <a href="/student/messages.html" class="btn ghost">View All Messages →</a>
         </div>
       </div>
-      
+
+      <!-- Recent Assessments -->
       <div class="card panel">
         <h3>📊 Recent Assessments</h3>
         ${assessments.slice(0, 5).map(a => `
-          <div style="padding:12px;border-bottom:1px solid #eee;">
-            <div style="display:flex;justify-content:space-between;">
-              <strong>${escapeHtml(a.title)}</strong>
-              ${a.score ? `<span class="badge success">${a.score}/${a.maxScore}</span>` : '<span class="badge warn">Pending</span>'}
+          <div style="padding:14px;border-bottom:1px solid #eee;">
+            <div style="display:flex;justify-content:space-between;align-items:start;">
+              <div>
+                <strong>${escapeHtml(a.title)}</strong><br>
+                <small>${escapeHtml(a.subject || '—')} • ${fmtDate(a.createdAt)}</small>
+              </div>
+              ${a.score != null 
+                ? `<span class="badge success">${a.score}/${a.maxScore || '—'}</span>` 
+                : `<span class="badge warn">Pending</span>`}
             </div>
-            <small>${fmtDate(a.createdAt)}</small>
-            ${a.feedback ? `<p style="margin:8px 0 0;font-size:13px;">💬 ${escapeHtml(a.feedback.substring(0, 100))}</p>` : ''}
+            ${a.feedback ? `<p style="margin:8px 0 0 0;font-size:13.5px;color:#555;">💬 ${escapeHtml(a.feedback.substring(0, 120))}${a.feedback.length > 120 ? '...' : ''}</p>` : ''}
           </div>
-        `).join('') || '<p class="empty">No assessments</p>'}
+        `).join('') || '<p class="empty">No assessments yet.</p>'}
+        <div style="text-align:center;margin-top:12px;">
+          <a href="/student/assessments.html" class="btn ghost">View All Assessments →</a>
+        </div>
       </div>
     </div>
-    
+
+    <!-- Recent Assignments -->
     <div class="card panel" style="margin-top:24px;">
       <h3>📝 Recent Assignments</h3>
-      ${assignments.slice(0, 5).map(a => {
+      ${assignments.slice(0, 6).map(a => {
         const submitted = submissions.find(s => s.assignmentId === a.id);
         return `
-          <div style="padding:12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
-            <div><strong>${escapeHtml(a.title)}</strong><br><small>Due: ${fmtDate(a.dueDate)}</small></div>
-            ${submitted ? '<span class="badge success">✓ Submitted</span>' : `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit</a>`}
+          <div style="padding:14px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <strong>${escapeHtml(a.title)}</strong><br>
+              <small>Due: ${fmtDate(a.dueDate)} • ${escapeHtml(a.subject || '—')}</small>
+            </div>
+            ${submitted 
+              ? `<span class="badge success">✓ Submitted</span>` 
+              : `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit Now</a>`}
           </div>
         `;
-      }).join('') || '<p class="empty">No assignments</p>'}
-      <div style="margin-top:12px;text-align:center;"><a href="/student/assignments.html" class="btn ghost">View All →</a></div>
+      }).join('') || '<p class="empty">No assignments assigned yet.</p>'}
+      <div style="text-align:center;margin-top:16px;">
+        <a href="/student/assignments.html" class="btn ghost">View All Assignments →</a>
+      </div>
     </div>
-    
+
+    <!-- Portfolio Highlights -->
     <div class="card panel" style="margin-top:24px;">
       <h3>🌟 Portfolio Highlights</h3>
-      ${portfolioItems.slice(0, 3).map(item => `
-        <div style="padding:12px;border-bottom:1px solid #eee;">
+      ${portfolioItems.slice(0, 4).map(item => `
+        <div style="padding:14px;border-bottom:1px solid #eee;">
           <span class="badge">${escapeHtml(item.type || 'Entry')}</span>
-          <strong>${escapeHtml(item.title || item.note?.substring(0, 60) || 'Entry')}</strong>
+          <strong>${escapeHtml(item.title || item.note?.substring(0, 70) || 'Portfolio entry')}</strong>
+          <small style="float:right;">${fmtDate(item.createdAt)}</small>
         </div>
-      `).join('') || '<p class="empty">No portfolio entries</p>'}
-      <div style="margin-top:12px;text-align:center;"><a href="/student/portfolio.html" class="btn ghost">View Portfolio →</a></div>
+      `).join('') || '<p class="empty">No portfolio entries yet.</p>'}
+      <div style="text-align:center;margin-top:16px;">
+        <a href="/student/portfolio.html" class="btn ghost">Go to Portfolio →</a>
+      </div>
     </div>
   `;
 }
@@ -1515,488 +1584,7 @@ function renderResourcesPage(resources, classrooms, students) {
   `;
 }
 
-function renderParentDashboard(children, assignmentsByChild, assessmentsByChild, attendanceByChild, alerts) {
-  const totalChildren = children.length;
-  const totalAssignments = Object.values(assignmentsByChild).flat().length;
-  const pendingAssignments = Object.values(assignmentsByChild).flat().filter(a => a.status !== 'Submitted' && a.status !== 'Completed').length;
-  const totalAssessments = Object.values(assessmentsByChild).flat().length;
-  const recentAlerts = alerts.filter(a => !a.acknowledged).slice(0, 5);
-  
-  // Calculate subject performance summary
-  const subjectPerformance = {};
-  Object.values(assessmentsByChild).flat().forEach(a => {
-    if (a.subject && a.score && a.maxScore) {
-      if (!subjectPerformance[a.subject]) {
-        subjectPerformance[a.subject] = { total: 0, count: 0 };
-      }
-      subjectPerformance[a.subject].total += (a.score / a.maxScore) * 100;
-      subjectPerformance[a.subject].count++;
-    }
-  });
-  
-  const subjectsHtml = Object.entries(subjectPerformance).map(([subject, data]) => `
-    <div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between">
-        <strong>${escapeHtml(subject)}</strong>
-        <span>${Math.round(data.total / data.count)}%</span>
-      </div>
-      <div class="progress-bar"><div style="width:${data.total / data.count}%;background:#3498db;height:8px;border-radius:4px"></div></div>
-    </div>
-  `).join('');
-  
-  // Areas of concern (assignments overdue, low scores)
-  const areasOfConcern = [];
-  Object.entries(assignmentsByChild).forEach(([childId, assignments]) => {
-    const child = children.find(c => c.id === childId);
-    const overdue = assignments.filter(a => a.dueDate && new Date(a.dueDate) < new Date() && a.status !== 'Submitted');
-    if (overdue.length > 0) {
-      areasOfConcern.push(`${child?.full_name || child?.name}: ${overdue.length} overdue assignment(s)`);
-    }
-  });
-  
-  Object.entries(assessmentsByChild).forEach(([childId, assessments]) => {
-    const child = children.find(c => c.id === childId);
-    const lowScores = assessments.filter(a => a.score && a.maxScore && (a.score / a.maxScore) < 0.7);
-    if (lowScores.length > 0) {
-      areasOfConcern.push(`${child?.full_name || child?.name}: ${lowScores.length} assessment(s) below 70%`);
-    }
-  });
-  
-  return `
-    <style>
-      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
-      .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-      .stat-number { font-size: 32px; font-weight: bold; margin: 0; color: #2c3e50; }
-      .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
-      @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
-      .alert-item { padding: 12px; border-left: 3px solid #e74c3c; background: #fff5f5; margin-bottom: 8px; border-radius: 8px; }
-      .concern-item { padding: 8px 12px; background: #fff3e0; border-radius: 8px; margin-bottom: 8px; }
-      .progress-bar { background: #ecf0f1; border-radius: 4px; overflow: hidden; }
-      .child-card { background: #f8f9fa; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    </style>
-    
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-number">${totalChildren}</div><p>Children</p></div>
-      <div class="stat-card"><div class="stat-number">${totalAssignments}</div><p>Total Assignments</p></div>
-      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingAssignments}</div><p>Pending</p></div>
-      <div class="stat-card"><div class="stat-number">${totalAssessments}</div><p>Assessments Completed</p></div>
-    </div>
-    
-    <div class="dashboard-grid">
-      <div class="card panel">
-        <h3>⚠️ Areas of Concern</h3>
-        ${areasOfConcern.length ? areasOfConcern.map(c => `<div class="concern-item">⚠️ ${escapeHtml(c)}</div>`).join('') : '<p class="empty">No major concerns - great job!</p>'}
-      </div>
-      
-      <div class="card panel">
-        <h3>📊 Subject Performance Overview</h3>
-        ${subjectsHtml || '<p class="empty">No assessment data yet</p>'}
-      </div>
-    </div>
-    
-    <div class="card panel" style="margin-top:24px;">
-      <h3>🔔 Recent Alerts & Notifications</h3>
-      ${recentAlerts.length ? recentAlerts.map(a => `<div class="alert-item"><strong>${escapeHtml(a.title)}</strong><br><small>${escapeHtml(a.message)}</small><br><small class="text-muted">${fmtDate(a.createdAt)}</small></div>`).join('') : '<p class="empty">No new alerts</p>'}
-    </div>
-    
-    <div class="card panel" style="margin-top:24px;">
-      <h3>👧👦 Children at a Glance</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
-        ${children.map(child => {
-          const childAssignments = assignmentsByChild[child.id] || [];
-          const completedAssignments = childAssignments.filter(a => a.status === 'Submitted' || a.status === 'Completed').length;
-          const childAssessments = assessmentsByChild[child.id] || [];
-          const avgScore = childAssessments.filter(a => a.score && a.maxScore).reduce((sum, a) => sum + (a.score / a.maxScore) * 100, 0) / (childAssessments.filter(a => a.score && a.maxScore).length || 1);
-          
-          return `
-            <div class="child-card">
-              <h4>${escapeHtml(child.full_name || child.name)}</h4>
-              <p>Grade: ${escapeHtml(child.grade_level || '—')} | Classroom: ${escapeHtml(child.classroomName || '—')}</p>
-              <div style="display:flex;justify-content:space-between;margin-top:12px;">
-                <span>📝 ${completedAssignments}/${childAssignments.length} done</span>
-                <span>📊 ${Math.round(avgScore)}% avg</span>
-              </div>
-              <div style="margin-top:12px;">
-                <button class="btn small ghost" onclick="location.href='/parent/portfolio.html?childId=${child.id}'">View Portfolio →</button>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  `;
-}
 
-function renderParentAssessmentsPage(children, assessmentsByChild) {
-  const allAssessments = [];
-  children.forEach(child => {
-    const childAssessments = assessmentsByChild[child.id] || [];
-    childAssessments.forEach(a => {
-      allAssessments.push({
-        ...a,
-        childName: child.full_name || child.name,
-        childId: child.id,
-        percentage: a.score && a.maxScore ? Math.round((a.score / a.maxScore) * 100) : null
-      });
-    });
-  });
-  
-  allAssessments.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  
-  const rows = allAssessments.map(a => `
-    <tr>
-      <td><strong>${escapeHtml(a.childName)}</strong></td>
-      <td><strong>${escapeHtml(a.title)}</strong></td>
-      <td>${escapeHtml(a.subject || '—')}</td>
-      <td>${a.score || '—'} / ${a.maxScore || '—'}</td>
-      <td>${a.percentage ? a.percentage + '%' : '—'}</td>
-      <td>${statusBadge(a.status || 'Pending')}</td>
-      <td>${fmtDate(a.createdAt)}</td>
-      <td>${a.feedback ? `<button class="btn small ghost view-feedback-btn" data-feedback="${escapeHtml(a.feedback)}">View Feedback</button>` : '—'}</td>
-    </tr>
-  `).join('');
-  
-  return `<div class="card panel"><h3>📊 All Assessments by Child</h3>${simpleTable(['Child', 'Assessment', 'Subject', 'Score', 'Percentage', 'Status', 'Date', 'Feedback'], rows)}</div>`;
-}
-
-
-
-function renderParentAssignmentsPage(children, assignmentsByChild, submissionsByChild) {
-  const allAssignments = [];
-  children.forEach(child => {
-    const childAssignments = assignmentsByChild[child.id] || [];
-    childAssignments.forEach(a => {
-      const submission = submissionsByChild[child.id]?.find(s => s.assignmentId === a.id);
-      allAssignments.push({
-        ...a,
-        childName: child.full_name || child.name,
-        childId: child.id,
-        submitted: !!submission,
-        submittedAt: submission?.submittedAt,
-        fileUrl: submission?.fileUrl
-      });
-    });
-  });
-  
-  allAssignments.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  
-  const rows = allAssignments.map(a => `
-    <tr>
-      <td><strong>${escapeHtml(a.childName)}</strong></td>
-      <td><strong>${escapeHtml(a.title)}</strong></td>
-      <td>${escapeHtml(a.subject || '—')}</td>
-      <td>${fmtDate(a.dueDate)}</td>
-      <td>${a.submitted ? statusBadge('Submitted') : statusBadge('Pending')}</td>
-      <td>${a.submitted ? fmtDate(a.submittedAt) : '—'}</td>
-      <td>${a.fileUrl ? `<a href="${a.fileUrl}" target="_blank" class="btn small ghost">View</a>` : (a.submitted ? '✓' : '—')}</td>
-    </tr>
-  `).join('');
-  
-  const pendingCount = allAssignments.filter(a => !a.submitted).length;
-  const completedCount = allAssignments.filter(a => a.submitted).length;
-  
-  return `
-    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
-      <div class="stat-card"><div class="stat-number">${allAssignments.length}</div><p>Total Assignments</p></div>
-      <div class="stat-card" style="background:#e8f5e9;"><div class="stat-number">${completedCount}</div><p>Completed</p></div>
-      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingCount}</div><p>Pending</p></div>
-    </div>
-    <div class="card panel"><h3>📝 All Assignments by Child</h3>${simpleTable(['Child', 'Assignment', 'Subject', 'Due Date', 'Status', 'Submitted', 'File'], rows)}</div>
-  `;
-}
-
-
-function renderParentAttendancePage(children, attendanceByChild) {
-  const allRecords = [];
-  children.forEach(child => {
-    const records = attendanceByChild[child.id] || [];
-    records.forEach(r => {
-      allRecords.push({
-        ...r,
-        childName: child.full_name || child.name,
-        childId: child.id
-      });
-    });
-  });
-  
-  allRecords.sort((a, b) => {
-    const aDate = toMillis(a.recordDate || a.date || a.attendanceDate);
-    const bDate = toMillis(b.recordDate || b.date || b.attendanceDate);
-    return bDate - aDate;
-  });
-  
-  const summary = {};
-  children.forEach(child => {
-    const records = attendanceByChild[child.id] || [];
-    summary[child.id] = {
-      name: child.full_name || child.name,
-      present: records.filter(r => sentenceCase(r.status) === 'Present').length,
-      absent: records.filter(r => sentenceCase(r.status) === 'Absent').length,
-      late: records.filter(r => sentenceCase(r.status) === 'Late').length,
-      total: records.length
-    };
-  });
-  
-  const summaryRows = Object.values(summary).map(s => `
-    <tr>
-      <td>${escapeHtml(s.name)}</td>
-      <td>${s.present}</td>
-      <td>${s.absent}</td>
-      <td>${s.late}</td>
-      <td>${s.total}</td>
-      <td>${s.total ? Math.round((s.present / s.total) * 100) : 0}%</td>
-    </tr>
-  `).join('');
-  
-  const detailRows = allRecords.map(r => `
-    <tr>
-      <td>${escapeHtml(r.childName)}</td>
-      <td>${fmtDate(r.recordDate || r.date || r.attendanceDate)}</td>
-      <td>${statusBadge(sentenceCase(r.status))}</td>
-      <td>${escapeHtml(r.classroomName || r.classroom || '—')}</td>
-      <td>${escapeHtml(r.tutorName || r.recordedBy || '—')}</td>
-      <td>${escapeHtml(r.note || r.notes || '—')}</td>
-    </tr>
-  `).join('');
-  
-  return `
-    <div class="card panel">
-      <h3>📅 Attendance Summary by Child</h3>
-      ${simpleTable(['Child', 'Present', 'Absent', 'Late', 'Total Days', 'Attendance Rate'], summaryRows)}
-    </div>
-    <div class="card panel" style="margin-top:24px;">
-      <h3>📋 Detailed Attendance Records</h3>
-      ${simpleTable(['Child', 'Date', 'Status', 'Classroom', 'Recorded By', 'Notes'], detailRows)}
-    </div>
-  `;
-}
-
-function renderParentReportsPage(children, reportsByChild) {
-  const allReports = [];
-  children.forEach(child => {
-    const reports = reportsByChild[child.id] || [];
-    reports.forEach(r => {
-      allReports.push({
-        ...r,
-        childName: child.full_name || child.name,
-        childId: child.id
-      });
-    });
-  });
-  
-  allReports.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  
-  const reportCards = allReports.map(r => `
-    <div class="card panel" style="margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-        <h4>${escapeHtml(r.childName)} - ${escapeHtml(r.title || 'Progress Report')}</h4>
-        <small>${fmtDate(r.createdAt)}</small>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0;">
-        <div style="background:#e8f5e9;padding:12px;border-radius:8px;">
-          <strong>✅ Strengths</strong>
-          <p>${escapeHtml(r.strengths || '—')}</p>
-        </div>
-        <div style="background:#fff3e0;padding:12px;border-radius:8px;">
-          <strong>⚠️ Areas for Improvement</strong>
-          <p>${escapeHtml(r.lows || r.challenges || '—')}</p>
-        </div>
-      </div>
-      <div style="background:#f0f7ff;padding:12px;border-radius:8px;">
-        <strong>📝 Summary</strong>
-        <p>${escapeHtml(r.summary || r.comment || '—')}</p>
-      </div>
-      ${r.recommendations ? `<div style="margin-top:12px;"><strong>💡 Recommendations:</strong> ${escapeHtml(r.recommendations)}</div>` : ''}
-    </div>
-  `).join('');
-  
-  return `<div class="card panel"><h3>📄 Academic Reports by Child</h3>${allReports.length ? reportCards : '<p class="empty">No reports available yet</p>'}</div>`;
-}
-
-function renderParentResourcesPage(children, resourcesByChild) {
-  const allResources = [];
-  children.forEach(child => {
-    const resources = resourcesByChild[child.id] || [];
-    resources.forEach(r => {
-      allResources.push({
-        ...r,
-        childName: child.full_name || child.name,
-        childId: child.id
-      });
-    });
-  });
-  
-  allResources.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  
-  const resourceCards = allResources.map(r => `
-    <div class="card panel" style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-        <div>
-          <span class="badge">${escapeHtml(r.childName)}</span>
-          <strong style="margin-left:8px;">${escapeHtml(r.title)}</strong>
-        </div>
-        <small>${fmtDate(r.createdAt)}</small>
-      </div>
-      ${r.note ? `<p style="margin:12px 0;">${escapeHtml(r.note)}</p>` : ''}
-      ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
-      <div style="margin-top:8px;">
-        <small>Type: ${escapeHtml(r.type || 'Resource')} | Subject: ${escapeHtml(r.subject || 'General')}</small>
-      </div>
-    </div>
-  `).join('');
-  
-  return `<div class="card panel"><h3>📚 Learning Resources by Child</h3>${allResources.length ? resourceCards : '<p class="empty">No resources shared yet</p>'}</div>`;
-}
-
-function renderParentMessagesPage(children, messages) {
-  const sentMessages = messages.filter(m => m.direction === 'sent' || m.fromParent);
-  const receivedMessages = messages.filter(m => m.direction === 'received' || m.toParent);
-  
-  const receivedHtml = receivedMessages.map(m => `
-    <div class="card panel" style="margin-bottom:12px;border-left:3px solid #3498db;">
-      <div style="display:flex;justify-content:space-between;">
-        <strong>From: ${escapeHtml(m.fromName || m.tutorName || 'Tutor')}</strong>
-        <small>${fmtDate(m.createdAt)}</small>
-      </div>
-      <strong>${escapeHtml(m.subject || 'Message')}</strong>
-      <p>${escapeHtml(m.message || m.body || '—')}</p>
-      ${m.replied ? '<span class="badge success">Replied</span>' : ''}
-    </div>
-  `).join('');
-  
-  const sentHtml = sentMessages.map(m => `
-    <div class="card panel" style="margin-bottom:12px;border-left:3px solid #95a5a6;">
-      <div style="display:flex;justify-content:space-between;">
-        <strong>To: ${escapeHtml(m.toName || m.studentName || 'Tutor')}</strong>
-        <small>${fmtDate(m.createdAt)}</small>
-      </div>
-      <strong>${escapeHtml(m.subject || 'Message')}</strong>
-      <p>${escapeHtml(m.message || m.body || '—')}</p>
-    </div>
-  `).join('');
-  
-  const studentOptions = children.map(c => `<option value="${c.id}">${escapeHtml(c.full_name || c.name)} (child)</option>`).join('');
-  
-  return `
-    <div class="grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-      <div class="card panel">
-        <h3>✉️ Send Message</h3>
-        <form id="parentMessageForm" class="stack-form">
-          <div class="form-row">
-            <label>To</label>
-            <select id="messageRecipientId" required>
-              <option value="">-- Select Recipient --</option>
-              <option value="tutor">📚 Tutor/Teacher</option>
-              ${studentOptions}
-            </select>
-          </div>
-          <div class="form-row">
-            <label>Subject</label>
-            <input id="messageSubject" type="text" required placeholder="Message subject...">
-          </div>
-          <div class="form-row">
-            <label>Message</label>
-            <textarea id="messageBody" rows="5" required placeholder="Write your message here..."></textarea>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn">Send Message</button>
-            <span id="messageMsg"></span>
-          </div>
-        </form>
-      </div>
-      
-      <div>
-        <div class="card panel">
-          <h3>📥 Received Messages</h3>
-          ${receivedHtml || '<p class="empty">No messages yet</p>'}
-        </div>
-        <div class="card panel" style="margin-top:20px;">
-          <h3>📤 Sent Messages</h3>
-          ${sentHtml || '<p class="empty">No sent messages</p>'}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderParentSettingsPage(profile, children) {
-  return `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-      <div class="card panel">
-        <h3>👤 Profile Information</h3>
-        <div style="padding:16px 0;">
-          <div style="margin-bottom:16px;"><strong>Name:</strong> ${escapeHtml(profile?.name || profile?.full_name || '—')}</div>
-          <div style="margin-bottom:16px;"><strong>Email:</strong> ${escapeHtml(profile?.email || '—')}</div>
-          <div style="margin-bottom:16px;"><strong>Role:</strong> ${escapeHtml(profile?.role || 'Parent')}</div>
-          <div><strong>Account Created:</strong> ${fmtDate(profile?.createdAt)}</div>
-        </div>
-      </div>
-      
-      <div class="card panel">
-        <h3>👨‍👩‍👧‍👦 Linked Children</h3>
-        ${children.length ? children.map(c => `
-          <div style="padding:12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;">
-            <div><strong>${escapeHtml(c.full_name || c.name)}</strong><br><small>Grade ${escapeHtml(c.grade_level || '—')}</small></div>
-            <span class="badge success">Linked</span>
-          </div>
-        `).join('') : '<p class="empty">No children linked. Contact your tutor to connect accounts.</p>'}
-      </div>
-      
-      <div class="card panel">
-        <h3>🔔 Notification Preferences</h3>
-        <form id="notificationPrefsForm">
-          <div style="margin-bottom:12px;"><label><input type="checkbox" id="notifyAssignments" checked> Assignment reminders</label></div>
-          <div style="margin-bottom:12px;"><label><input type="checkbox" id="notifyAssessments" checked> Assessment results</label></div>
-          <div style="margin-bottom:12px;"><label><input type="checkbox" id="notifyAttendance" checked> Attendance updates</label></div>
-          <div style="margin-bottom:12px;"><label><input type="checkbox" id="notifyMessages" checked> New messages</label></div>
-          <button type="submit" class="btn small">Save Preferences</button>
-          <span id="prefMsg"></span>
-        </form>
-      </div>
-      
-      <div class="card panel">
-        <h3>🔒 Security</h3>
-        <button class="btn ghost" id="changePasswordBtn">Change Password</button>
-        <button class="btn danger" id="logoutSettingsBtn" style="margin-left:12px;">Logout</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderParentGrowthPage(children, growthNotesByChild) {
-  const allNotes = [];
-  children.forEach(child => {
-    const notes = growthNotesByChild[child.id] || [];
-    notes.forEach(n => {
-      allNotes.push({
-        ...n,
-        childName: child.full_name || child.name,
-        childId: child.id
-      });
-    });
-  });
-  
-  allNotes.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  
-  const noteCards = allNotes.map(n => `
-    <div class="card panel" style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <span class="badge ${n.type === 'Strength' ? 'success' : (n.type === 'Challenge' ? 'danger' : 'warn')}">${escapeHtml(n.type || 'Note')}</span>
-        <small>${escapeHtml(n.childName)} • ${fmtDate(n.createdAt)}</small>
-      </div>
-      <p style="margin-top:12px;">${escapeHtml(n.note || n.comment || '—')}</p>
-      ${n.milestone ? `<small>🎯 Milestone: ${escapeHtml(n.milestone)}</small>` : ''}
-    </div>
-  `).join('');
-  
-  return `
-    <div class="card panel">
-      <h3>🌱 Growth & Development Notes</h3>
-      <p>Track social-emotional growth, behavioral observations, and developmental milestones across all children.</p>
-      ${allNotes.length ? noteCards : '<p class="empty">No growth notes recorded yet</p>'}
-    </div>
-  `;
-}
 
 
 
@@ -2753,24 +2341,51 @@ async function loadAllStudentNotes() {
 async function bootStudentDashboard() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-  await ensureStudentMirror(bundle.user, bundle.profile);
-  const { user, profile } = bundle;
-  const [assignments, submissions, assessments, notifications, portfolioItems, resources] = await Promise.all([
-    loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid), loadStudentAssessments(user.uid),
-    loadStudentNotifications(user.uid), loadStudentPortfolio(user.uid), loadStudentResources(user.uid)
-  ]);
-  document.getElementById('page-content').innerHTML = renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
-  document.querySelectorAll('.notification-item').forEach(el => {
-    el.addEventListener('click', async () => {
-      if (el.classList.contains('unread')) {
-        await updateDoc(doc(db, 'notifications', el.dataset.id), { read: true });
-        el.classList.remove('unread');
-        el.style.background = 'white';
-      }
-    });
-  });
-}
 
+  await ensureStudentMirror(bundle.user, bundle.profile);
+
+  const { user, profile } = bundle;
+
+  try {
+    const [assignments, submissions, assessments, notifications, portfolioItems, resources] =
+      await Promise.all([
+        loadStudentAssignments(user.uid),
+        loadStudentSubmissions(user.uid),
+        loadStudentAssessments(user.uid),
+        loadStudentNotifications(user.uid),
+        loadStudentPortfolio(user.uid),
+        loadStudentResources(user.uid)
+      ]);
+
+    document.getElementById('page-content').innerHTML = 
+      renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
+
+    // Notification click handlers
+    document.querySelectorAll('.notification-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        if (el.classList.contains('unread') && el.dataset.id) {
+          try {
+            await updateDoc(doc(db, 'notifications', el.dataset.id), { read: true });
+            el.classList.remove('unread');
+            el.style.background = 'white';
+          } catch (e) {
+            console.warn('Failed to mark notification as read', e);
+          }
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error('Dashboard load error:', err);
+    document.getElementById('page-content').innerHTML = `
+      <div class="card panel">
+        <h3>⚠️ Error loading dashboard</h3>
+        <p>${escapeHtml(err.message)}</p>
+        <button class="btn" onclick="location.reload()">Retry</button>
+      </div>
+    `;
+  }
+}
 
 async function bootStudentAssignmentsPage() {
   const bundle = await requireAuth();
