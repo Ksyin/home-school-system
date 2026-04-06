@@ -830,156 +830,157 @@ function openFileModal(url, type, name = '') {
   document.body.appendChild(modal);
 }
 
-function renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources) {
-  const pendingAssignments = assignments.length - submissions.length;
-  const unreadNotifications = notifications.filter(n => !n.read).length;
-  const gradedAssessments = assessments.filter(a => a.status === 'Graded' || a.score != null).length;
+// ============================================
+// RENDER FUNCTIONS - STUDENT PAGES
+// ============================================
 
+function renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources) {
+  const pendingAssignments = assignments.filter(a => !submissions.find(s => s.assignmentId === a.id)).length;
+  const unreadNotifications = notifications.filter(n => !n.read).length;
+  const gradedAssessments = assessments.filter(a => a.status === 'Graded').length;
+  
   return `
     <style>
-      .stats-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
-        gap: 20px; 
-        margin-bottom: 32px; 
-      }
-      .stat-card { 
-        background: white; 
-        border-radius: 12px; 
-        padding: 24px 20px; 
-        text-align: center; 
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08); 
-        transition: transform 0.2s;
-      }
-      .stat-card:hover { transform: translateY(-4px); }
-      .stat-number { 
-        font-size: 36px; 
-        font-weight: 700; 
-        margin: 0 0 8px 0; 
-        color: #2c3e50;
-      }
-      .dashboard-grid { 
-        display: grid; 
-        grid-template-columns: 1fr 1fr; 
-        gap: 24px; 
-      }
-      @media (max-width: 768px) { 
-        .dashboard-grid { grid-template-columns: 1fr; } 
-      }
-      .notification-item { 
-        padding: 14px; 
-        border-bottom: 1px solid #eee; 
-        cursor: pointer; 
-        border-radius: 8px;
-      }
-      .notification-item.unread { 
-        background: #f0f7ff; 
-        border-left: 4px solid #3498db; 
-      }
-      .notification-item:hover { background: #f8fbff; }
-      .card.panel h3 { margin-bottom: 16px; }
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 24px; }
+      .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+      .stat-number { font-size: 32px; font-weight: bold; margin: 0; }
+      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
+      .notification-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+      .notification-item.unread { background: #f0f7ff; border-left: 3px solid #3498db; }
+      .notification-item:hover { background: #e8f0fe; }
     </style>
-
+    
     <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-number">${assignments.length}</div>
-        <p>Total Assignments</p>
-      </div>
-      <div class="stat-card" style="background:#e8f5e9;">
-        <div class="stat-number">${submissions.length}</div>
-        <p>Submitted</p>
-      </div>
-      <div class="stat-card" style="background:#fff3e0;">
-        <div class="stat-number">${Math.max(0, pendingAssignments)}</div>
-        <p>Pending</p>
-      </div>
-      <div class="stat-card" style="background:#e3f2fd;">
-        <div class="stat-number">${gradedAssessments}</div>
-        <p>Graded Assessments</p>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number">${resources.length}</div>
-        <p>Resources</p>
-      </div>
+      <div class="stat-card"><div class="stat-number">${assignments.length}</div><p>Assignments</p></div>
+      <div class="stat-card" style="background:#e8f5e9;"><div class="stat-number">${submissions.length}</div><p>Completed</p></div>
+      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingAssignments}</div><p>Pending</p></div>
+      <div class="stat-card" style="background:#e3f2fd;"><div class="stat-number">${gradedAssessments}</div><p>Graded</p></div>
+      <div class="stat-card"><div class="stat-number">${resources.length}</div><p>Resources</p></div>
     </div>
-
+    
     <div class="dashboard-grid">
-      <!-- Notifications -->
       <div class="card panel">
-        <h3>🔔 Recent Notifications ${unreadNotifications ? `<span class="badge">${unreadNotifications} new</span>` : ''}</h3>
+        <h3>🔔 Notifications ${unreadNotifications > 0 ? `<span class="badge">${unreadNotifications} new</span>` : ''}</h3>
         <div id="notificationsList">
-          ${notifications.slice(0, 6).map(n => `
-            <div class="notification-item ${!n.read ? 'unread' : ''}" data-id="${escapeHtml(n.id)}">
-              <strong>${escapeHtml(n.title)}</strong> 
-              <small style="float:right;">${fmtDate(n.createdAt)}</small>
-              <p style="margin:6px 0 0;font-size:14px;color:#555;">${escapeHtml(n.message || '')}</p>
+          ${notifications.slice(0, 5).map(n => `
+            <div class="notification-item ${!n.read ? 'unread' : ''}" data-id="${n.id}">
+              <strong>${escapeHtml(n.title)}</strong> <small>${fmtDate(n.createdAt)}</small>
+              <p style="margin:8px 0 0;font-size:14px;">${escapeHtml(n.message)}</p>
             </div>
-          `).join('') || '<p class="empty">No notifications yet.</p>'}
-        </div>
-        <div style="text-align:center;margin-top:12px;">
-          <a href="/student/messages.html" class="btn ghost">View All Messages →</a>
+          `).join('') || '<p class="empty">No notifications</p>'}
         </div>
       </div>
-
-      <!-- Recent Assessments -->
+      
       <div class="card panel">
         <h3>📊 Recent Assessments</h3>
         ${assessments.slice(0, 5).map(a => `
-          <div style="padding:14px;border-bottom:1px solid #eee;">
-            <div style="display:flex;justify-content:space-between;align-items:start;">
-              <div>
-                <strong>${escapeHtml(a.title)}</strong><br>
-                <small>${escapeHtml(a.subject || '—')} • ${fmtDate(a.createdAt)}</small>
-              </div>
-              ${a.score != null 
-                ? `<span class="badge success">${a.score}/${a.maxScore || '—'}</span>` 
-                : `<span class="badge warn">Pending</span>`}
+          <div style="padding:12px;border-bottom:1px solid #eee;">
+            <div style="display:flex;justify-content:space-between;">
+              <strong>${escapeHtml(a.title)}</strong>
+              ${a.score ? `<span class="badge success">${a.score}/${a.maxScore}</span>` : '<span class="badge warn">Pending</span>'}
             </div>
-            ${a.feedback ? `<p style="margin:8px 0 0 0;font-size:13.5px;color:#555;">💬 ${escapeHtml(a.feedback.substring(0, 120))}${a.feedback.length > 120 ? '...' : ''}</p>` : ''}
+            <small>${fmtDate(a.createdAt)}</small>
+            ${a.feedback ? `<p style="margin:8px 0 0;font-size:13px;">💬 ${escapeHtml(a.feedback.substring(0, 100))}</p>` : ''}
           </div>
-        `).join('') || '<p class="empty">No assessments yet.</p>'}
-        <div style="text-align:center;margin-top:12px;">
-          <a href="/student/assessments.html" class="btn ghost">View All Assessments →</a>
-        </div>
+        `).join('') || '<p class="empty">No assessments</p>'}
       </div>
     </div>
-
-    <!-- Recent Assignments -->
+    
     <div class="card panel" style="margin-top:24px;">
       <h3>📝 Recent Assignments</h3>
-      ${assignments.slice(0, 6).map(a => {
+      ${assignments.slice(0, 5).map(a => {
         const submitted = submissions.find(s => s.assignmentId === a.id);
         return `
-          <div style="padding:14px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <strong>${escapeHtml(a.title)}</strong><br>
-              <small>Due: ${fmtDate(a.dueDate)} • ${escapeHtml(a.subject || '—')}</small>
-            </div>
-            ${submitted 
-              ? `<span class="badge success">✓ Submitted</span>` 
-              : `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit Now</a>`}
+          <div style="padding:12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>${escapeHtml(a.title)}</strong><br><small>Due: ${fmtDate(a.dueDate)}</small></div>
+            ${submitted ? '<span class="badge success">✓ Submitted</span>' : `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit</a>`}
           </div>
         `;
-      }).join('') || '<p class="empty">No assignments assigned yet.</p>'}
-      <div style="text-align:center;margin-top:16px;">
-        <a href="/student/assignments.html" class="btn ghost">View All Assignments →</a>
-      </div>
+      }).join('') || '<p class="empty">No assignments</p>'}
+      <div style="margin-top:12px;text-align:center;"><a href="/student/assignments.html" class="btn ghost">View All →</a></div>
     </div>
-
-    <!-- Portfolio Highlights -->
+    
     <div class="card panel" style="margin-top:24px;">
       <h3>🌟 Portfolio Highlights</h3>
-      ${portfolioItems.slice(0, 4).map(item => `
-        <div style="padding:14px;border-bottom:1px solid #eee;">
+      ${portfolioItems.slice(0, 3).map(item => `
+        <div style="padding:12px;border-bottom:1px solid #eee;">
           <span class="badge">${escapeHtml(item.type || 'Entry')}</span>
-          <strong>${escapeHtml(item.title || item.note?.substring(0, 70) || 'Portfolio entry')}</strong>
-          <small style="float:right;">${fmtDate(item.createdAt)}</small>
+          <strong>${escapeHtml(item.title || item.note?.substring(0, 60) || 'Entry')}</strong>
         </div>
-      `).join('') || '<p class="empty">No portfolio entries yet.</p>'}
-      <div style="text-align:center;margin-top:16px;">
-        <a href="/student/portfolio.html" class="btn ghost">Go to Portfolio →</a>
-      </div>
+      `).join('') || '<p class="empty">No portfolio entries</p>'}
+      <div style="margin-top:12px;text-align:center;"><a href="/student/portfolio.html" class="btn ghost">View Portfolio →</a></div>
     </div>
+  `;
+}
+
+
+async function refreshStudentDashboard(bundle) {
+  const { user, profile } = bundle;
+  const pageContent = document.getElementById('page-content');
+  if (!pageContent) return;
+
+  // Simplified - load data with simple queries or no filters
+  const [assignments, submissions, resources, reports] = await Promise.all([
+    loadStudentAssignments(user.uid),
+    loadStudentSubmissions(user.uid),
+    loadStudentResources(user.uid),
+    loadStudentReports(user.uid)
+  ]);
+
+  // Calculate pending assignments (assignments not submitted)
+  const submittedIds = new Set(submissions.map(s => s.assignmentId));
+  const pendingAssignments = assignments.filter(a => !submittedIds.has(a.id)).length;
+
+  // Simple portfolio count (no complex query)
+  let portfolioCount = 0;
+  try {
+    const portfolioSnap = await getDocs(collection(db, 'portfolio'));
+    portfolioCount = portfolioSnap.docs.filter(d => d.data().studentId === user.uid).length;
+  } catch (e) {
+    console.warn('Could not load portfolio count:', e);
+  }
+
+  const recentRows = submissions.slice(0, 5).map(item => `
+    <tr>
+      <td>${escapeHtml(item.assignmentTitle || 'Assignment')}</td>
+      <td>${statusBadge(item.status || 'Submitted')}</td>
+      <td>${fmtDate(item.submittedAt)}</td>
+    </tr>
+  `).join('');
+
+  pageContent.innerHTML = `
+    <section class="grid cols-4 gap-4">
+      <div class="card stat primary">
+        <h3>${assignments.length}</h3>
+        <p>Assignments</p>
+      </div>
+
+      <div class="card stat success">
+        <h3>${submissions.length}</h3>
+        <p>Submitted</p>
+      </div>
+
+      <div class="card stat warn">
+        <h3>${pendingAssignments}</h3>
+        <p>Pending</p>
+      </div>
+
+      <div class="card stat danger">
+        <h3>${reports.length}</h3>
+        <p>Reports</p>
+      </div>
+    </section>
+
+    <section class="card panel" style="margin-top:20px">
+      <h3>Welcome ${escapeHtml(profile?.full_name || profile?.name || 'Student')}</h3>
+      <p>You currently have <strong>${resources.length}</strong> resources and <strong>${portfolioCount}</strong> portfolio entries.</p>
+    </section>
+
+    <section class="card panel" style="margin-top:20px">
+      <h3>Recent Submissions</h3>
+      ${simpleTable(['Assignment', 'Status', 'Submitted'], recentRows)}
+    </section>
   `;
 }
 
@@ -2341,51 +2342,24 @@ async function loadAllStudentNotes() {
 async function bootStudentDashboard() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
-
   await ensureStudentMirror(bundle.user, bundle.profile);
-
   const { user, profile } = bundle;
-
-  try {
-    const [assignments, submissions, assessments, notifications, portfolioItems, resources] =
-      await Promise.all([
-        loadStudentAssignments(user.uid),
-        loadStudentSubmissions(user.uid),
-        loadStudentAssessments(user.uid),
-        loadStudentNotifications(user.uid),
-        loadStudentPortfolio(user.uid),
-        loadStudentResources(user.uid)
-      ]);
-
-    document.getElementById('page-content').innerHTML = 
-      renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
-
-    // Notification click handlers
-    document.querySelectorAll('.notification-item').forEach(el => {
-      el.addEventListener('click', async () => {
-        if (el.classList.contains('unread') && el.dataset.id) {
-          try {
-            await updateDoc(doc(db, 'notifications', el.dataset.id), { read: true });
-            el.classList.remove('unread');
-            el.style.background = 'white';
-          } catch (e) {
-            console.warn('Failed to mark notification as read', e);
-          }
-        }
-      });
+  const [assignments, submissions, assessments, notifications, portfolioItems, resources] = await Promise.all([
+    loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid), loadStudentAssessments(user.uid),
+    loadStudentNotifications(user.uid), loadStudentPortfolio(user.uid), loadStudentResources(user.uid)
+  ]);
+  document.getElementById('page-content').innerHTML = renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
+  document.querySelectorAll('.notification-item').forEach(el => {
+    el.addEventListener('click', async () => {
+      if (el.classList.contains('unread')) {
+        await updateDoc(doc(db, 'notifications', el.dataset.id), { read: true });
+        el.classList.remove('unread');
+        el.style.background = 'white';
+      }
     });
-
-  } catch (err) {
-    console.error('Dashboard load error:', err);
-    document.getElementById('page-content').innerHTML = `
-      <div class="card panel">
-        <h3>⚠️ Error loading dashboard</h3>
-        <p>${escapeHtml(err.message)}</p>
-        <button class="btn" onclick="location.reload()">Retry</button>
-      </div>
-    `;
-  }
+  });
 }
+
 
 async function bootStudentAssignmentsPage() {
   const bundle = await requireAuth();
