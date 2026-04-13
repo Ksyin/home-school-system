@@ -798,39 +798,50 @@ function renderFilePreview(url, name = '') {
 
   const lower = (name || url).toLowerCase();
 
-  if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
-    return `
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <img src="${url}" style="width:140px;height:100px;object-fit:cover;border-radius:10px;cursor:pointer"
-          onclick="openFileModal('${url}', 'image', '${name}')">
-        <button class="btn" onclick="openFileModal('${url}', 'image', '${name}')">View</button>
+  const baseCard = (inner, actions = '') => `
+    <div class="file-card">
+      <div class="file-preview">
+        ${inner}
       </div>
-    `;
+      <div class="file-actions">
+        ${actions}
+      </div>
+    </div>
+  `;
+
+  if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+    return baseCard(
+      `<img src="${url}" onclick="openFileModal('${url}', 'image', '${name}')">`,
+      `
+        <button class="btn primary" onclick="openFileModal('${url}', 'image', '${name}')">View</button>
+      `
+    );
   }
 
   if (lower.match(/\.(pdf|doc|docx)$/)) {
-    return `
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="width:140px;height:100px;background:#f1f5ff;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:bold"
-          onclick="openFileModal('${url}', 'doc', '${name}')">📄 Document</div>
-        <button class="btn" onclick="openFileModal('${url}', 'doc', '${name}')">Read</button>
-        <a href="${url}" target="_blank" class="btn ghost">Open tab</a>
+    return baseCard(
+      `<div class="file-icon" onclick="openFileModal('${url}', 'doc', '${name}')">📄</div>`,
+      `
+        <button class="btn primary" onclick="openFileModal('${url}', 'doc', '${name}')">Read</button>
+        <a href="${url}" target="_blank" class="btn ghost">Open</a>
         <a href="${url}" download class="btn ghost">Download</a>
-      </div>
-    `;
+      `
+    );
   }
 
   if (lower.match(/\.(mp4|webm|ogg)$/)) {
-    return `
-      <video controls style="width:140px;border-radius:10px">
-        <source src="${url}">
-      </video>
-    `;
+    return baseCard(
+      `<video src="${url}" muted></video>`,
+      `
+        <button class="btn primary" onclick="openFileModal('${url}', 'video', '${name}')">Play</button>
+      `
+    );
   }
 
-  return `
-    <button class="btn" onclick="openFileModal('${url}', 'file', '${name}')">Open</button>
-  `;
+  return baseCard(
+    `<div class="file-icon">📁</div>`,
+    `<button class="btn primary" onclick="openFileModal('${url}', 'file', '${name}')">Open</button>`
+  );
 }
 
 function openFileModal(url, type, name = '') {
@@ -840,32 +851,40 @@ function openFileModal(url, type, name = '') {
   let content = '';
 
   if (type === 'image') {
-    content = `<img src="${url}" style="max-width:100%;max-height:80vh">`;
+    content = `<img src="${url}" class="modal-media">`;
   } else if (type === 'doc') {
-    content = `<iframe src="https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}" style="width:100%;height:80vh;border:none"></iframe>`;
+    content = `<iframe src="https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}" class="modal-media"></iframe>`;
   } else if (type === 'video') {
-    content = `<video controls style="width:100%"><source src="${url}"></video>`;
+    content = `<video controls class="modal-media"><source src="${url}"></video>`;
   } else {
-    content = `<iframe src="${url}" style="width:100%;height:80vh"></iframe>`;
+    content = `<iframe src="${url}" class="modal-media"></iframe>`;
   }
 
   const modal = document.createElement('div');
   modal.id = 'fileModal';
+
   modal.innerHTML = `
-    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;">
-      <div style="width:90%;max-width:1000px;background:#fff;padding:16px;border-radius:12px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-          <strong>${name || 'Preview'}</strong>
-          <button onclick="document.getElementById('fileModal').remove()" class="btn danger">Close</button>
+    <div class="modal-overlay" onclick="this.parentElement.remove()">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        
+        <div class="modal-header">
+          <h3>${name || 'Preview'}</h3>
+          <button class="btn danger" onclick="document.getElementById('fileModal').remove()">✕</button>
         </div>
-        ${content}
-        <div style="margin-top:10px;display:flex;gap:10px">
-          <a href="${url}" target="_blank" class="btn">Open</a>
+
+        <div class="modal-body">
+          ${content}
+        </div>
+
+        <div class="modal-footer">
+          <a href="${url}" target="_blank" class="btn">Open in new tab</a>
           <a href="${url}" download class="btn ghost">Download</a>
         </div>
+
       </div>
     </div>
   `;
+
   document.body.appendChild(modal);
 }
 
