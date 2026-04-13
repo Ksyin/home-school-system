@@ -665,11 +665,50 @@ async function loadStudentActivities(studentUid) {
 }
 
 async function loadStudentMessages(studentUid) {
-  const snap = await getDocs(
-    query(collection(db, 'messages'), where('studentId', '==', studentUid))
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  console.log('💬 Loading messages for student:', studentUid);
+  
+  try {
+    // Query messages where studentId matches (tutor -> student messages)
+    const q1 = query(
+      collection(db, 'messages'), 
+      where('studentId', '==', studentUid)
+    );
+    
+    // Also query messages where toId matches (general messages)
+    const q2 = query(
+      collection(db, 'messages'),
+      where('toId', '==', studentUid)
+    );
+    
+    const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+    
+    // Combine and deduplicate by ID
+    const messagesMap = new Map();
+    
+    [...snap1.docs, ...snap2.docs].forEach(docSnap => {
+      if (!messagesMap.has(docSnap.id)) {
+        messagesMap.set(docSnap.id, {
+          id: docSnap.id,
+          ...docSnap.data()
+        });
+      }
+    });
+    
+    const messages = Array.from(messagesMap.values());
+    
+    // Sort by createdAt descending
+    messages.sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+    
+    console.log(`📨 Found ${messages.length} messages for student`);
+    return messages;
+  } catch (err) {
+    console.error('Error loading student messages:', err);
+    return [];
+  }
 }
 
 async function loadStudentSubmissions(studentUid) {
@@ -1102,15 +1141,70 @@ function renderStudentActivitiesPage(items) {
 }
 
 function renderStudentMessagesPage(messages) {
-  const rows = messages.map(item => `
-    <div class="card panel" style="margin-bottom:12px">
-      <h4>${escapeHtml(item.subject || 'Message')}</h4>
-      <p>${escapeHtml(item.message || '—')}</p>
-      <small>${fmtDate(item.createdAt)}</small>
+  if (!messages || messages.length === 0) {
+    return `
+      <div class="card panel">
+        <h3>💬 Messages from Your Tutor</h3>
+        <div class="empty-state" style="text-align:center;padding:40px;">
+          <div style="font-size:48px;margin-bottom:16px;">📭</div>
+          <p>No messages yet.</p>
+          <p style="color:#666;font-size:14px;">Messages from your tutor will appear here.</p>
+        </div>
+      </div>
+    `;
+  }
+  
+  const unreadCount = messages.filter(m => !m.read).length;
+  
+  const rows = messages.map(item => {
+    const isUnread = !item.read;
+    const senderName = item.tutorName || item.fromName || 'Tutor';
+    
+    return `
+      <div class="message-card ${isUnread ? 'unread' : ''}" style="
+        background: ${isUnread ? '#f0f7ff' : '#ffffff'};
+        border-left: 4px solid ${isUnread ? '#3498db' : '#e0e0e0'};
+        padding: 16px;
+        margin-bottom: 12px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div>
+            <span class="badge" style="background:#3498db;color:white;">📨 From: ${escapeHtml(senderName)}</span>
+            ${isUnread ? '<span class="badge" style="background:#e74c3c;color:white;margin-left:8px;">NEW</span>' : ''}
+          </div>
+          <small style="color:#666;">${fmtDate(item.createdAt)}</small>
+        </div>
+        <h4 style="margin:8px 0;color:#2c3e50;">${escapeHtml(item.subject || 'No Subject')}</h4>
+        <div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:8px;">
+          <p style="margin:0;line-height:1.5;">${escapeHtml(item.message || item.body || '—')}</p>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  return `
+    <style>
+      .message-card { transition: all 0.2s; }
+      .message-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+      .message-card.unread { border-left-width: 6px; }
+      .messages-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    </style>
+    
+    <div class="card panel">
+      <div class="messages-header">
+        <h3>💬 Messages from Your Tutor</h3>
+        ${unreadCount > 0 ? `<span class="badge" style="background:#e74c3c;">${unreadCount} unread</span>` : ''}
+      </div>
+      <p style="margin-bottom:20px;color:#666;">Messages sent by your tutor appear here. New messages are highlighted.</p>
+      <div class="messages-list">
+        ${rows}
+      </div>
     </div>
-  `).join('');
-  return `<div class="card panel"><h3>Messages from Tutor</h3>${messages.length ? rows : '<div class="empty">No messages yet.</div>'}</div>`;
+  `;
 }
+
 
 function renderStudentSettingsPage(profile, user, studentRecord = {}) {
   const displayName = getStudentDisplayName(profile, user);
@@ -2002,107 +2096,167 @@ async function bootParentAllMessagesPage() {
   ]);
   
   const userMap = {};
-  allStudents.forEach(s => { userMap[s.id] = { name: s.full_name || s.name || s.email, role: 'Student' }; });
-  allTutors.forEach(t => { userMap[t.id] = { name: t.full_name || t.name || t.email, role: 'Tutor' }; });
-  
-  const messagesByConversation = {};
-  allMessages.forEach(msg => {
-    const participants = [msg.fromId, msg.toId].sort().join('-');
-    if (!messagesByConversation[participants]) messagesByConversation[participants] = [];
-    messagesByConversation[participants].push(msg);
+  allStudents.forEach(s => { 
+    userMap[s.id] = { 
+      name: s.full_name || s.name || s.email, 
+      role: 'Student',
+      email: s.email 
+    }; 
+  });
+  allTutors.forEach(t => { 
+    userMap[t.id] = { 
+      name: t.full_name || t.name || t.email, 
+      role: 'Tutor',
+      email: t.email 
+    }; 
   });
   
-  const conversationHtml = Object.values(messagesByConversation).map(conversation => {
-    const sorted = conversation.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-    const first = sorted[0];
-    const fromName = userMap[first.fromId]?.name || first.fromName || first.fromId;
-    const toName = userMap[first.toId]?.name || first.toName || first.toId;
+  // Group messages by conversation (tutor-student pair)
+  const conversations = {};
+  
+  allMessages.forEach(msg => {
+    const studentId = msg.studentId || msg.toId;
+    const tutorId = msg.tutorId || msg.fromId;
+    
+    if (!studentId || !tutorId) return;
+    
+    const key = `${tutorId}|${studentId}`;
+    if (!conversations[key]) {
+      conversations[key] = {
+        tutor: userMap[tutorId] || { name: msg.tutorName || tutorId },
+        student: userMap[studentId] || { name: msg.studentName || studentId },
+        messages: []
+      };
+    }
+    conversations[key].messages.push(msg);
+  });
+  
+  // Sort conversations by latest message
+  const sortedConversations = Object.values(conversations).sort((a, b) => {
+    const aLatest = Math.max(...a.messages.map(m => m.createdAt?.seconds || 0));
+    const bLatest = Math.max(...b.messages.map(m => m.createdAt?.seconds || 0));
+    return bLatest - aLatest;
+  });
+  
+  const conversationHtml = sortedConversations.map(conv => {
+    const sortedMessages = conv.messages.sort((a, b) => 
+      (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
+    );
+    
+    const unreadCount = sortedMessages.filter(m => !m.read).length;
     
     return `
-      <div class="card panel" style="margin-bottom:16px;">
-        <div style="border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:8px;">
-          <strong>💬 ${escapeHtml(fromName)} → ${escapeHtml(toName)}</strong>
-          <small style="float:right">${sorted.length} messages</small>
-        </div>
-        ${sorted.slice(-3).map(msg => `
-          <div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
-            <div style="display:flex;justify-content:space-between;">
-              <strong>${escapeHtml(msg.subject || 'Message')}</strong>
-              <small>${fmtDate(msg.createdAt)}</small>
+      <div class="conversation-card" style="
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      ">
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-bottom: 12px;
+          border-bottom: 2px solid #f0f0f0;
+          margin-bottom: 12px;
+        ">
+          <div>
+            <div style="display: flex; gap: 16px; align-items: center;">
+              <span style="font-size: 18px;">👨‍🏫</span>
+              <div>
+                <strong style="font-size: 16px;">${escapeHtml(conv.tutor.name)}</strong>
+                <span class="badge" style="margin-left: 8px;">Tutor</span>
+              </div>
+              <span style="color: #999;">→</span>
+              <span style="font-size: 18px;">👧</span>
+              <div>
+                <strong style="font-size: 16px;">${escapeHtml(conv.student.name)}</strong>
+                <span class="badge success" style="margin-left: 8px;">Student</span>
+              </div>
             </div>
-            <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(msg.message || msg.body || '—')}</p>
           </div>
-        `).join('')}
+          <div style="text-align: right;">
+            <div style="font-size: 13px; color: #666;">
+              ${sortedMessages.length} message${sortedMessages.length !== 1 ? 's' : ''}
+            </div>
+            ${unreadCount > 0 ? `<span class="badge" style="background:#e74c3c;margin-top:4px;">${unreadCount} unread</span>` : ''}
+          </div>
+        </div>
+        
+        <div style="max-height: 300px; overflow-y: auto; padding-right: 8px;">
+          ${sortedMessages.slice(-10).map(msg => {
+            const isFromTutor = msg.fromRole === 'tutor' || msg.tutorId;
+            return `
+              <div style="
+                display: flex;
+                justify-content: ${isFromTutor ? 'flex-start' : 'flex-end'};
+                margin-bottom: 12px;
+              ">
+                <div style="
+                  max-width: 70%;
+                  background: ${isFromTutor ? '#e3f2fd' : '#f3e5f5'};
+                  padding: 12px;
+                  border-radius: 12px;
+                  border-bottom-${isFromTutor ? 'left' : 'right'}-radius: 2px;
+                ">
+                  <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 6px;
+                  ">
+                    <strong style="font-size: 13px;">
+                      ${escapeHtml(isFromTutor ? conv.tutor.name : conv.student.name)}
+                    </strong>
+                    <small style="margin-left: 12px; color: #666;">
+                      ${fmtDate(msg.createdAt)}
+                    </small>
+                  </div>
+                  ${msg.subject ? `<div style="font-weight: 500; margin-bottom: 6px; color: #2c3e50;">${escapeHtml(msg.subject)}</div>` : ''}
+                  <p style="margin: 0; line-height: 1.4;">${escapeHtml(msg.message || msg.body || '—')}</p>
+                  ${!msg.read && isFromTutor ? '<div style="margin-top: 4px;"><span style="font-size: 11px; color: #e74c3c;">● Unread</span></div>' : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       </div>
     `;
   }).join('');
   
   document.getElementById('page-content').innerHTML = `
-    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;">
-      <div class="stat-card"><div class="stat-number">${allMessages.length}</div><p>Total Messages</p></div>
-      <div class="stat-card"><div class="stat-number">${Object.keys(messagesByConversation).length}</div><p>Conversations</p></div>
+    <style>
+      .conversation-card::-webkit-scrollbar { width: 6px; }
+      .conversation-card::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+      .conversation-card::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+    </style>
+    
+    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card">
+        <div class="stat-number">${allMessages.length}</div>
+        <p>Total Messages</p>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">${Object.keys(conversations).length}</div>
+        <p>Conversations</p>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">${allMessages.filter(m => !m.read).length}</div>
+        <p>Unread Messages</p>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">${allStudents.length}</div>
+        <p>Students</p>
+      </div>
     </div>
+    
     <div class="card panel">
-      <h3>📨 All Conversations</h3>
-      ${conversationHtml || '<p class="empty">No messages yet</p>'}
-    </div>
-    <div class="card panel" style="margin-top:24px;">
-      <h3>✉️ Send New Message</h3>
-      <form id="parentMessageForm" class="stack-form">
-        <div class="form-row">
-          <label>To (User ID or Email)</label>
-          <input type="text" id="messageToId" placeholder="Enter user ID or email" required>
-        </div>
-        <div class="form-row">
-          <label>Subject</label>
-          <input id="messageSubject" type="text" required placeholder="Subject">
-        </div>
-        <div class="form-row">
-          <label>Message</label>
-          <textarea id="messageBody" rows="4" required placeholder="Write your message..."></textarea>
-        </div>
-        <button type="submit" class="btn">Send Message</button>
-        <span id="messageMsg"></span>
-      </form>
+      <h3>📨 All Tutor-Student Conversations</h3>
+      <p style="margin-bottom:20px;color:#666;">Complete view of all messages exchanged between tutors and students.</p>
+      ${conversationHtml || '<p class="empty">No messages have been sent yet.</p>'}
     </div>
   `;
-  
-  const form = document.getElementById('parentMessageForm');
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const toId = document.getElementById('messageToId').value;
-      const subject = document.getElementById('messageSubject').value;
-      const body = document.getElementById('messageBody').value;
-      const msgSpan = document.getElementById('messageMsg');
-      
-      if (!toId || !subject || !body) {
-        msgSpan.textContent = 'Please fill all fields';
-        return;
-      }
-      
-      msgSpan.textContent = 'Sending...';
-      
-      try {
-        await addDoc(collection(db, 'messages'), {
-          fromParent: true,
-          fromId: bundle.user.uid,
-          fromName: bundle.profile?.name || bundle.profile?.full_name,
-          toId: toId,
-          subject: subject,
-          message: body,
-          createdAt: serverTimestamp(),
-          read: false
-        });
-        
-        msgSpan.textContent = '✅ Message sent!';
-        form.reset();
-        setTimeout(() => bootParentAllMessagesPage(), 1500);
-      } catch (err) {
-        msgSpan.textContent = 'Error: ' + err.message;
-      }
-    });
-  }
 }
 
 async function bootParentAllReportsPage() {
@@ -2314,8 +2468,18 @@ async function loadAllResources() {
 }
 
 async function loadAllMessages() {
-  const snap = await getDocs(collection(db, 'messages'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await getDocs(collection(db, 'messages'));
+    const messages = snap.docs.map(d => ({ 
+      id: d.id, 
+      ...d.data() 
+    }));
+    console.log(`📨 Loaded ${messages.length} total messages for parent view`);
+    return messages;
+  } catch (err) {
+    console.error('Error loading all messages:', err);
+    return [];
+  }
 }
 
 async function loadAllReports() {
@@ -2464,10 +2628,28 @@ async function bootStudentActivitiesPage() {
 async function bootStudentMessagesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
+  
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user } = bundle;
-  const messages = await loadStudentMessages(user.uid);
-  document.getElementById('page-content').innerHTML = renderStudentMessagesPage(messages);
+  
+  try {
+    const messages = await loadStudentMessages(user.uid);
+    document.getElementById('page-content').innerHTML = renderStudentMessagesPage(messages);
+    
+    // Mark messages as read when viewed
+    const unreadMessages = messages.filter(m => !m.read);
+    for (const msg of unreadMessages) {
+      await updateDoc(doc(db, 'messages', msg.id), { read: true });
+    }
+  } catch (err) {
+    console.error('Error loading student messages:', err);
+    document.getElementById('page-content').innerHTML = `
+      <div class="card panel error">
+        <h3>Error</h3>
+        <p>Unable to load messages: ${err.message}</p>
+      </div>
+    `;
+  }
 }
 
 async function bootStudentSettingsPage() {
@@ -2926,24 +3108,155 @@ async function bootResourcesPage() {
     });
   }
 }
-
 async function bootMessagesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'tutor') return;
   
-  const { user } = bundle;
+  const { user, profile } = bundle;
   const messages = await loadMessagesForTutor(user.uid);
   const students = await loadAllStudents();
-  document.getElementById('page-content').innerHTML = renderMessagesPage(messages, students);
+  document.getElementById('page-content').innerHTML = renderMessagesPage(messages, students, profile);
+  
+  const form = document.getElementById('messageForm');
+  const msg = document.getElementById('messageMsg');
+  
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const studentId = document.getElementById('messageStudentId').value;
+      const subject = document.getElementById('messageSubject').value.trim();
+      const body = document.getElementById('messageBody').value.trim();
+      
+      if (!studentId) {
+        msg.textContent = 'Please select a student';
+        msg.style.color = 'red';
+        return;
+      }
+      
+      if (!subject || !body) {
+        msg.textContent = 'Subject and message are required';
+        msg.style.color = 'red';
+        return;
+      }
+      
+      msg.textContent = 'Sending...';
+      msg.style.color = 'blue';
+      
+      try {
+        const student = students.find(s => s.id === studentId);
+        const studentName = student?.full_name || student?.name || student?.email || 'Student';
+        
+        // Save message with proper fields for student retrieval
+        await addDoc(collection(db, 'messages'), {
+          tutorId: user.uid,
+          tutorName: profile?.name || profile?.full_name || user.email,
+          studentId: studentId,           // CRITICAL: This field is used by loadStudentMessages
+          studentName: studentName,
+          fromId: user.uid,
+          fromName: profile?.name || profile?.full_name || user.email,
+          fromRole: 'tutor',
+          toId: studentId,
+          toName: studentName,
+          toRole: 'student',
+          subject: subject,
+          message: body,
+          body: body,                      // For compatibility
+          read: false,
+          createdAt: serverTimestamp()
+        });
+        
+        // Also create a notification for the student
+        await addDoc(collection(db, 'notifications'), {
+          studentId: studentId,
+          title: 'New Message from Tutor',
+          message: `${profile?.name || 'Your tutor'}: ${subject}`,
+          type: 'message',
+          read: false,
+          createdAt: serverTimestamp()
+        });
+        
+        msg.textContent = '✅ Message sent successfully!';
+        msg.style.color = 'green';
+        
+        // Clear form
+        document.getElementById('messageSubject').value = '';
+        document.getElementById('messageBody').value = '';
+        
+        // Refresh messages display
+        setTimeout(() => bootMessagesPage(), 1000);
+      } catch (err) {
+        console.error('Send message error:', err);
+        msg.textContent = 'Error: ' + err.message;
+        msg.style.color = 'red';
+      }
+    });
+  }
 }
-
-function renderMessagesPage(messages, students) {
-  const rows = messages.map(m => `<div class="card panel" style="margin-bottom:12px"><h4>To: ${escapeHtml(m.studentName)}</h4><strong>${escapeHtml(m.subject)}</strong><p>${escapeHtml(m.message)}</p><small>${fmtDate(m.createdAt)}</small></div>`).join('');
+function renderMessagesPage(messages, students, profile) {
+  // Sort messages newest first
+  const sortedMessages = [...messages].sort((a, b) => {
+    const aTime = a.createdAt?.seconds || 0;
+    const bTime = b.createdAt?.seconds || 0;
+    return bTime - aTime;
+  });
+  
+  const rows = sortedMessages.map(m => {
+    const studentName = m.studentName || m.toName || 'Student';
+    return `
+      <div class="card panel" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <span class="badge success">📤 To: ${escapeHtml(studentName)}</span>
+            ${m.read ? '<span class="badge">✓ Read</span>' : '<span class="badge warn">Unread</span>'}
+          </div>
+          <small>${fmtDate(m.createdAt)}</small>
+        </div>
+        <h4 style="margin:8px 0">${escapeHtml(m.subject || 'No Subject')}</h4>
+        <p style="background:#f8f9fa;padding:12px;border-radius:8px;">${escapeHtml(m.message || m.body || '—')}</p>
+      </div>
+    `;
+  }).join('');
+  
   return `
-    <section class="card panel"><h3>Send Message</h3><form id="messageForm"><select id="messageStudentId" required><option value="">Select Student</option>${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}</select><input id="messageSubject" placeholder="Subject"><textarea id="messageBody" rows="4" placeholder="Message"></textarea><button type="submit" class="btn">Send</button><span id="messageMsg"></span></form></section>
-    <section class="card panel" style="margin-top:24px"><h3>Sent Messages</h3>${rows || '<p class="empty">No messages sent yet.</p>'}</section>
+    <style>
+      .message-form-card { margin-bottom: 24px; }
+      .sent-messages-card { margin-top: 24px; }
+    </style>
+    
+    <section class="card panel message-form-card">
+      <h3>✉️ Send Message to Student</h3>
+      <p>Messages will appear on the student's Messages page.</p>
+      <form id="messageForm" class="stack-form">
+        <div class="form-row">
+          <label>Select Student *</label>
+          <select id="messageStudentId" required>
+            <option value="">-- Choose a student --</option>
+            ${students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.full_name || s.name || s.email)} ${s.classroomName ? `(${escapeHtml(s.classroomName)})` : ''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Subject *</label>
+          <input id="messageSubject" type="text" required placeholder="Message subject">
+        </div>
+        <div class="form-row">
+          <label>Message *</label>
+          <textarea id="messageBody" rows="5" required placeholder="Write your message to the student..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn">📨 Send Message</button>
+          <span id="messageMsg" style="margin-left:12px;"></span>
+        </div>
+      </form>
+    </section>
+    
+    <section class="card panel sent-messages-card">
+      <h3>📋 Sent Messages (${messages.length})</h3>
+      ${rows || '<p class="empty">No messages sent yet. Use the form above to send your first message.</p>'}
+    </section>
   `;
 }
+
 
 
 
