@@ -6,152 +6,137 @@
     <title>Join HomeSchool</title>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <style>
-        /* Reuse same styles as login for consistency */
-        .auth-wrap {
-            background: linear-gradient(135deg, #eff5ff, #f0f4ff);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+        /* Reuse most styles from login for consistency */
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
         }
 
-        .auth-card {
-            max-width: 980px;
+        .auth-wrap { background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .auth-card { max-width: 1000px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border-radius: 28px; box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18); background: white; animation: fadeUp 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+        .auth-aside { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); color: white; padding: 70px 55px; position: relative; overflow: hidden; }
+        .auth-aside::before { content: ''; position: absolute; width: 320px; height: 320px; background: rgba(255,255,255,0.07); filter: blur(100px); top: -100px; left: -100px; border-radius: 50%; }
+        .auth-aside::after { content: '🚀'; position: absolute; font-size: 160px; opacity: 0.08; bottom: -30px; right: -40px; }
+        .auth-main { padding: 70px 55px; background: white; }
+
+        .nav-bar { position: fixed; top: 0; left: 0; right: 0; background: rgba(255,255,255,0.96); backdrop-filter: blur(16px); z-index: 1000; padding: 18px 28px; border-bottom: 1px solid #e2e8f0; }
+
+        .brand-badge { width: 42px; height: 42px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; border-radius: 12px; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-group input, .input-group select {
             width: 100%;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            overflow: hidden;
-            border-radius: 24px;
-            box-shadow: 0 25px 70px rgba(15, 23, 42, 0.15);
-            animation: fadeUp 0.7s ease;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            font-size: 1.02rem;
+            transition: all 0.3s ease;
         }
 
-        .auth-aside {
-            background: linear-gradient(135deg, #0a1f44, #1e3a8a);
-            color: white;
-            padding: 60px 50px;
-            position: relative;
-        }
-
-        .auth-aside::before {
-            content: '';
-            position: absolute;
-            width: 280px;
-            height: 280px;
-            background: rgba(255,255,255,0.08);
-            filter: blur(90px);
-            top: -80px;
-            left: -80px;
-            border-radius: 50%;
-        }
-
-        .auth-main {
-            padding: 60px 50px;
-            background: white;
-        }
-
-        .nav-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: rgba(255,255,255,0.95);
-            backdrop-filter: blur(12px);
-            z-index: 1000;
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border);
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
         }
 
         .btn-modern {
             width: 100%;
-            padding: 16px;
-            font-size: 1.1rem;
+            padding: 18px;
+            font-size: 1.15rem;
             font-weight: 700;
-            border-radius: 16px;
-            margin-top: 12px;
+            border-radius: 18px;
+            margin-top: 10px;
             background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+            color: white;
+            border: none;
+            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
         }
 
         .btn-modern:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 35px rgba(37, 99, 235, 0.4);
-        }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.45);
         }
     </style>
 </head>
 <body data-auth-page="public">
 
-    <!-- Fixed Navigation -->
     <nav class="nav-bar">
         <div style="max-width:1200px; margin:0 auto; display:flex; justify-content:space-between; align-items:center;">
             <a href="/" class="brand-small">
                 <div class="brand-badge">H</div>
-                <h1 style="font-size:22px; margin:0; font-weight:800;">HomeSchool</h1>
+                <h1 style="font-size:24px; margin:0; font-weight:800; color:#0f172a;">HomeSchool</h1>
             </a>
-            <a href="/login.html" class="btn secondary" style="padding:10px 24px;">Login</a>
+            <a href="/login.html" class="btn secondary" style="padding:12px 28px; border-radius:12px;">Login</a>
         </div>
     </nav>
 
     <div class="auth-wrap">
-        <div class="auth-card card">
+        <div class="auth-card">
 
             <!-- Left Side -->
             <div class="auth-aside">
-                <div class="brand" style="margin-bottom:40px;">
-                    <div class="brand-badge">H</div>
+                <div class="brand" style="margin-bottom:50px;">
+                    <div class="brand-badge" style="width:52px;height:52px;font-size:26px;">H</div>
                     <div>
-                        <h1 style="color:white; font-size:28px;">HomeSchool</h1>
-                        <p style="color:#b7c7ee; margin:4px 0 0; font-size:14px;">Join the community</p>
+                        <h1 style="color:white; font-size:32px; margin:0;">HomeSchool</h1>
+                        <p style="color:#c3d0f0; margin:6px 0 0; font-size:15px;">Join the future of learning</p>
                     </div>
                 </div>
 
-                <h1 class="auth-title" style="font-size:42px; line-height:1.2; margin-bottom:20px;">
+                <h1 style="font-size:46px; line-height:1.15; margin-bottom:24px; font-weight:700;">
                     Start your journey
                 </h1>
-                <p class="auth-sub" style="font-size:1.15rem; opacity:0.95;">
-                    Create an account and connect with tutors, students, and parents in one powerful platform.
+                <p style="font-size:1.22rem; opacity:0.92; line-height:1.5;">
+                    Connect with amazing tutors, students, and parents in one beautiful platform.
                 </p>
 
-                <div class="list modern-list" style="margin-top:50px;">
-                    <div class="list-item glass">📖 Structured lesson planning</div>
-                    <div class="list-item glass">📤 Easy assignment submission</div>
-                    <div class="list-item glass">📊 Real-time progress tracking</div>
+                <div style="margin-top:60px; display:flex; flex-direction:column; gap:18px;">
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span style="font-size:28px;">📖</span>
+                        <div><strong>Structured Lessons</strong></div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span style="font-size:28px;">📤</span>
+                        <div><strong>Easy Assignments</strong></div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span style="font-size:28px;">📊</span>
+                        <div><strong>Real-time Progress</strong></div>
+                    </div>
                 </div>
             </div>
 
             <!-- Right Side - Form -->
             <div class="auth-main">
-                <h2 class="auth-title main-title" style="margin-bottom:8px;">Create Account</h2>
-                <p style="color:var(--muted); margin-bottom:24px;">Join thousands of learners and educators</p>
+                <h2 style="margin-bottom:8px; font-size:28px;">Create Account</h2>
+                <p style="color:#64748b; margin-bottom:32px;">Join thousands of learners and educators</p>
 
-                <div id="notice" class="notice" style="margin-bottom:20px;">
+                <div id="notice" class="notice" style="margin-bottom:24px;">
                     Fill in your details to get started.
                 </div>
 
                 <form id="registerForm" class="form-grid">
-                    <div>
-                        <label>Full Name</label>
+                    <div class="input-group">
+                        <label style="font-weight:600; margin-bottom:8px; display:block; color:#334155;">Full Name</label>
                         <input name="fullName" required placeholder="John Doe">
                     </div>
 
-                    <div>
-                        <label>Email Address</label>
+                    <div class="input-group">
+                        <label style="font-weight:600; margin-bottom:8px; display:block; color:#334155;">Email Address</label>
                         <input type="email" name="email" required placeholder="you@example.com">
                     </div>
 
-                    <div class="form-grid two">
-                        <div>
-                            <label>Phone (optional)</label>
+                    <div class="form-grid two" style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div class="input-group">
+                            <label style="font-weight:600; margin-bottom:8px; display:block; color:#334155;">Phone (optional)</label>
                             <input name="phone" placeholder="+254 700 000 000">
                         </div>
-                        <div>
-                            <label>Role</label>
+                        <div class="input-group">
+                            <label style="font-weight:600; margin-bottom:8px; display:block; color:#334155;">Role</label>
                             <select name="role" required>
                                 <option value="parent">Parent</option>
                                 <option value="tutor">Tutor</option>
@@ -160,34 +145,41 @@
                         </div>
                     </div>
 
-                    <div>
-                        <label>Password</label>
-                        <input type="password" name="password" minlength="6" required>
+                    <div class="input-group">
+                        <label style="font-weight:600; margin-bottom:8px; display:block; color:#334155;">Password</label>
+                        <input type="password" name="password" id="regPassword" minlength="6" required>
+                        <span class="toggle-password" onclick="togglePassword('regPassword')" style="right:18px; top:52px;">👁️</span>
                     </div>
 
-                    <div id="tutorCodeField" style="display:none;">
-                        <label>Access Code (Tutors only)</label>
-                        <input name="accessCode" placeholder="Enter tutor access code">
+                    <div id="tutorCodeField" style="display:none; margin-top:10px;">
+                        <label style="font-weight:600; margin-bottom:8px; display:block; color:#334155;">Tutor Access Code</label>
+                        <input name="accessCode" placeholder="Enter your tutor code">
                     </div>
 
                     <button type="submit" class="btn btn-modern">Create My Account</button>
                 </form>
 
-                <div class="row" style="margin-top:24px; font-size:14px; text-align:center;">
-                    <a href="/login.html" style="color:var(--primary);">Already have an account? Sign in</a>
+                <div style="margin-top:32px; text-align:center; font-size:14px;">
+                    Already have an account? 
+                    <a href="/login.html" style="color:var(--primary); font-weight:600;">Sign in</a>
                 </div>
             </div>
         </div>
     </div>
 
     <script type="module" src="/assets/js/auth.js"></script>
-
     <script>
-        // Show/hide tutor access code field
+        // Role selector for tutor code
         document.querySelector('select[name="role"]').addEventListener('change', function() {
             const codeField = document.getElementById('tutorCodeField');
             codeField.style.display = this.value === 'tutor' ? 'block' : 'none';
         });
+
+        function togglePassword(id) {
+            const input = document.getElementById(id);
+            if (input.type === "password") input.type = "text";
+            else input.type = "password";
+        }
     </script>
 </body>
 </html>
