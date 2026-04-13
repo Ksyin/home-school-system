@@ -271,17 +271,46 @@ async function requireAuth() {
   });
 }
 
+// ============================================
+// UPDATED - Enhanced uploadFile with better error handling and file type support
+// ============================================
+
 async function uploadFile(file, folder = 'uploads') {
   if (!file) {
-    return { url: '', path: '', name: '' };
+    return { url: '', path: '', name: '', type: '', size: 0 };
   }
 
   const CLOUD_NAME = 'djqqcepe8';
   const UPLOAD_PRESET = 'homeschool';
+  
+  // Validate file size (max 100MB)
+  const MAX_SIZE = 100 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    throw new Error(`File size exceeds 100MB limit. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+  }
+
+  // Get file extension and determine resource type
+  const fileName = file.name;
+  const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
+  
+  const mimeType = file.type;
+  let resourceType = 'other';
+  
+  if (mimeType.startsWith('image/')) resourceType = 'image';
+  else if (mimeType === 'application/pdf') resourceType = 'pdf';
+  else if (mimeType.startsWith('video/')) resourceType = 'video';
+  else if (mimeType.startsWith('audio/')) resourceType = 'audio';
+  else if (mimeType.includes('document') || mimeType.includes('text') || ['doc', 'docx', 'txt', 'rtf'].includes(fileExt)) {
+    resourceType = 'document';
+  } else if (['xls', 'xlsx', 'csv'].includes(fileExt)) {
+    resourceType = 'spreadsheet';
+  } else if (['ppt', 'pptx'].includes(fileExt)) {
+    resourceType = 'presentation';
+  }
+
+  console.log(`📤 Uploading ${resourceType} file: ${fileName} (${(file.size / 1024).toFixed(2)}KB)`);
 
   try {
-    console.log('📤 Uploading to Cloudinary...');
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
@@ -298,21 +327,82 @@ async function uploadFile(file, folder = 'uploads') {
     const data = await response.json();
 
     if (!response.ok || !data.secure_url) {
+      console.error('Upload failed:', data);
       throw new Error(data?.error?.message || 'Upload failed');
     }
 
-    console.log('✅ Upload success:', data.secure_url);
+    console.log('✅ Upload success:', {
+      url: data.secure_url,
+      type: resourceType,
+      size: file.size
+    });
 
     return {
       url: data.secure_url,
       path: data.public_id,
-      name: file.name
+      name: file.name,
+      type: resourceType,
+      size: file.size,
+      format: data.format
     };
 
   } catch (err) {
     console.error('❌ Upload failed:', err);
-    throw err;
+    throw new Error(`Upload failed: ${err.message}`);
   }
+}
+// ============================================
+// NEW - File Type Detection Helper
+// ============================================
+
+function getFileTypeInfo(fileName, mimeType = '') {
+  const name = (fileName || '').toLowerCase();
+  const ext = name.split('.').pop() || '';
+  
+  const typeMap = {
+    // Images
+    'jpg': { type: 'image', icon: '🖼️', label: 'Image' },
+    'jpeg': { type: 'image', icon: '🖼️', label: 'Image' },
+    'png': { type: 'image', icon: '🖼️', label: 'Image' },
+    'gif': { type: 'image', icon: '🖼️', label: 'GIF' },
+    'webp': { type: 'image', icon: '🖼️', label: 'Image' },
+    'svg': { type: 'image', icon: '🖼️', label: 'SVG' },
+    
+    // Documents
+    'pdf': { type: 'pdf', icon: '📄', label: 'PDF' },
+    'doc': { type: 'document', icon: '📝', label: 'Word' },
+    'docx': { type: 'document', icon: '📝', label: 'Word' },
+    'txt': { type: 'document', icon: '📃', label: 'Text' },
+    'rtf': { type: 'document', icon: '📝', label: 'Document' },
+    
+    // Spreadsheets
+    'xls': { type: 'spreadsheet', icon: '📊', label: 'Excel' },
+    'xlsx': { type: 'spreadsheet', icon: '📊', label: 'Excel' },
+    'csv': { type: 'spreadsheet', icon: '📊', label: 'CSV' },
+    
+    // Presentations
+    'ppt': { type: 'presentation', icon: '📽️', label: 'PowerPoint' },
+    'pptx': { type: 'presentation', icon: '📽️', label: 'PowerPoint' },
+    
+    // Video
+    'mp4': { type: 'video', icon: '🎬', label: 'Video' },
+    'webm': { type: 'video', icon: '🎬', label: 'Video' },
+    'mov': { type: 'video', icon: '🎬', label: 'Video' },
+    'avi': { type: 'video', icon: '🎬', label: 'Video' },
+    
+    // Audio
+    'mp3': { type: 'audio', icon: '🎵', label: 'Audio' },
+    'wav': { type: 'audio', icon: '🎵', label: 'Audio' },
+    'm4a': { type: 'audio', icon: '🎵', label: 'Audio' },
+    'ogg': { type: 'audio', icon: '🎵', label: 'Audio' },
+    
+    // Archives
+    'zip': { type: 'archive', icon: '📦', label: 'Archive' },
+    'rar': { type: 'archive', icon: '📦', label: 'Archive' },
+    '7z': { type: 'archive', icon: '📦', label: 'Archive' }
+  };
+  
+  return typeMap[ext] || { type: 'other', icon: '📁', label: 'File' };
 }
 
 function getStudentDisplayName(profile, user) {
@@ -790,48 +880,754 @@ async function loadChildPortfolio(childId) {
 }
 
 // ============================================
-// FILE PREVIEW & MODAL
+// UPDATED - ENHANCED FILE PREVIEW & MODAL
 // ============================================
 
-function renderFilePreview(url, name = '') {
-  if (!url) return '—';
+function renderFilePreview(url, name = '', showFull = false) {
+  if (!url) return '<span class="file-placeholder">📁 No file</span>';
 
   const lower = (name || url).toLowerCase();
+  const fileName = name || url.split('/').pop() || 'file';
+  const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
 
-  if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+  // Image files
+  if (lower.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/)) {
     return `
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <img src="${url}" style="width:140px;height:100px;object-fit:cover;border-radius:10px;cursor:pointer"
-          onclick="openFileModal('${url}', 'image', '${name}')">
-        <button class="btn" onclick="openFileModal('${url}', 'image', '${name}')">View</button>
+      <div class="file-preview file-preview-image">
+        <div class="file-thumbnail">
+          <img src="${url}" alt="${escapeHtml(fileName)}" loading="lazy">
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'image', '${escapeHtml(fileName)}')" title="View">
+            <span>🔍</span> View
+          </button>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
       </div>
     `;
   }
 
-  if (lower.match(/\.(pdf|doc|docx)$/)) {
+  // PDF files
+  if (lower.match(/\.pdf$/)) {
     return `
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="width:140px;height:100px;background:#f1f5ff;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:bold"
-          onclick="openFileModal('${url}', 'doc', '${name}')">📄 Document</div>
-        <button class="btn" onclick="openFileModal('${url}', 'doc', '${name}')">Read</button>
-        <a href="${url}" target="_blank" class="btn ghost">Open tab</a>
-        <a href="${url}" download class="btn ghost">Download</a>
+      <div class="file-preview file-preview-pdf">
+        <div class="file-thumbnail pdf-thumb">
+          <span class="file-icon">📄</span>
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'pdf', '${escapeHtml(fileName)}')" title="View PDF">
+            <span>👁️</span> View
+          </button>
+          <a href="${url}" target="_blank" class="btn-icon" title="Open in new tab">
+            <span>🔗</span> Open
+          </a>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
       </div>
     `;
   }
 
-  if (lower.match(/\.(mp4|webm|ogg)$/)) {
+  // Document files (doc, docx, txt, etc.)
+  if (lower.match(/\.(doc|docx|txt|rtf|odt)$/)) {
     return `
-      <video controls style="width:140px;border-radius:10px">
-        <source src="${url}">
-      </video>
+      <div class="file-preview file-preview-doc">
+        <div class="file-thumbnail doc-thumb">
+          <span class="file-icon">📝</span>
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'doc', '${escapeHtml(fileName)}')" title="View Document">
+            <span>👁️</span> View
+          </button>
+          <a href="${url}" target="_blank" class="btn-icon" title="Open in Google Docs">
+            <span>📎</span> Google Docs
+          </a>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
+      </div>
     `;
   }
 
+  // Spreadsheet files
+  if (lower.match(/\.(xls|xlsx|csv)$/)) {
+    return `
+      <div class="file-preview file-preview-sheet">
+        <div class="file-thumbnail sheet-thumb">
+          <span class="file-icon">📊</span>
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'sheet', '${escapeHtml(fileName)}')" title="View Spreadsheet">
+            <span>👁️</span> View
+          </button>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
+      </div>
+    `;
+  }
+
+  // Presentation files
+  if (lower.match(/\.(ppt|pptx)$/)) {
+    return `
+      <div class="file-preview file-preview-presentation">
+        <div class="file-thumbnail ppt-thumb">
+          <span class="file-icon">📽️</span>
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'presentation', '${escapeHtml(fileName)}')" title="View Presentation">
+            <span>👁️</span> View
+          </button>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
+      </div>
+    `;
+  }
+
+  // Video files
+  if (lower.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/)) {
+    return `
+      <div class="file-preview file-preview-video">
+        <div class="file-thumbnail video-thumb">
+          <span class="file-icon">🎬</span>
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'video', '${escapeHtml(fileName)}')" title="Play Video">
+            <span>▶️</span> Play
+          </button>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
+      </div>
+    `;
+  }
+
+  // Audio files
+  if (lower.match(/\.(mp3|wav|ogg|m4a|flac)$/)) {
+    return `
+      <div class="file-preview file-preview-audio">
+        <div class="file-thumbnail audio-thumb">
+          <span class="file-icon">🎵</span>
+        </div>
+        <div class="file-actions">
+          <button class="btn-icon" onclick="openFileModal('${url}', 'audio', '${escapeHtml(fileName)}')" title="Play Audio">
+            <span>▶️</span> Play
+          </button>
+          <a href="${url}" download class="btn-icon" title="Download">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
+      </div>
+    `;
+  }
+
+  // Archive files (zip, etc.)
+  if (lower.match(/\.(zip|rar|7z|tar|gz)$/)) {
+    return `
+      <div class="file-preview file-preview-archive">
+        <div class="file-thumbnail archive-thumb">
+          <span class="file-icon">📦</span>
+        </div>
+        <div class="file-actions">
+          <a href="${url}" download class="btn-icon" title="Download Archive">
+            <span>⬇️</span> Download
+          </a>
+        </div>
+        <div class="file-name">${escapeHtml(fileName)}</div>
+      </div>
+    `;
+  }
+
+  // Default/unknown file type
   return `
-    <button class="btn" onclick="openFileModal('${url}', 'file', '${name}')">Open</button>
+    <div class="file-preview file-preview-generic">
+      <div class="file-thumbnail generic-thumb">
+        <span class="file-icon">📄</span>
+      </div>
+      <div class="file-actions">
+        <a href="${url}" target="_blank" class="btn-icon" title="Open">
+          <span>🔗</span> Open
+        </a>
+        <a href="${url}" download class="btn-icon" title="Download">
+          <span>⬇️</span> Download
+        </a>
+      </div>
+      <div class="file-name">${escapeHtml(fileName)}</div>
+    </div>
   `;
 }
+
+// UPDATED - Enhanced openFileModal with better file type support
+function openFileModal(url, type, name = '') {
+  const old = document.getElementById('fileModal');
+  if (old) old.remove();
+
+  let content = '';
+  let title = name || 'File Preview';
+
+  switch (type) {
+    case 'image':
+      content = `
+        <div class="modal-image-container">
+          <img src="${url}" alt="${escapeHtml(name)}" style="max-width:100%;max-height:70vh;object-fit:contain;">
+        </div>
+      `;
+      break;
+      
+    case 'pdf':
+      content = `
+        <div class="modal-pdf-container">
+          <iframe src="${url}#toolbar=1&navpanes=1" style="width:100%;height:70vh;border:none;border-radius:8px;"></iframe>
+        </div>
+      `;
+      break;
+      
+    case 'doc':
+      content = `
+        <div class="modal-doc-container">
+          <iframe src="https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}" style="width:100%;height:70vh;border:none;border-radius:8px;"></iframe>
+        </div>
+      `;
+      break;
+      
+    case 'sheet':
+      content = `
+        <div class="modal-sheet-container">
+          <iframe src="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ?embedded=true&url=${encodeURIComponent(url)}" style="width:100%;height:70vh;border:none;border-radius:8px;"></iframe>
+          <p class="modal-note">For best viewing, download and open in Excel/Sheets</p>
+        </div>
+      `;
+      break;
+      
+    case 'presentation':
+      content = `
+        <div class="modal-presentation-container">
+          <iframe src="https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}" style="width:100%;height:70vh;border:none;border-radius:8px;"></iframe>
+        </div>
+      `;
+      break;
+      
+    case 'video':
+      content = `
+        <div class="modal-video-container">
+          <video controls style="width:100%;max-height:70vh;border-radius:8px;">
+            <source src="${url}">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      `;
+      break;
+      
+    case 'audio':
+      content = `
+        <div class="modal-audio-container">
+          <div class="audio-player">
+            <span class="audio-icon">🎵</span>
+            <h4>${escapeHtml(name)}</h4>
+            <audio controls style="width:100%;margin-top:16px;">
+              <source src="${url}">
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        </div>
+      `;
+      break;
+      
+    default:
+      content = `
+        <div class="modal-generic-container">
+          <p>This file type cannot be previewed directly.</p>
+          <div class="file-actions-center">
+            <a href="${url}" target="_blank" class="btn">Open in New Tab</a>
+            <a href="${url}" download class="btn">Download File</a>
+          </div>
+        </div>
+      `;
+  }
+
+  const modal = document.createElement('div');
+  modal.id = 'fileModal';
+  modal.className = 'file-modal-overlay';
+  modal.innerHTML = `
+    <div class="file-modal" onclick="event.stopPropagation()">
+      <div class="file-modal-header">
+        <h3>${escapeHtml(title)}</h3>
+        <button class="modal-close-btn" onclick="document.getElementById('fileModal').remove()">✕</button>
+      </div>
+      <div class="file-modal-body">
+        ${content}
+      </div>
+      <div class="file-modal-footer">
+        <a href="${url}" target="_blank" class="btn ghost">🔗 Open in New Tab</a>
+        <a href="${url}" download class="btn">⬇️ Download</a>
+        <button class="btn ghost" onclick="document.getElementById('fileModal').remove()">Close</button>
+      </div>
+    </div>
+  `;
+  
+  // Close on overlay click
+  modal.addEventListener('click', () => modal.remove());
+  
+  document.body.appendChild(modal);
+}
+// ============================================
+// NEW - RESOURCE STYLES INJECTION
+// ============================================
+
+function injectResourceStyles() {
+  const styleId = 'homeschool-resource-styles';
+  if (document.getElementById(styleId)) return;
+  
+  const styles = document.createElement('style');
+  styles.id = styleId;
+  styles.textContent = `
+    /* Resource Grid Layout */
+    .resources-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    
+    /* Resource Card */
+    .resource-card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+      border: 1px solid #eef2f6;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .resource-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      border-color: #3498db;
+    }
+    
+    .resource-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .resource-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    
+    .resource-icon.pdf { background: #fee2e2; color: #dc2626; }
+    .resource-icon.doc { background: #dbeafe; color: #2563eb; }
+    .resource-icon.image { background: #d1fae5; color: #059669; }
+    .resource-icon.video { background: #fef3c7; color: #d97706; }
+    .resource-icon.audio { background: #ede9fe; color: #7c3aed; }
+    .resource-icon.generic { background: #f3f4f6; color: #6b7280; }
+    
+    .resource-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .resource-title {
+      font-weight: 600;
+      font-size: 16px;
+      color: #1a1a2e;
+      margin: 0 0 4px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .resource-meta {
+      font-size: 12px;
+      color: #6b7280;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .resource-description {
+      font-size: 13px;
+      color: #4b5563;
+      margin: 12px 0;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .resource-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    
+    .resource-tag {
+      background: #f0f4f8;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      color: #475569;
+      font-weight: 500;
+    }
+    
+    .resource-tag.classroom { background: #e0f2fe; color: #0369a1; }
+    .resource-tag.student { background: #fce7f3; color: #be185d; }
+    
+    /* File Preview Components */
+    .file-preview {
+      margin-top: 12px;
+      border-top: 1px solid #eef2f6;
+      padding-top: 12px;
+    }
+    
+    .file-thumbnail {
+      width: 100%;
+      height: 140px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .file-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .file-thumbnail .file-icon {
+      font-size: 48px;
+    }
+    
+    .pdf-thumb { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); }
+    .doc-thumb { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); }
+    .sheet-thumb { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); }
+    .video-thumb { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); }
+    .audio-thumb { background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); }
+    
+    .file-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .btn-icon {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #475569;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    
+    .btn-icon:hover {
+      background: #eef2f6;
+      border-color: #cbd5e1;
+    }
+    
+    .file-name {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 6px;
+      word-break: break-all;
+    }
+    
+    /* File Modal */
+    .file-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 20px;
+      backdrop-filter: blur(4px);
+    }
+    
+    .file-modal {
+      background: white;
+      border-radius: 20px;
+      max-width: 1200px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+      animation: modalSlideIn 0.2s ease;
+    }
+    
+    @keyframes modalSlideIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    
+    .file-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid #eef2f6;
+    }
+    
+    .file-modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    
+    .modal-close-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: none;
+      background: #f1f5f9;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    
+    .modal-close-btn:hover {
+      background: #e2e8f0;
+    }
+    
+    .file-modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .file-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #eef2f6;
+    }
+    
+    .audio-player {
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .audio-icon {
+      font-size: 64px;
+      display: block;
+      margin-bottom: 16px;
+    }
+    
+    .modal-note {
+      text-align: center;
+      color: #64748b;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    
+    /* Resource Filter Bar */
+    .resources-filter-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 16px;
+    }
+    
+    .filter-search {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .filter-search input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 14px;
+      background: white;
+    }
+    
+    .filter-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .view-toggle {
+      display: flex;
+      gap: 4px;
+      background: white;
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .view-toggle-btn {
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .view-toggle-btn.active {
+      background: #3498db;
+      color: white;
+    }
+    
+    /* List View */
+    .resources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .resource-list-item {
+      background: white;
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border: 1px solid #eef2f6;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.2s;
+    }
+    
+    .resource-list-item:hover {
+      border-color: #3498db;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .resource-list-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    
+    .resource-list-content {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .resource-list-title {
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+    }
+    
+    .resource-list-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: #64748b;
+    }
+    
+    .resource-list-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    /* Empty State */
+    .resources-empty {
+      text-align: center;
+      padding: 60px 20px;
+      background: #f8fafc;
+      border-radius: 24px;
+      color: #64748b;
+    }
+    
+    .resources-empty-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    
+    /* Stats Cards for Parent View */
+    .resources-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .resource-stat-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    
+    .resource-stat-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .resource-stat-number {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    
+    .resource-stat-label {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+  `;
+  
+  document.head.appendChild(styles);
+}
+
 
 function openFileModal(url, type, name = '') {
   const old = document.getElementById('fileModal');
@@ -1059,19 +1855,125 @@ function renderStudentAssessmentsPage(assessments) {
   return `<div class="card panel"><h3>📊 My Assessments</h3>${assessments.length === 0 ? '<p class="empty">No assessments yet</p>' : simpleTable(['Title', 'Subject', 'Score', 'Max Score', 'Percentage', 'Status', 'Date'], rows)}</div>`;
 }
 
+// ============================================
+// UPDATED - renderStudentResourcesPage with enhanced UI
+// ============================================
+
 function renderStudentResourcesPage(resources) {
-  if (!resources.length) return `<div class="card panel"><h3>📚 Resources</h3><p class="empty">No resources shared yet</p></div>`;
+  injectResourceStyles();
   
-  const resourcesHtml = resources.map(r => `
-    <div class="resource-card" style="padding:16px;border-bottom:1px solid #eee;">
-      <strong>${escapeHtml(r.title)}</strong>
-      ${r.note ? `<p>${escapeHtml(r.note)}</p>` : ''}
-      ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
-      <br><small>Shared: ${fmtDate(r.createdAt)}</small>
+  if (!resources || resources.length === 0) {
+    return `
+      <div class="card panel">
+        <div class="resources-header">
+          <h3>📚 Learning Resources</h3>
+          <p>Resources shared by your tutors will appear here.</p>
+        </div>
+        <div class="resources-empty">
+          <div class="resources-empty-icon">📭</div>
+          <h4>No resources yet</h4>
+          <p>When your tutor shares learning materials, they'll show up here.</p>
+        </div>
+      </div>
+    `;
+  }
+  
+  // Group resources by type for stats
+  const stats = {
+    total: resources.length,
+    withFiles: resources.filter(r => r.fileUrl).length,
+    pdf: resources.filter(r => r.fileName?.toLowerCase().endsWith('.pdf')).length,
+    images: resources.filter(r => r.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)).length,
+    videos: resources.filter(r => r.fileName?.toLowerCase().match(/\.(mp4|webm|mov)$/)).length
+  };
+  
+  const getFileIconClass = (fileName) => {
+    if (!fileName) return 'generic';
+    const ext = fileName.toLowerCase().split('.').pop();
+    if (ext === 'pdf') return 'pdf';
+    if (['doc', 'docx', 'txt'].includes(ext)) return 'doc';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+    if (['mp4', 'webm', 'mov'].includes(ext)) return 'video';
+    if (['mp3', 'wav'].includes(ext)) return 'audio';
+    return 'generic';
+  };
+  
+  const resourceCards = resources.map(resource => {
+    const iconClass = getFileIconClass(resource.fileName);
+    
+    return `
+      <div class="resource-card">
+        <div class="resource-header">
+          <div class="resource-icon ${iconClass}">
+            ${iconClass === 'pdf' ? '📄' : 
+              iconClass === 'doc' ? '📝' : 
+              iconClass === 'image' ? '🖼️' : 
+              iconClass === 'video' ? '🎬' : 
+              iconClass === 'audio' ? '🎵' : '📁'}
+          </div>
+          <div class="resource-info">
+            <h4 class="resource-title" title="${escapeHtml(resource.title)}">${escapeHtml(resource.title)}</h4>
+            <div class="resource-meta">
+              <span>📅 ${fmtDate(resource.createdAt)}</span>
+              ${resource.type ? `<span>🏷️ ${escapeHtml(resource.type)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        
+        ${resource.note ? `<p class="resource-description">${escapeHtml(resource.note)}</p>` : ''}
+        
+        <div class="resource-tags">
+          ${resource.classroomName ? `<span class="resource-tag classroom">📚 ${escapeHtml(resource.classroomName)}</span>` : ''}
+          ${resource.tutorName ? `<span class="resource-tag">👨‍🏫 ${escapeHtml(resource.tutorName)}</span>` : ''}
+        </div>
+        
+        ${resource.fileUrl ? renderFilePreview(resource.fileUrl, resource.fileName) : ''}
+      </div>
+    `;
+  }).join('');
+  
+  return `
+    <div class="resources-page">
+      <div class="resources-stats">
+        <div class="resource-stat-card">
+          <div class="resource-stat-icon">📚</div>
+          <div class="resource-stat-number">${stats.total}</div>
+          <div class="resource-stat-label">Total Resources</div>
+        </div>
+        <div class="resource-stat-card">
+          <div class="resource-stat-icon">📎</div>
+          <div class="resource-stat-number">${stats.withFiles}</div>
+          <div class="resource-stat-label">With Files</div>
+        </div>
+        <div class="resource-stat-card">
+          <div class="resource-stat-icon">📄</div>
+          <div class="resource-stat-number">${stats.pdf}</div>
+          <div class="resource-stat-label">PDFs</div>
+        </div>
+        <div class="resource-stat-card">
+          <div class="resource-stat-icon">🖼️</div>
+          <div class="resource-stat-number">${stats.images}</div>
+          <div class="resource-stat-label">Images</div>
+        </div>
+        <div class="resource-stat-card">
+          <div class="resource-stat-icon">🎬</div>
+          <div class="resource-stat-number">${stats.videos}</div>
+          <div class="resource-stat-label">Videos</div>
+        </div>
+      </div>
+      
+      <div class="card panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3>📚 All Resources</h3>
+          <span class="badge">${stats.total} items</span>
+        </div>
+        
+        <div class="resources-grid">
+          ${resourceCards}
+        </div>
+      </div>
     </div>
-  `).join('');
-  
-  return `<div class="card panel"><h3>📚 Resources (${resources.length})</h3>${resourcesHtml}</div>`;
+  `;
 }
 
 function renderStudentReportsPage(items) {
@@ -1660,22 +2562,126 @@ function renderClassroomsPage(classrooms, students) {
   `;
 }
 
-function renderResourcesPage(resources, classrooms, students) {
-  const rowsHtml = resources.map((item) => `
-    <tr>
-      <td><strong>${escapeHtml(item.title || 'Untitled')}</strong></td>
-      <td>${escapeHtml(item.type || 'File')}</td>
-      <td>${escapeHtml(item.classroomName || '—')}</td>
-      <td>${escapeHtml(item.studentName || '—')}</td>
-      <td>${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : '—'}</td>
-      <td>${fmtDate(item.createdAt)}</td><td><button class="btn danger resource-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button></td>
-    </tr>
-    <tr class="details-row"><td colspan="7"><div style="padding:14px;background:var(--surface-2);border-radius:12px;"><strong>Description:</strong> ${escapeHtml(item.note || 'No description')}<br>${item.fileName ? `<strong>File:</strong> ${escapeHtml(item.fileName)}` : ''}</div></td></tr>
-  `).join('');
+// ============================================
+// UPDATED - renderResourcesPage with enhanced UI
+// ============================================
 
+function renderResourcesPage(resources, classrooms, students) {
+  injectResourceStyles();
+  
+  const getFileIconClass = (fileName) => {
+    if (!fileName) return 'generic';
+    const ext = fileName.toLowerCase().split('.').pop();
+    if (ext === 'pdf') return 'pdf';
+    if (['doc', 'docx', 'txt'].includes(ext)) return 'doc';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+    if (['mp4', 'webm', 'mov'].includes(ext)) return 'video';
+    return 'generic';
+  };
+  
+  const resourceCards = resources.map(resource => {
+    const iconClass = getFileIconClass(resource.fileName);
+    
+    return `
+      <div class="resource-card">
+        <div class="resource-header">
+          <div class="resource-icon ${iconClass}">
+            ${iconClass === 'pdf' ? '📄' : iconClass === 'doc' ? '📝' : iconClass === 'image' ? '🖼️' : '📁'}
+          </div>
+          <div class="resource-info">
+            <h4 class="resource-title">${escapeHtml(resource.title)}</h4>
+            <div class="resource-meta">
+              <span>📅 ${fmtDate(resource.createdAt)}</span>
+            </div>
+          </div>
+        </div>
+        
+        ${resource.note ? `<p class="resource-description">${escapeHtml(resource.note)}</p>` : ''}
+        
+        <div class="resource-tags">
+          ${resource.classroomName ? `<span class="resource-tag classroom">📚 ${escapeHtml(resource.classroomName)}</span>` : ''}
+          ${resource.studentName ? `<span class="resource-tag student">👤 ${escapeHtml(resource.studentName)}</span>` : ''}
+        </div>
+        
+        ${resource.fileUrl ? renderFilePreview(resource.fileUrl, resource.fileName) : ''}
+        
+        <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+          <button class="btn-icon danger resource-delete-btn" data-id="${escapeHtml(resource.id)}" title="Delete">
+            <span>🗑️</span> Delete
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
   return `
-    <section class="card panel"><h3>📚 Upload New Resource</h3><form id="resourceForm" class="stack-form"><div class="form-row"><label>Title *</label><input id="resourceTitle" required></div><div class="form-row"><label>Type</label><input id="resourceType"></div><div class="form-row"><label>Classroom</label><select id="resourceClassroomId"><option value="">None</option>${classrooms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div><div class="form-row"><label>Student</label><select id="resourceStudentId"><option value="">None</option>${students.map(s => `<option value="${s.id}">${s.full_name || s.email}</option>`).join('')}</select></div><div class="form-row"><label>File</label><input id="resourceFile" type="file"></div><div class="form-row"><label>Description</label><textarea id="resourceNote"></textarea></div><button class="btn" id="saveResourceBtn">Upload</button><span id="resourceMsg"></span></form></section>
-    <section class="card panel" style="margin-top:20px"><h3>Resources (${resources.length})</h3>${simpleTable(['Title', 'Type', 'Classroom', 'Student', 'File', 'Created', 'Action'], rowsHtml)}</section>
+    <section class="card panel">
+      <h3>📤 Upload New Resource</h3>
+      <p>Share files, links, and learning materials with your students.</p>
+      <form id="resourceForm" class="stack-form">
+        <div class="form-row">
+          <label>Resource Title *</label>
+          <input id="resourceTitle" required placeholder="e.g., Math Practice Worksheet - Week 3">
+        </div>
+        <div class="form-row">
+          <label>Resource Type</label>
+          <select id="resourceType">
+            <option value="Worksheet">📝 Worksheet</option>
+            <option value="Reading">📖 Reading Material</option>
+            <option value="Video">🎬 Video</option>
+            <option value="Audio">🎵 Audio</option>
+            <option value="Link">🔗 Link</option>
+            <option value="Other">📁 Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Share with Classroom (Optional)</label>
+          <select id="resourceClassroomId">
+            <option value="">-- All Students --</option>
+            ${classrooms.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Share with Specific Student (Optional)</label>
+          <select id="resourceStudentId">
+            <option value="">-- None --</option>
+            ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Attach File</label>
+          <input id="resourceFile" type="file" accept="*/*">
+          <small style="color: #64748b;">Supports PDF, images, videos, audio, and documents</small>
+        </div>
+        <div class="form-row">
+          <label>Description / Notes</label>
+          <textarea id="resourceNote" rows="3" placeholder="Add any instructions or notes for students..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn" id="saveResourceBtn">📤 Upload Resource</button>
+          <span id="resourceMsg"></span>
+        </div>
+      </form>
+    </section>
+    
+    <section class="card panel" style="margin-top: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3>📚 Your Resources</h3>
+        <span class="badge">${resources.length} items</span>
+      </div>
+      
+      ${resources.length > 0 ? `
+        <div class="resources-grid">
+          ${resourceCards}
+        </div>
+      ` : `
+        <div class="resources-empty">
+          <div class="resources-empty-icon">📭</div>
+          <h4>No resources uploaded yet</h4>
+          <p>Use the form above to share your first learning resource with students.</p>
+        </div>
+      `}
+    </section>
   `;
 }
 
@@ -2038,9 +3044,15 @@ async function bootParentAllAttendancePage() {
   `;
 }
 
+// ============================================
+// UPDATED - Parent Resources Page with enhanced view
+// ============================================
+
 async function bootParentAllResourcesPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
+  
+  injectResourceStyles();
   
   const [allResources, allStudents, allTutors] = await Promise.all([
     loadAllResources(),
@@ -2054,33 +3066,146 @@ async function bootParentAllResourcesPage() {
   const tutorMap = {};
   allTutors.forEach(t => { tutorMap[t.id] = t.full_name || t.name || t.email; });
   
-  const resourceCards = allResources.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(r => `
-    <div class="card panel" style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-        <div>
-          <h4>${escapeHtml(r.title)}</h4>
-          <p><strong>Shared by:</strong> ${escapeHtml(tutorMap[r.tutorId] || r.tutorName || 'Tutor')}</p>
+  // Calculate stats
+  const stats = {
+    total: allResources.length,
+    withFiles: allResources.filter(r => r.fileUrl).length,
+    byTutor: {},
+    byType: {}
+  };
+  
+  allResources.forEach(r => {
+    stats.byTutor[r.tutorId] = (stats.byTutor[r.tutorId] || 0) + 1;
+    const type = r.type || 'Other';
+    stats.byType[type] = (stats.byType[type] || 0) + 1;
+  });
+  
+  const getFileIconClass = (fileName) => {
+    if (!fileName) return 'generic';
+    const ext = fileName.toLowerCase().split('.').pop();
+    if (ext === 'pdf') return 'pdf';
+    if (['doc', 'docx', 'txt'].includes(ext)) return 'doc';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+    if (['mp4', 'webm', 'mov'].includes(ext)) return 'video';
+    if (['mp3', 'wav'].includes(ext)) return 'audio';
+    return 'generic';
+  };
+  
+  const resourceCards = allResources
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .map(resource => {
+      const iconClass = getFileIconClass(resource.fileName);
+      const tutorName = tutorMap[resource.tutorId] || resource.tutorName || 'Tutor';
+      const studentName = resource.studentName || studentMap[resource.studentId];
+      
+      return `
+        <div class="resource-card">
+          <div class="resource-header">
+            <div class="resource-icon ${iconClass}">
+              ${iconClass === 'pdf' ? '📄' : 
+                iconClass === 'doc' ? '📝' : 
+                iconClass === 'image' ? '🖼️' : 
+                iconClass === 'video' ? '🎬' : 
+                iconClass === 'audio' ? '🎵' : '📁'}
+            </div>
+            <div class="resource-info">
+              <h4 class="resource-title" title="${escapeHtml(resource.title)}">${escapeHtml(resource.title)}</h4>
+              <div class="resource-meta">
+                <span>👨‍🏫 ${escapeHtml(tutorName)}</span>
+                <span>📅 ${fmtDate(resource.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+          
+          ${resource.note ? `<p class="resource-description">${escapeHtml(resource.note)}</p>` : ''}
+          
+          <div class="resource-tags">
+            <span class="resource-tag">🏷️ ${escapeHtml(resource.type || 'Resource')}</span>
+            ${resource.classroomName ? `<span class="resource-tag classroom">📚 ${escapeHtml(resource.classroomName)}</span>` : ''}
+            ${studentName ? `<span class="resource-tag student">👤 ${escapeHtml(studentName)}</span>` : ''}
+          </div>
+          
+          ${resource.fileUrl ? renderFilePreview(resource.fileUrl, resource.fileName) : ''}
         </div>
-        <small>${fmtDate(r.createdAt)}</small>
+      `;
+    }).join('');
+  
+  const tutorStatsHtml = Object.entries(stats.byTutor)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([tutorId, count]) => `
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eef2f6;">
+        <span>${escapeHtml(tutorMap[tutorId] || 'Unknown Tutor')}</span>
+        <span class="badge">${count} resources</span>
       </div>
-      ${r.note ? `<p>${escapeHtml(r.note)}</p>` : ''}
-      <div style="margin-top:8px;">
-        <span class="badge">${escapeHtml(r.type || 'Resource')}</span>
-        ${r.classroomName ? `<span class="badge">📚 ${escapeHtml(r.classroomName)}</span>` : ''}
-        ${r.studentName ? `<span class="badge">👤 ${escapeHtml(r.studentName)}</span>` : ''}
-      </div>
-      ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
-    </div>
-  `).join('');
+    `).join('');
   
   document.getElementById('page-content').innerHTML = `
-    <div class="stats-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;">
-      <div class="stat-card"><div class="stat-number">${allResources.length}</div><p>Total Resources</p></div>
-      <div class="stat-card"><div class="stat-number">${allResources.filter(r => r.fileUrl).length}</div><p>With Attachments</p></div>
+    <div class="resources-stats">
+      <div class="resource-stat-card">
+        <div class="resource-stat-icon">📚</div>
+        <div class="resource-stat-number">${stats.total}</div>
+        <div class="resource-stat-label">Total Resources</div>
+      </div>
+      <div class="resource-stat-card">
+        <div class="resource-stat-icon">📎</div>
+        <div class="resource-stat-number">${stats.withFiles}</div>
+        <div class="resource-stat-label">With Files</div>
+      </div>
+      <div class="resource-stat-card">
+        <div class="resource-stat-icon">👨‍🏫</div>
+        <div class="resource-stat-number">${Object.keys(stats.byTutor).length}</div>
+        <div class="resource-stat-label">Active Tutors</div>
+      </div>
+      <div class="resource-stat-card">
+        <div class="resource-stat-icon">👥</div>
+        <div class="resource-stat-number">${allStudents.length}</div>
+        <div class="resource-stat-label">Students</div>
+      </div>
     </div>
-    <div class="card panel">
-      <h3>📚 All Learning Resources</h3>
-      ${resourceCards || '<p class="empty">No resources uploaded yet</p>'}
+    
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+      <div class="card panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3>📚 All Learning Resources</h3>
+          <span class="badge">${stats.total} items</span>
+        </div>
+        
+        ${resourceCards ? `
+          <div class="resources-grid">
+            ${resourceCards}
+          </div>
+        ` : `
+          <div class="resources-empty">
+            <div class="resources-empty-icon">📭</div>
+            <h4>No resources yet</h4>
+            <p>Resources uploaded by tutors will appear here.</p>
+          </div>
+        `}
+      </div>
+      
+      <div>
+        <div class="card panel">
+          <h3>📊 Resources by Tutor</h3>
+          ${tutorStatsHtml || '<p class="empty">No data</p>'}
+        </div>
+        
+        <div class="card panel" style="margin-top: 20px;">
+          <h3>🏷️ Resource Types</h3>
+          ${Object.entries(stats.byType).map(([type, count]) => `
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eef2f6;">
+              <span>${escapeHtml(type)}</span>
+              <span class="badge">${count}</span>
+            </div>
+          `).join('') || '<p class="empty">No data</p>'}
+        </div>
+        
+        <div class="card panel" style="margin-top: 20px;">
+          <h3>📋 Quick Info</h3>
+          <p>All resources uploaded by tutors are visible here. Students can access resources shared with their classroom or individually.</p>
+          <p style="margin-top: 12px;"><strong>Supported file types:</strong> PDF, Word, Excel, PowerPoint, Images, Videos, Audio, and more.</p>
+        </div>
+      </div>
     </div>
   `;
 }
