@@ -634,34 +634,200 @@ async function loadStudentAttendance(studentUid) {
 }
 
 async function loadStudentActivities(studentUid) {
-  const notesSnap = await getDocs(
-    query(collection(db, 'student-notes'), where('studentId', '==', studentUid))
-  );
-  const portfolioSnap = await getDocs(
-    query(collection(db, 'portfolio'), where('studentId', '==', studentUid))
-  );
-
-  const noteItems = notesSnap.docs.map(d => ({
-    id: d.id,
-    type: 'Tutor Note',
-    title: d.data().comment || 'Tutor note',
-    createdAt: d.data().createdAt || null,
-    raw: d.data()
-  }));
-
-  const portfolioItems = portfolioSnap.docs.map(d => ({
-    id: d.id,
-    type: 'Portfolio',
-    title: d.data().note || d.data().tag || 'Portfolio item',
-    createdAt: d.data().createdAt || null,
-    raw: d.data()
-  }));
-
-  return [...noteItems, ...portfolioItems].sort((a, b) => {
+  console.log('📊 Loading ALL activities for student:', studentUid);
+  
+  // Load from multiple sources to get comprehensive activity feed
+  const [
+    notesSnap,
+    portfolioSnap,
+    submissionsSnap,
+    assignmentsSnap,
+    assessmentsSnap,
+    notificationsSnap,
+    messagesSnap,
+    attendanceSnap
+  ] = await Promise.all([
+    getDocs(query(collection(db, 'student-notes'), where('studentId', '==', studentUid))),
+    getDocs(query(collection(db, 'portfolio'), where('studentId', '==', studentUid))),
+    getDocs(query(collection(db, 'submissions'), where('studentId', '==', studentUid))),
+    getDocs(query(collection(db, 'assignments'))), // Will filter for student visibility
+    getDocs(query(collection(db, 'assessments'), where('studentId', '==', studentUid))),
+    getDocs(query(collection(db, 'notifications'), where('studentId', '==', studentUid))),
+    getDocs(query(collection(db, 'messages'), where('studentId', '==', studentUid))),
+    getDocs(query(collection(db, 'attendance'), where('studentId', '==', studentUid)))
+  ]);
+  
+  // Get student's classroom for assignment filtering
+  const studentDoc = await getDoc(doc(db, 'students', studentUid));
+  const studentData = studentDoc.data();
+  const classroomId = studentData?.classroomId || '';
+  
+  const activities = [];
+  
+  // 1. Tutor Notes
+  notesSnap.docs.forEach(d => {
+    const data = d.data();
+    activities.push({
+      id: d.id,
+      type: 'tutor_note',
+      typeLabel: '📝 Tutor Feedback',
+      icon: '✏️',
+      title: 'Tutor Comment',
+      description: data.comment || 'Tutor left feedback',
+      createdAt: data.createdAt,
+      priority: 2,
+      metadata: { tutorName: data.tutorName }
+    });
+  });
+  
+  // 2. Portfolio Entries (Journey entries)
+  portfolioSnap.docs.forEach(d => {
+    const data = d.data();
+    const typeMap = {
+      'Achievement': '🏆',
+      'Challenge': '⚠️',
+      'Progress': '📈',
+      'Reflection': '🤔',
+      'Character': '💪',
+      'Problem_Solved': '🧩',
+      'Skill_Mastered': '⭐',
+      'Goal_Set': '🎯'
+    };
+    activities.push({
+      id: d.id,
+      type: 'portfolio_' + (data.type || 'entry'),
+      typeLabel: data.feeling ? `${data.feeling} ${data.type || 'Portfolio Entry'}` : (data.type || 'Portfolio Entry'),
+      icon: typeMap[data.type] || '📖',
+      title: data.title || 'Portfolio Entry',
+      description: data.note || '',
+      createdAt: data.createdAt,
+      priority: 1,
+      metadata: { feeling: data.feeling, fileUrl: data.fileUrl, type: data.type }
+    });
+  });
+  
+  // 3. Assignment Submissions (Work submitted)
+  submissionsSnap.docs.forEach(d => {
+    const data = d.data();
+    activities.push({
+      id: d.id,
+      type: 'submission',
+      typeLabel: '📤 Work Submitted',
+      icon: '📤',
+      title: `Submitted: ${data.assignmentTitle || 'Assignment'}`,
+      description: data.note || 'No additional notes',
+      createdAt: data.submittedAt || data.createdAt,
+      priority: 1,
+      metadata: { assignmentId: data.assignmentId, fileUrl: data.fileUrl, status: data.status }
+    });
+  });
+  
+  // 4. Assignments Received (Filter for this student)
+  assignmentsSnap.docs.forEach(d => {
+    const data = d.data();
+    let isVisible = false;
+    if (data.studentId === studentUid) isVisible = true;
+    if (data.classroomId === classroomId) isVisible = true;
+    if (data.targetType === 'all_students' || data.published === true) isVisible = true;
+    if (Array.isArray(data.assignedTo) && data.assignedTo.includes(studentUid)) isVisible = true;
+    
+    if (isVisible) {
+      activities.push({
+        id: d.id,
+        type: 'assignment_received',
+        typeLabel: '📋 Assignment Received',
+        icon: '📋',
+        title: `New: ${data.title || 'Assignment'}`,
+        description: data.description || 'Check your assignments page for details',
+        createdAt: data.createdAt,
+        priority: 2,
+        metadata: { dueDate: data.dueDate, subject: data.subject }
+      });
+    }
+  });
+  
+  // 5. Assessments (Quizzes/Tests)
+  assessmentsSnap.docs.forEach(d => {
+    const data = d.data();
+    const isGraded = data.status === 'Graded';
+    activities.push({
+      id: d.id,
+      type: 'assessment',
+      typeLabel: isGraded ? '📊 Assessment Graded' : '📝 Assessment Created',
+      icon: isGraded ? '⭐' : '📝',
+      title: data.title || 'Assessment',
+      description: isGraded ? `Score: ${data.score}/${data.maxScore || '—'} - ${data.feedback || 'No feedback'}` : 'New assessment ready',
+      createdAt: data.createdAt,
+      priority: 2,
+      metadata: { score: data.score, maxScore: data.maxScore, feedback: data.feedback, status: data.status }
+    });
+  });
+  
+  // 6. Notifications
+  notificationsSnap.docs.forEach(d => {
+    const data = d.data();
+    const typeMap = {
+      'assignment': '📋',
+      'assessment': '📝',
+      'message': '💬',
+      'submission': '📤',
+      'resource': '📚'
+    };
+    activities.push({
+      id: d.id,
+      type: 'notification',
+      typeLabel: `🔔 ${data.title || 'Notification'}`,
+      icon: typeMap[data.type] || '🔔',
+      title: data.title || 'Update',
+      description: data.message || '',
+      createdAt: data.createdAt,
+      priority: 3,
+      metadata: { read: data.read, type: data.type }
+    });
+  });
+  
+  // 7. Messages Received
+  messagesSnap.docs.forEach(d => {
+    const data = d.data();
+    activities.push({
+      id: d.id,
+      type: 'message',
+      typeLabel: '💬 Message',
+      icon: '💬',
+      title: data.subject || 'Message from Tutor',
+      description: (data.message || data.body || '').substring(0, 150),
+      createdAt: data.createdAt,
+      priority: 2,
+      metadata: { fromName: data.tutorName || data.fromName, read: data.read }
+    });
+  });
+  
+  // 8. Attendance Records
+  attendanceSnap.docs.forEach(d => {
+    const data = d.data();
+    const statusIcon = data.status === 'Present' ? '✅' : (data.status === 'Late' ? '⏰' : '❌');
+    activities.push({
+      id: d.id,
+      type: 'attendance',
+      typeLabel: `${statusIcon} Attendance: ${data.status || 'Recorded'}`,
+      icon: statusIcon,
+      title: `${data.status || 'Attendance'} - ${data.classroomName || 'Class'}`,
+      description: data.note || data.notes || `Duration: ${data.durationMinutes || 'N/A'} minutes`,
+      createdAt: data.recordDate || data.date || data.attendanceDate || data.createdAt,
+      priority: 3,
+      metadata: { status: data.status, duration: data.durationMinutes }
+    });
+  });
+  
+  // Sort by date (newest first)
+  activities.sort((a, b) => {
     const aTime = a.createdAt?.seconds || 0;
     const bTime = b.createdAt?.seconds || 0;
     return bTime - aTime;
   });
+  
+  console.log(`📊 Loaded ${activities.length} total activities for student`);
+  return activities;
 }
 
 async function loadStudentMessages(studentUid) {
@@ -1293,16 +1459,238 @@ function renderStudentAttendancePage(records) {
 }
 
 function renderStudentActivitiesPage(items) {
-  const rows = items.map(item => `
-    <div class="card panel" style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
-        <strong>${escapeHtml(item.type)}</strong>
-        <small>${fmtDate(item.createdAt)}</small>
+  // Group activities by date
+  const groupedByDate = {};
+  items.forEach(item => {
+    const dateKey = fmtDate(item.createdAt).split(',')[0]; // Just the date part
+    if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+    groupedByDate[dateKey].push(item);
+  });
+  
+  // Count by type for stats
+  const stats = {
+    total: items.length,
+    submissions: items.filter(i => i.type === 'submission').length,
+    assignments: items.filter(i => i.type === 'assignment_received').length,
+    portfolio: items.filter(i => i.type.startsWith('portfolio_')).length,
+    feedback: items.filter(i => i.type === 'tutor_note').length,
+    assessments: items.filter(i => i.type === 'assessment').length
+  };
+  
+  const timelineHtml = Object.entries(groupedByDate).map(([date, dayItems]) => `
+    <div class="timeline-group">
+      <div class="timeline-date">📅 ${date}</div>
+      <div class="timeline-items">
+        ${dayItems.map(item => `
+          <div class="activity-item ${item.type.replace('_', '-')}" data-activity-id="${item.id}" data-type="${item.type}">
+            <div class="activity-icon">${item.icon}</div>
+            <div class="activity-content">
+              <div class="activity-header">
+                <span class="activity-type">${item.typeLabel}</span>
+                <span class="activity-time">${fmtDate(item.createdAt).split(',')[1] || ''}</span>
+              </div>
+              <div class="activity-title">${escapeHtml(item.title)}</div>
+              <div class="activity-description">${escapeHtml(item.description.length > 200 ? item.description.substring(0, 200) + '...' : item.description)}</div>
+              ${item.metadata?.fileUrl ? `<div class="activity-attachment"><a href="${item.metadata.fileUrl}" target="_blank" class="btn small ghost">📎 View Attachment</a></div>` : ''}
+              ${item.metadata?.score ? `<div class="activity-score">Score: ${item.metadata.score}/${item.metadata.maxScore || '—'}</div>` : ''}
+              ${item.metadata?.dueDate ? `<div class="activity-due">Due: ${fmtDate(item.metadata.dueDate)}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
       </div>
-      <p style="margin-top:10px">${escapeHtml(item.title || '—')}</p>
     </div>
   `).join('');
-  return `<div class="card panel"><h3>My Activities</h3>${items.length ? rows : '<div class="empty">No activities yet.</div>'}</div>`;
+  
+  return `
+    <style>
+      .activities-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .stat-pill {
+        background: white;
+        border-radius: 12px;
+        padding: 12px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .stat-pill .number {
+        font-size: 24px;
+        font-weight: bold;
+        display: block;
+      }
+      .stat-pill .label {
+        font-size: 12px;
+        color: #666;
+      }
+      .timeline-group {
+        margin-bottom: 24px;
+      }
+      .timeline-date {
+        font-weight: bold;
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 12px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+      }
+      .timeline-items {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .activity-item {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        gap: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .activity-item:hover {
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+      .activity-icon {
+        font-size: 28px;
+        min-width: 48px;
+        text-align: center;
+      }
+      .activity-content {
+        flex: 1;
+      }
+      .activity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .activity-type {
+        font-size: 12px;
+        font-weight: 600;
+        color: #3498db;
+        background: #e3f2fd;
+        padding: 2px 8px;
+        border-radius: 20px;
+      }
+      .activity-time {
+        font-size: 11px;
+        color: #999;
+      }
+      .activity-title {
+        font-weight: 600;
+        font-size: 16px;
+        margin-bottom: 6px;
+        color: #2c3e50;
+      }
+      .activity-description {
+        font-size: 13px;
+        color: #555;
+        line-height: 1.4;
+      }
+      .activity-attachment {
+        margin-top: 8px;
+      }
+      .activity-score {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #27ae60;
+        font-weight: 500;
+      }
+      .activity-due {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #e67e22;
+      }
+      .filter-bar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .filter-btn {
+        padding: 6px 14px;
+        border-radius: 20px;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.2s;
+      }
+      .filter-btn.active {
+        background: #3498db;
+        color: white;
+        border-color: #3498db;
+      }
+      .filter-btn:hover {
+        background: #e3f2fd;
+      }
+      @media (max-width: 600px) {
+        .activity-item { flex-direction: column; align-items: center; text-align: center; }
+        .activity-header { justify-content: center; }
+      }
+    </style>
+    
+    <div class="stats-card" style="margin-bottom:20px;">
+      <div class="activities-stats">
+        <div class="stat-pill"><span class="number">${stats.total}</span><span class="label">Total Activities</span></div>
+        <div class="stat-pill"><span class="number">${stats.submissions}</span><span class="label">📤 Submissions</span></div>
+        <div class="stat-pill"><span class="number">${stats.assignments}</span><span class="label">📋 Assignments</span></div>
+        <div class="stat-pill"><span class="number">${stats.portfolio}</span><span class="label">📖 Portfolio</span></div>
+        <div class="stat-pill"><span class="number">${stats.feedback}</span><span class="label">✏️ Feedback</span></div>
+        <div class="stat-pill"><span class="number">${stats.assessments}</span><span class="label">📊 Assessments</span></div>
+      </div>
+    </div>
+    
+    <div class="card panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+        <h3 style="margin:0;">📅 Activity Timeline</h3>
+        <div class="filter-bar" id="activityFilterBar">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="submission">Submissions</button>
+          <button class="filter-btn" data-filter="assignment_received">Assignments</button>
+          <button class="filter-btn" data-filter="portfolio">Portfolio</button>
+          <button class="filter-btn" data-filter="tutor_note">Feedback</button>
+          <button class="filter-btn" data-filter="assessment">Assessments</button>
+        </div>
+      </div>
+      <div id="activitiesTimeline">
+        ${timelineHtml || '<div class="empty-state" style="text-align:center;padding:40px;"><div style="font-size:48px;">📭</div><p>No activities yet. Start by submitting work or adding portfolio entries!</p></div>'}
+      </div>
+    </div>
+    
+    <script>
+      // Filter functionality
+      const filterBtns = document.querySelectorAll('.filter-btn');
+      const allActivities = document.querySelectorAll('.activity-item');
+      
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          filterBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const filter = btn.dataset.filter;
+          
+          allActivities.forEach(activity => {
+            if (filter === 'all') {
+              activity.style.display = 'flex';
+            } else {
+              const type = activity.dataset.type;
+              if (type === filter || (filter === 'portfolio' && type.startsWith('portfolio_'))) {
+                activity.style.display = 'flex';
+              } else {
+                activity.style.display = 'none';
+              }
+            }
+          });
+        });
+      });
+    </script>
+  `;
 }
 
 function renderStudentMessagesPage(messages) {
@@ -1409,36 +1797,331 @@ function renderStudentSettingsPage(profile, user, studentRecord = {}) {
 }
 
 function renderStudentPortfolioPage(items) {
-  const feedHtml = items.length ? items.map(item => `
-    <div class="card panel" style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="badge">${escapeHtml(item.type || 'Reflection')}</span>
-        <small>${fmtDate(item.createdAt)}</small>
+  // Group entries by type for stats
+  const stats = {
+    total: items.length,
+    achievements: items.filter(i => i.type === 'Achievement').length,
+    challenges: items.filter(i => i.type === 'Challenge').length,
+    progress: items.filter(i => i.type === 'Progress').length,
+    reflections: items.filter(i => i.type === 'Reflection').length,
+    character: items.filter(i => i.type === 'Character').length,
+    problemsSolved: items.filter(i => i.type === 'Problem_Solved').length,
+    skillsMastered: items.filter(i => i.type === 'Skill_Mastered').length,
+    goals: items.filter(i => i.type === 'Goal_Set').length
+  };
+  
+  const feedHtml = items.length ? items.map(item => {
+    const typeIcons = {
+      'Achievement': '🏆',
+      'Challenge': '⚠️',
+      'Progress': '📈',
+      'Reflection': '🤔',
+      'Character': '💪',
+      'Problem_Solved': '🧩',
+      'Skill_Mastered': '⭐',
+      'Goal_Set': '🎯'
+    };
+    const icon = typeIcons[item.type] || '📖';
+    const feelingEmoji = item.feeling === 'Excited' ? '😊' : (item.feeling === 'Struggling' ? '😟' : (item.feeling === 'Proud' ? '🦁' : ''));
+    
+    return `
+      <div class="portfolio-card" data-type="${item.type}">
+        <div class="portfolio-card-header">
+          <div>
+            <span class="portfolio-type-badge ${item.type?.toLowerCase()}">${icon} ${item.type || 'Entry'}</span>
+            ${feelingEmoji ? `<span class="feeling-badge">${feelingEmoji} ${item.feeling}</span>` : ''}
+          </div>
+          <small>${fmtDate(item.createdAt)}</small>
+        </div>
+        <h4 class="portfolio-title">${escapeHtml(item.title || 'Untitled')}</h4>
+        <p class="portfolio-note">${escapeHtml(item.note || '')}</p>
+        ${item.milestone ? `<div class="portfolio-milestone">🎯 Milestone: ${escapeHtml(item.milestone)}</div>` : ''}
+        ${item.fileUrl ? `<div class="portfolio-attachment">${renderFilePreview(item.fileUrl, item.fileName)}</div>` : ''}
+        <div class="portfolio-actions">
+          <button class="btn small ghost delete-portfolio-btn" data-id="${item.id}">Delete</button>
+        </div>
       </div>
-      <h4 style="margin:12px 0 8px;">${escapeHtml(item.title || 'Untitled')}</h4>
-      <p>${escapeHtml(item.note || '')}</p>
-      ${item.fileUrl ? `<div class="file-preview">${renderFilePreview(item.fileUrl, item.fileName)}</div>` : ''}
-    </div>
-  `).join('') : `<div style="text-align:center;padding:60px 20px;color:var(--muted);background:#f8fbff;border-radius:20px;">✨ No entries yet – start your journey by adding one!</div>`;
-
+    `;
+  }).join('') : `<div class="empty-state" style="text-align:center;padding:60px 20px;"><div style="font-size:64px;">🌟</div><h3>Start Your Journey</h3><p>Document your learning, track your growth, and celebrate your achievements!</p></div>`;
+  
   return `
-    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;">
-      <div class="card panel">
-        <h3>📖 New Journal Entry</h3>
+    <style>
+      .portfolio-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .stat-card-portfolio {
+        background: white;
+        border-radius: 12px;
+        padding: 12px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+      }
+      .stat-card-portfolio:hover { transform: translateY(-2px); }
+      .stat-number { font-size: 24px; font-weight: bold; display: block; }
+      .stat-label { font-size: 11px; color: #666; }
+      .portfolio-layout {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr;
+        gap: 24px;
+      }
+      @media (max-width: 768px) {
+        .portfolio-layout { grid-template-columns: 1fr; }
+      }
+      .form-card {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 20px;
+      }
+      .form-card h3 {
+        margin-top: 0;
+        margin-bottom: 16px;
+      }
+      .form-group {
+        margin-bottom: 16px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        font-size: 13px;
+        color: #555;
+      }
+      .form-group select, .form-group input, .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .form-group textarea {
+        resize: vertical;
+      }
+      .portfolio-card {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .portfolio-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      }
+      .portfolio-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .portfolio-type-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        background: #e3f2fd;
+        color: #1976d2;
+      }
+      .portfolio-type-badge.achievement { background: #e8f5e9; color: #2e7d32; }
+      .portfolio-type-badge.challenge { background: #ffebee; color: #c62828; }
+      .portfolio-type-badge.progress { background: #e0f7fa; color: #00838f; }
+      .portfolio-type-badge.reflection { background: #f3e5f5; color: #6a1b9a; }
+      .portfolio-type-badge.character { background: #fff3e0; color: #e65100; }
+      .portfolio-type-badge.problem_solved { background: #e8eaf6; color: #283593; }
+      .portfolio-type-badge.skill_mastered { background: #fce4ec; color: #880e4f; }
+      .portfolio-type-badge.goal_set { background: #e0f2f1; color: #00695c; }
+      .feeling-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 11px;
+        background: #f5f5f5;
+        margin-left: 8px;
+      }
+      .portfolio-title {
+        margin: 0 0 10px 0;
+        font-size: 18px;
+        color: #2c3e50;
+      }
+      .portfolio-note {
+        margin: 0 0 12px 0;
+        line-height: 1.5;
+        color: #444;
+      }
+      .portfolio-milestone {
+        background: #f0f7ff;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-size: 13px;
+        border-left: 3px solid #3498db;
+      }
+      .portfolio-attachment {
+        margin: 12px 0;
+      }
+      .portfolio-actions {
+        margin-top: 12px;
+        text-align: right;
+      }
+      .filter-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .filter-chip {
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+      .filter-chip.active {
+        background: #3498db;
+        color: white;
+        border-color: #3498db;
+      }
+      .filter-chip:hover {
+        background: #e3f2fd;
+      }
+    </style>
+    
+    <div class="portfolio-stats">
+      <div class="stat-card-portfolio"><span class="stat-number">${stats.total}</span><span class="stat-label">Total Entries</span></div>
+      <div class="stat-card-portfolio"><span class="stat-number">🏆 ${stats.achievements}</span><span class="stat-label">Achievements</span></div>
+      <div class="stat-card-portfolio"><span class="stat-number">🧩 ${stats.problemsSolved}</span><span class="stat-label">Problems Solved</span></div>
+      <div class="stat-card-portfolio"><span class="stat-number">⭐ ${stats.skillsMastered}</span><span class="stat-label">Skills Mastered</span></div>
+      <div class="stat-card-portfolio"><span class="stat-number">💪 ${stats.character}</span><span class="stat-label">Character Growth</span></div>
+      <div class="stat-card-portfolio"><span class="stat-number">🎯 ${stats.goals}</span><span class="stat-label">Goals Set</span></div>
+    </div>
+    
+    <div class="portfolio-layout">
+      <div class="form-card">
+        <h3>📖 Add to Your Journey</h3>
         <form id="portfolioForm" class="stack-form">
-          <div class="form-row"><label>Type</label><select id="portfolioType" required><option value="Achievement">🏆 Achievement</option><option value="Challenge">⚠️ Challenge</option><option value="Progress">📈 Progress</option><option value="Reflection">🤔 Reflection</option></select></div>
-          <div class="form-row"><label>How are you feeling?</label><select id="portfolioFeeling"><option value="">— Optional —</option><option value="Excited">Excited</option><option value="Struggling">Struggling</option><option value="Proud">Proud</option></select></div>
-          <div class="form-row"><label>Title</label><input id="portfolioTitle" placeholder="What happened today?"></div>
-          <div class="form-row"><label>Reflection</label><textarea id="portfolioNote" rows="4" placeholder="Write your thoughts..."></textarea></div>
-          <div class="form-row"><label>Upload</label><input id="portfolioFile" type="file" accept="image/*,video/*,application/pdf"></div>
-          <button type="submit" class="btn">✨ Add to Journey</button><span id="portfolioMsg"></span>
+          <div class="form-group">
+            <label>Entry Type *</label>
+            <select id="portfolioType" required>
+              <option value="Achievement">🏆 Achievement - Something you accomplished</option>
+              <option value="Challenge">⚠️ Challenge - Something you overcame</option>
+              <option value="Progress">📈 Progress - How you're improving</option>
+              <option value="Reflection">🤔 Reflection - What you learned about yourself</option>
+              <option value="Character">💪 Character Growth - Kindness, patience, honesty, etc.</option>
+              <option value="Problem_Solved">🧩 Problem Solved - A difficult problem you solved</option>
+              <option value="Skill_Mastered">⭐ Skill Mastered - Something new you can do</option>
+              <option value="Goal_Set">🎯 Goal Set - A new goal for yourself</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>How are you feeling?</label>
+            <select id="portfolioFeeling">
+              <option value="">— Optional —</option>
+              <option value="Excited">😊 Excited</option>
+              <option value="Proud">🦁 Proud</option>
+              <option value="Struggling">😟 Struggling</option>
+              <option value="Determined">💪 Determined</option>
+              <option value="Grateful">🙏 Grateful</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>Title *</label>
+            <input id="portfolioTitle" placeholder="What happened today? (e.g., 'I helped a classmate', 'Finally understood fractions')" required>
+          </div>
+          
+          <div class="form-group">
+            <label>Your Reflection / Story *</label>
+            <textarea id="portfolioNote" rows="5" placeholder="Write about what happened, what you learned, and how you grew..."></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label>Milestone (Optional)</label>
+            <input id="portfolioMilestone" placeholder="e.g., 'First time doing X', 'Reached 80% mastery'">
+          </div>
+          
+          <div class="form-group">
+            <label>Upload Evidence (Optional)</label>
+            <input id="portfolioFile" type="file" accept="image/*,video/*,application/pdf">
+            <small style="color:#666;display:block;margin-top:4px;">Upload a photo, scan, or video of your work</small>
+          </div>
+          
+          <button type="submit" class="btn" style="width:100%;">✨ Add to My Journey</button>
+          <span id="portfolioMsg" style="display:block;text-align:center;margin-top:10px;"></span>
         </form>
       </div>
-      <div><h3>🌟 My Learning Journey</h3><div style="display:flex;flex-direction:column;gap:20px;">${feedHtml}</div></div>
+      
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+          <h3 style="margin:0;">🌟 My Growth Journey</h3>
+          <div class="filter-buttons" id="portfolioFilterBar">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="Achievement">🏆</button>
+            <button class="filter-chip" data-filter="Problem_Solved">🧩</button>
+            <button class="filter-chip" data-filter="Skill_Mastered">⭐</button>
+            <button class="filter-chip" data-filter="Character">💪</button>
+            <button class="filter-chip" data-filter="Goal_Set">🎯</button>
+            <button class="filter-chip" data-filter="Progress">📈</button>
+            <button class="filter-chip" data-filter="Reflection">🤔</button>
+          </div>
+        </div>
+        <div id="portfolioFeed">
+          ${feedHtml}
+        </div>
+      </div>
     </div>
+    
+    <script>
+      // Portfolio filter functionality
+      const filterChips = document.querySelectorAll('.filter-chip');
+      const portfolioCards = document.querySelectorAll('.portfolio-card');
+      
+      filterChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          filterChips.forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          const filter = chip.dataset.filter;
+          
+          portfolioCards.forEach(card => {
+            if (filter === 'all') {
+              card.style.display = 'block';
+            } else {
+              const badge = card.querySelector('.portfolio-type-badge');
+              if (badge && badge.textContent.includes(filter)) {
+                card.style.display = 'block';
+              } else {
+                card.style.display = 'none';
+              }
+            }
+          });
+        });
+      });
+      
+      // Delete portfolio entry handler
+      document.querySelectorAll('.delete-portfolio-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          if (confirm('Delete this portfolio entry? This cannot be undone.')) {
+            const id = btn.dataset.id;
+            await deleteDoc(doc(db, 'portfolio', id));
+            location.reload();
+          }
+        });
+      });
+    </script>
   `;
 }
-
 function renderSubmitWorkPage(profile, user, assignments, submissions, forcedId = null) {
   const studentName = getStudentDisplayName(profile, user);
   const submittedMap = new Map(submissions.map(s => [s.assignmentId, s]));
@@ -2819,15 +3502,40 @@ async function bootStudentPortfolioPage() {
       const note = document.getElementById('portfolioNote').value;
       const file = document.getElementById('portfolioFile').files[0];
       const feeling = document.getElementById('portfolioFeeling')?.value || '';
+      const milestone = document.getElementById('portfolioMilestone')?.value || '';
       
-      const upload = file ? await uploadFile(file, `portfolio/${user.uid}`) : { url: '' };
-      await addDoc(collection(db, 'portfolio'), {
-        studentId: user.uid, studentName: getStudentDisplayName(profile, user),
-        type, title, note, feeling, fileUrl: upload.url, fileName: upload.name,
-        createdAt: serverTimestamp()
-      });
-      form.reset();
-      bootStudentPortfolioPage();
+      if (!title || !note) {
+        document.getElementById('portfolioMsg').innerHTML = '<span style="color:#e74c3c;">❌ Please add a title and reflection</span>';
+        return;
+      }
+      
+      document.getElementById('portfolioMsg').innerHTML = '<span style="color:#3498db;">⏳ Saving your journey entry...</span>';
+      
+      try {
+        let upload = { url: '', name: '' };
+        if (file) {
+          upload = await uploadFile(file, `portfolio/${user.uid}`);
+        }
+        
+        await addDoc(collection(db, 'portfolio'), {
+          studentId: user.uid,
+          studentName: getStudentDisplayName(profile, user),
+          type: type,
+          title: title,
+          note: note,
+          feeling: feeling,
+          milestone: milestone,
+          fileUrl: upload.url,
+          fileName: upload.name,
+          createdAt: serverTimestamp()
+        });
+        
+        document.getElementById('portfolioMsg').innerHTML = '<span style="color:#27ae60;">✅ Entry saved! Refreshing...</span>';
+        form.reset();
+        setTimeout(() => bootStudentPortfolioPage(), 1500);
+      } catch (err) {
+        document.getElementById('portfolioMsg').innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
+      }
     });
   }
 }
