@@ -944,41 +944,60 @@ function trackUserActivity(userId, role) {
 // ============================================
 
 function renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources) {
-  const pendingAssignments = assignments.filter(a => !submissions.find(s => s.assignmentId === a.id)).length;
+  const submittedMap = new Map(submissions.map(s => [s.assignmentId, s]));
+  const pendingAssignments = assignments.filter(a => !submittedMap.has(a.id));
   const unreadNotifications = notifications.filter(n => !n.read).length;
   const gradedAssessments = assessments.filter(a => a.status === 'Graded').length;
   
   return `
     <style>
-      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 24px; }
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
       .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
       .stat-number { font-size: 32px; font-weight: bold; margin: 0; }
       .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
       @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
-      .notification-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+      .notification-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
       .notification-item.unread { background: #f0f7ff; border-left: 3px solid #3498db; }
       .notification-item:hover { background: #e8f0fe; }
+      .assignment-dash-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
     </style>
     
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-number">${assignments.length}</div><p>Assignments</p></div>
-      <div class="stat-card" style="background:#e8f5e9;"><div class="stat-number">${submissions.length}</div><p>Completed</p></div>
-      <div class="stat-card" style="background:#fff3e0;"><div class="stat-number">${pendingAssignments}</div><p>Pending</p></div>
-      <div class="stat-card" style="background:#e3f2fd;"><div class="stat-number">${gradedAssessments}</div><p>Graded</p></div>
-      <div class="stat-card"><div class="stat-number">${resources.length}</div><p>Resources</p></div>
+      <div class="stat-card">
+        <div class="stat-number" style="color:#3498db;">${assignments.length}</div>
+        <p>Total Assignments</p>
+      </div>
+      <div class="stat-card" style="background:#e8f5e9;">
+        <div class="stat-number" style="color:#27ae60;">${submissions.length}</div>
+        <p>Completed</p>
+      </div>
+      <div class="stat-card" style="background:#fff3e0;">
+        <div class="stat-number" style="color:#e67e22;">${pendingAssignments.length}</div>
+        <p>Pending</p>
+      </div>
+      <div class="stat-card" style="background:#e3f2fd;">
+        <div class="stat-number" style="color:#2980b9;">${gradedAssessments}</div>
+        <p>Graded</p>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color:#8e44ad;">${resources.length}</div>
+        <p>Resources</p>
+      </div>
     </div>
     
     <div class="dashboard-grid">
       <div class="card panel">
-        <h3>🔔 Notifications ${unreadNotifications > 0 ? `<span class="badge">${unreadNotifications} new</span>` : ''}</h3>
+        <h3>🔔 Notifications ${unreadNotifications > 0 ? `<span class="badge" style="background:#e74c3c;">${unreadNotifications} new</span>` : ''}</h3>
         <div id="notificationsList">
           ${notifications.slice(0, 5).map(n => `
             <div class="notification-item ${!n.read ? 'unread' : ''}" data-id="${n.id}">
-              <strong>${escapeHtml(n.title)}</strong> <small>${fmtDate(n.createdAt)}</small>
+              <strong>${escapeHtml(n.title)}</strong> 
+              <small style="float:right;">${fmtDate(n.createdAt)}</small>
               <p style="margin:8px 0 0;font-size:14px;">${escapeHtml(n.message)}</p>
             </div>
           `).join('') || '<p class="empty">No notifications</p>'}
         </div>
+        ${notifications.length > 5 ? '<div style="margin-top:12px;text-align:center;"><a href="/student/messages.html" class="btn ghost">View All →</a></div>' : ''}
       </div>
       
       <div class="card panel">
@@ -987,42 +1006,47 @@ function renderStudentDashboard(profile, assignments, submissions, assessments, 
           <div style="padding:12px;border-bottom:1px solid #eee;">
             <div style="display:flex;justify-content:space-between;">
               <strong>${escapeHtml(a.title)}</strong>
-              ${a.score ? `<span class="badge success">${a.score}/${a.maxScore}</span>` : '<span class="badge warn">Pending</span>'}
+              ${a.score ? `<span class="badge success">${a.score}/${a.maxScore || '—'}</span>` : '<span class="badge warn">Pending</span>'}
             </div>
             <small>${fmtDate(a.createdAt)}</small>
-            ${a.feedback ? `<p style="margin:8px 0 0;font-size:13px;">💬 ${escapeHtml(a.feedback.substring(0, 100))}</p>` : ''}
+            ${a.feedback ? `<p style="margin:8px 0 0;font-size:13px;color:#666;">💬 ${escapeHtml(a.feedback.substring(0, 100))}${a.feedback.length > 100 ? '...' : ''}</p>` : ''}
           </div>
-        `).join('') || '<p class="empty">No assessments</p>'}
+        `).join('') || '<p class="empty">No assessments yet</p>'}
+        ${assessments.length > 5 ? '<div style="margin-top:12px;text-align:center;"><a href="/student/assessments.html" class="btn ghost">View All →</a></div>' : ''}
       </div>
     </div>
     
     <div class="card panel" style="margin-top:24px;">
-      <h3>📝 Recent Assignments</h3>
-      ${assignments.slice(0, 5).map(a => {
-        const submitted = submissions.find(s => s.assignmentId === a.id);
+      <h3>📝 Pending Assignments</h3>
+      ${pendingAssignments.length > 0 ? pendingAssignments.slice(0, 5).map(a => {
+        const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
         return `
-          <div style="padding:12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
-            <div><strong>${escapeHtml(a.title)}</strong><br><small>Due: ${fmtDate(a.dueDate)}</small></div>
-            ${submitted ? '<span class="badge success">✓ Submitted</span>' : `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit</a>`}
+          <div class="assignment-dash-item">
+            <div>
+              <strong>${escapeHtml(a.title)}</strong>
+              <br><small>Due: <span style="color:${isPastDue ? '#e74c3c' : '#666'};">${fmtDate(a.dueDate) || 'No due date'}</span></small>
+            </div>
+            <a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit →</a>
           </div>
         `;
-      }).join('') || '<p class="empty">No assignments</p>'}
-      <div style="margin-top:12px;text-align:center;"><a href="/student/assignments.html" class="btn ghost">View All →</a></div>
+      }).join('') : '<p class="empty">No pending assignments! 🎉</p>'}
+      ${pendingAssignments.length > 5 ? '<div style="margin-top:12px;text-align:center;"><a href="/student/assignments.html" class="btn ghost">View All Assignments →</a></div>' : ''}
     </div>
     
     <div class="card panel" style="margin-top:24px;">
-      <h3>🌟 Portfolio Highlights</h3>
-      ${portfolioItems.slice(0, 3).map(item => `
+      <h3>✅ Recently Completed</h3>
+      ${submissions.length > 0 ? submissions.slice(0, 3).map(s => `
         <div style="padding:12px;border-bottom:1px solid #eee;">
-          <span class="badge">${escapeHtml(item.type || 'Entry')}</span>
-          <strong>${escapeHtml(item.title || item.note?.substring(0, 60) || 'Entry')}</strong>
+          <div style="display:flex;justify-content:space-between;">
+            <strong>${escapeHtml(s.assignmentTitle || 'Assignment')}</strong>
+            <span class="badge success">✓ Submitted</span>
+          </div>
+          <small>Submitted: ${fmtDate(s.submittedAt)}</small>
         </div>
-      `).join('') || '<p class="empty">No portfolio entries</p>'}
-      <div style="margin-top:12px;text-align:center;"><a href="/student/portfolio.html" class="btn ghost">View Portfolio →</a></div>
+      `).join('') : '<p class="empty">No submissions yet. Start working on your assignments!</p>'}
     </div>
   `;
 }
-
 
 async function refreshStudentDashboard(bundle) {
   const { user, profile } = bundle;
@@ -1092,25 +1116,96 @@ async function refreshStudentDashboard(bundle) {
     </section>
   `;
 }
-
-function renderStudentAssignmentsPage(assignments, submissions) {
+function renderStudentAssignmentsPage(assignments, submissions, profile) {
   const submittedMap = new Map(submissions.map(s => [s.assignmentId, s]));
+  
   const rows = assignments.map(a => {
     const submitted = submittedMap.get(a.id);
+    const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
+    
     return `
-      <tr>
-        <td><strong>${escapeHtml(a.title)}</strong></td>
-        <td>${escapeHtml(a.subject || '—')}</td>
-        <td>${escapeHtml(a.description?.substring(0, 100) || '—')}</td>
-        <td>${fmtDate(a.dueDate)}</td>
-        <td>${submitted ? statusBadge('Submitted') : statusBadge('Pending')}</td>
-        <td>${!submitted ? `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn small">Submit</a>` : (submitted.fileUrl ? `<a href="${submitted.fileUrl}" target="_blank" class="btn small ghost">View File</a>` : '✓')}</td>
-      </tr>
+      <div class="assignment-card" style="
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-left: 4px solid ${submitted ? '#27ae60' : (isPastDue ? '#e74c3c' : '#3498db')};
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+          <div style="flex:1;">
+            <h3 style="margin:0 0 8px 0;color:#2c3e50;">${escapeHtml(a.title)}</h3>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
+              <span><strong>Subject:</strong> ${escapeHtml(a.subject || 'General')}</span>
+              <span><strong>Tutor:</strong> ${escapeHtml(a.tutorName || 'Tutor')}</span>
+              <span><strong>Due:</strong> ${a.dueDate ? `<span style="color:${isPastDue ? '#e74c3c' : 'inherit'};">${fmtDate(a.dueDate)}</span>` : 'No due date'}</span>
+            </div>
+            ${a.description ? `
+              <div style="background:#f8f9fa;padding:12px;border-radius:8px;margin:12px 0;">
+                <strong>📝 Instructions:</strong>
+                <p style="margin:8px 0 0 0;white-space:pre-wrap;">${escapeHtml(a.description)}</p>
+              </div>
+            ` : ''}
+            ${submitted ? `
+              <div style="background:#e8f5e9;padding:12px;border-radius:8px;margin-top:12px;">
+                <span class="badge success" style="margin-right:8px;">✓ Submitted</span>
+                <small>Submitted on ${fmtDate(submitted.submittedAt)}</small>
+                ${submitted.status === 'Reviewed' ? '<span class="badge" style="margin-left:8px;">Reviewed by Tutor</span>' : ''}
+                ${submitted.fileUrl ? `
+                  <div style="margin-top:8px;">
+                    <a href="${submitted.fileUrl}" target="_blank" class="btn small ghost">📎 View Your Submission</a>
+                  </div>
+                ` : ''}
+                ${submitted.note ? `<p style="margin:8px 0 0 0;"><strong>Your note:</strong> ${escapeHtml(submitted.note)}</p>` : ''}
+              </div>
+            ` : ''}
+          </div>
+          <div style="text-align:right;">
+            ${submitted ? 
+              '<span class="badge success" style="font-size:14px;padding:8px 16px;">✅ COMPLETED</span>' : 
+              `<a href="/student/submit-work.html?assignmentId=${a.id}" class="btn" style="padding:10px 20px;">📤 Submit Work</a>`
+            }
+          </div>
+        </div>
+      </div>
     `;
   }).join('');
   
-  return `<div class="card panel"><h3>📝 My Assignments (${assignments.length} total, ${submissions.length} completed)</h3>${simpleTable(['Title', 'Subject', 'Description', 'Due', 'Status', 'Action'], rows)}</div>`;
+  const pendingCount = assignments.filter(a => !submittedMap.has(a.id)).length;
+  const completedCount = submissions.length;
+  
+  return `
+    <style>
+      .assignment-card { transition: transform 0.2s, box-shadow 0.2s; }
+      .assignment-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+      .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+      .stat-box { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+      .stat-number { font-size: 32px; font-weight: bold; margin: 0; }
+    </style>
+    
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-number" style="color:#3498db;">${assignments.length}</div>
+        <p style="margin:0;color:#666;">Total Assignments</p>
+      </div>
+      <div class="stat-box">
+        <div class="stat-number" style="color:#27ae60;">${completedCount}</div>
+        <p style="margin:0;color:#666;">Completed</p>
+      </div>
+      <div class="stat-box">
+        <div class="stat-number" style="color:#e67e22;">${pendingCount}</div>
+        <p style="margin:0;color:#666;">Pending</p>
+      </div>
+    </div>
+    
+    <div class="card panel">
+      <h3>📝 My Assignments</h3>
+      <p style="margin-bottom:20px;color:#666;">View all your assignments, read instructions, and submit your work.</p>
+      ${rows || '<p class="empty">No assignments yet. Check back later!</p>'}
+    </div>
+  `;
 }
+
 
 function renderStudentAssessmentsPage(assessments) {
   const rows = assessments.map(a => `
@@ -1344,7 +1439,7 @@ function renderStudentPortfolioPage(items) {
   `;
 }
 
-function renderSubmitWorkPage(profile, user, assignments, submissions) {
+function renderSubmitWorkPage(profile, user, assignments, submissions, forcedId = null) {
   const studentName = getStudentDisplayName(profile, user);
   const submittedMap = new Map(submissions.map(s => [s.assignmentId, s]));
   const pendingAssignments = assignments.filter(a => !submittedMap.has(a.id));
@@ -1352,45 +1447,111 @@ function renderSubmitWorkPage(profile, user, assignments, submissions) {
   const pendingCount = pendingAssignments.length;
   
   const options = pendingAssignments.map(item => `
-    <option value="${escapeHtml(item.id)}">${escapeHtml(item.title || 'Untitled Assignment')} ${item.subject ? `- ${escapeHtml(item.subject)}` : ''} ${item.dueDate ? `(Due: ${fmtDate(item.dueDate)})` : ''}</option>
+    <option value="${escapeHtml(item.id)}" ${forcedId === item.id ? 'selected' : ''}>
+      ${escapeHtml(item.title || 'Untitled Assignment')} 
+      ${item.subject ? `- ${escapeHtml(item.subject)}` : ''} 
+      ${item.dueDate ? `(Due: ${fmtDate(item.dueDate)})` : ''}
+    </option>
   `).join('');
   
   const submissionRows = submissions.map(item => `
-    <tr>
-      <td>${escapeHtml(item.assignmentTitle || 'Assignment')}</td>
-      <td>${escapeHtml(item.subject || '—')}</td>
-      <td>${statusBadge(item.status || 'Submitted')}</td>
-      <td>${fmtDate(item.submittedAt)}</td>
-      <td>${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="btn small">📎 View</a>` : '—'}${item.fileUrl ? `<a href="${item.fileUrl}" download class="btn small ghost">⬇️ Download</a>` : ''}</td>
-    </tr>
+    <div class="submission-history-item" style="
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #27ae60;
+    ">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <strong>${escapeHtml(item.assignmentTitle || 'Assignment')}</strong>
+          <span class="badge success" style="margin-left:8px;">✓ Submitted</span>
+        </div>
+        <small>${fmtDate(item.submittedAt)}</small>
+      </div>
+      ${item.note ? `<p style="margin:8px 0 0;font-size:14px;color:#666;">${escapeHtml(item.note)}</p>` : ''}
+      ${item.fileUrl ? `
+        <div style="margin-top:8px;">
+          <a href="${item.fileUrl}" target="_blank" class="btn small ghost">📎 View File</a>
+        </div>
+      ` : ''}
+    </div>
   `).join('');
   
   return `
+    <style>
+      .submit-section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+      .history-section { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    </style>
+    
     <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
-      <div class="card stat primary"><h3 style="font-size:32px;margin:0;">${assignments.length}</h3><p>Total Assignments</p></div>
-      <div class="card stat success"><h3 style="font-size:32px;margin:0;">${completedCount}</h3><p>Completed</p></div>
-      <div class="card stat warn"><h3 style="font-size:32px;margin:0;">${pendingCount}</h3><p>Pending</p></div>
+      <div class="card stat primary">
+        <h3 style="font-size:28px;margin:0;">${assignments.length}</h3>
+        <p>Total Assignments</p>
+      </div>
+      <div class="card stat success">
+        <h3 style="font-size:28px;margin:0;">${completedCount}</h3>
+        <p>Completed</p>
+      </div>
+      <div class="card stat warn">
+        <h3 style="font-size:28px;margin:0;">${pendingCount}</h3>
+        <p>Pending</p>
+      </div>
     </div>
     
-    <section class="card panel">
-      <h3>📤 Submit Assignment</h3>
-      <p>Welcome, ${escapeHtml(studentName)}. Select an assignment, attach your work, and submit it.</p>
+    <div class="submit-section">
+      <h3>📤 Submit Your Work</h3>
+      <p>Welcome, ${escapeHtml(studentName)}. Select an assignment and submit your work below.</p>
       
       ${pendingAssignments.length === 0 ? `
-        <div class="success-message" style="background:#d4edda;padding:16px;border-radius:8px;text-align:center;">🎉 Great job! You've submitted all your assignments.</div>
+        <div class="success-message" style="background:#d4edda;padding:20px;border-radius:8px;text-align:center;">
+          <span style="font-size:32px;">🎉</span>
+          <h4 style="margin:8px 0;">Great job!</h4>
+          <p>You've submitted all your assignments. Check back later for new ones!</p>
+        </div>
       ` : `
         <form id="submissionForm" class="stack-form">
-          <div class="form-row"><label>Select Assignment *</label><select id="assignmentId" required><option value="">-- Choose an assignment --</option>${options}</select></div>
-          <div class="form-row"><label>Message / Notes</label><textarea id="submissionNote" rows="4" placeholder="Add any notes about your work..."></textarea></div>
-          <div class="form-row"><label>Attach File</label><input id="submissionFile" type="file"></div>
-          <div class="form-actions"><button type="submit" class="btn" id="submitWorkBtn">📤 Submit Work</button><span id="submitWorkMsg"></span></div>
+          <div class="form-row">
+            <label>Select Assignment *</label>
+            <select id="assignmentId" required style="width:100%;padding:10px;border-radius:6px;border:1px solid #ddd;">
+              <option value="">-- Choose an assignment --</option>
+              ${options}
+            </select>
+          </div>
+          
+          <div id="assignmentDetails"></div>
+          
+          <div class="form-row">
+            <label>Your Work / Notes</label>
+            <textarea id="submissionNote" rows="5" placeholder="Write your answers, reflections, or notes about your work..." style="width:100%;padding:12px;border-radius:6px;border:1px solid #ddd;"></textarea>
+          </div>
+          
+          <div class="form-row">
+            <label>Attach File (optional)</label>
+            <input id="submissionFile" type="file" style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd;">
+            <small style="color:#666;">Supported: images, PDFs, documents, videos</small>
+          </div>
+          
+          <div class="form-actions" style="display:flex;align-items:center;gap:16px;">
+            <button type="submit" class="btn" id="submitWorkBtn" style="padding:12px 24px;font-size:16px;">📤 Submit Work</button>
+            <span id="submitWorkMsg"></span>
+          </div>
         </form>
       `}
-    </section>
+    </div>
     
-    ${submissions.length > 0 ? `<section class="card panel" style="margin-top:18px"><h3>📋 My Previous Submissions</h3>${simpleTable(['Assignment', 'Subject', 'Status', 'Submitted', 'Attachment'], submissionRows)}</section>` : ''}
+    ${submissions.length > 0 ? `
+      <div class="history-section">
+        <h3>📋 Your Submission History</h3>
+        <p>Previously submitted work:</p>
+        <div style="margin-top:16px;">
+          ${submissionRows}
+        </div>
+      </div>
+    ` : ''}
   `;
 }
+
 
 // ============================================
 // RENDER FUNCTIONS - TUTOR PAGES
@@ -2589,32 +2750,37 @@ async function bootStudentDashboard() {
       loadStudentResources(user.uid)
     ]);
     document.getElementById('page-content').innerHTML = renderStudentDashboard(profile, assignments, submissions, assessments, notifications, portfolioItems, resources);
+    
+    // Attach click handlers for notifications (mark as read)
+    document.querySelectorAll('.notification-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        if (el.classList.contains('unread')) {
+          await updateDoc(doc(db, 'notifications', el.dataset.id), { read: true });
+          el.classList.remove('unread');
+          el.style.background = 'white';
+        }
+      });
+    });
   } catch (err) {
     console.error('Dashboard error:', err);
     document.getElementById('page-content').innerHTML = `<div class="card panel error">⚠️ Unable to load dashboard: ${err.message}</div>`;
-    return;
   }
-  
-  // Attach click handlers for notifications (mark as read)
-  document.querySelectorAll('.notification-item').forEach(el => {
-    el.addEventListener('click', async () => {
-      if (el.classList.contains('unread')) {
-        await updateDoc(doc(db, 'notifications', el.dataset.id), { read: true });
-        el.classList.remove('unread');
-        el.style.background = 'white';
-      }
-    });
-  });
 }
+
 
 
 async function bootStudentAssignmentsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
   await ensureStudentMirror(bundle.user, bundle.profile);
-  const { user } = bundle;
-  const [assignments, submissions] = await Promise.all([loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid)]);
-  document.getElementById('page-content').innerHTML = renderStudentAssignmentsPage(assignments, submissions);
+  const { user, profile } = bundle;
+  
+  const [assignments, submissions] = await Promise.all([
+    loadStudentAssignments(user.uid), 
+    loadStudentSubmissions(user.uid)
+  ]);
+  
+  document.getElementById('page-content').innerHTML = renderStudentAssignmentsPage(assignments, submissions, profile);
 }
 
 async function bootStudentAssessmentsPage() {
@@ -2737,37 +2903,133 @@ async function bootSubmitWorkPage() {
   if (!bundle || bundle.profile?.role !== 'student') return;
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user, profile } = bundle;
+  
   const params = new URLSearchParams(window.location.search);
   const forcedId = params.get('assignmentId');
-  const [assignments, submissions] = await Promise.all([loadStudentAssignments(user.uid), loadStudentSubmissions(user.uid)]);
-  document.getElementById('page-content').innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions);
-  if (forcedId && document.getElementById('assignmentId')) document.getElementById('assignmentId').value = forcedId;
+  
+  const [assignments, submissions] = await Promise.all([
+    loadStudentAssignments(user.uid), 
+    loadStudentSubmissions(user.uid)
+  ]);
+  
+  document.getElementById('page-content').innerHTML = renderSubmitWorkPage(profile, user, assignments, submissions, forcedId);
+  
+  // Pre-select assignment if forcedId is provided
+  if (forcedId && document.getElementById('assignmentId')) {
+    document.getElementById('assignmentId').value = forcedId;
+    // Trigger change to load assignment details
+    loadAssignmentDetails(forcedId, assignments);
+  }
+  
+  // Add change handler to show assignment details
+  const assignmentSelect = document.getElementById('assignmentId');
+  if (assignmentSelect) {
+    assignmentSelect.addEventListener('change', (e) => {
+      loadAssignmentDetails(e.target.value, assignments);
+    });
+  }
+  
   const form = document.getElementById('submissionForm');
   const msg = document.getElementById('submitWorkMsg');
   const submitBtn = document.getElementById('submitWorkBtn');
+  
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const assignmentId = document.getElementById('assignmentId').value;
       const note = document.getElementById('submissionNote')?.value || '';
       const file = document.getElementById('submissionFile').files[0];
-      if (!assignmentId) { msg.innerHTML = 'Please select an assignment'; return; }
+      
+      if (!assignmentId) { 
+        msg.innerHTML = '<span style="color:#e74c3c;">❌ Please select an assignment</span>'; 
+        return; 
+      }
+      
+      if (!file && !note.trim()) {
+        msg.innerHTML = '<span style="color:#e74c3c;">❌ Please attach a file or write a note</span>';
+        return;
+      }
+      
       if (submitBtn) submitBtn.disabled = true;
-      msg.innerHTML = 'Submitting...';
+      msg.innerHTML = '<span style="color:#3498db;">⏳ Submitting your work...</span>';
+      
       try {
         const assignmentDoc = await getDoc(doc(db, 'assignments', assignmentId));
         const assignment = assignmentDoc.data();
-        const upload = file ? await uploadFile(file, `submissions/${user.uid}`) : { url: '' };
-        await addDoc(collection(db, 'submissions'), { assignmentId, assignmentTitle: assignment?.title || 'Assignment', subject: assignment?.subject || '', studentId: user.uid, studentName: getStudentDisplayName(profile, user), note, fileUrl: upload.url, fileName: upload.name, status: 'Submitted', submittedAt: serverTimestamp(), createdAt: serverTimestamp() });
-        msg.innerHTML = '✅ Work submitted successfully!';
-        setTimeout(() => location.reload(), 1500);
+        
+        let upload = { url: '', name: '' };
+        if (file) {
+          upload = await uploadFile(file, `submissions/${user.uid}/${assignmentId}`);
+        }
+        
+        // Create submission record
+        await addDoc(collection(db, 'submissions'), {
+          assignmentId, 
+          assignmentTitle: assignment?.title || 'Assignment',
+          subject: assignment?.subject || '',
+          studentId: user.uid,
+          studentName: getStudentDisplayName(profile, user),
+          note,
+          fileUrl: upload.url,
+          fileName: upload.name,
+          status: 'Submitted',
+          submittedAt: serverTimestamp(),
+          createdAt: serverTimestamp()
+        });
+        
+        // Create notification for tutor
+        await addDoc(collection(db, 'notifications'), {
+          tutorId: assignment?.tutorId,
+          studentId: user.uid,
+          studentName: getStudentDisplayName(profile, user),
+          assignmentId,
+          assignmentTitle: assignment?.title,
+          title: 'New Submission',
+          message: `${getStudentDisplayName(profile, user)} submitted "${assignment?.title}"`,
+          type: 'submission',
+          read: false,
+          createdAt: serverTimestamp()
+        });
+        
+        msg.innerHTML = '<span style="color:#27ae60;">✅ Work submitted successfully! Redirecting...</span>';
+        setTimeout(() => location.href = '/student/assignments.html', 1500);
       } catch (err) {
-        msg.innerHTML = 'Error: ' + err.message;
+        msg.innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
         if (submitBtn) submitBtn.disabled = false;
       }
     });
   }
 }
+
+
+function loadAssignmentDetails(assignmentId, assignments) {
+  const detailsDiv = document.getElementById('assignmentDetails');
+  if (!detailsDiv) return;
+  
+  const assignment = assignments.find(a => a.id === assignmentId);
+  if (!assignment) {
+    detailsDiv.innerHTML = '';
+    return;
+  }
+  
+  const isPastDue = assignment.dueDate && new Date(assignment.dueDate) < new Date();
+  
+  detailsDiv.innerHTML = `
+    <div style="background:#f0f7ff;padding:16px;border-radius:8px;margin-top:16px;">
+      <h4 style="margin:0 0 8px 0;">📋 Assignment Details</h4>
+      <p><strong>Subject:</strong> ${escapeHtml(assignment.subject || 'General')}</p>
+      <p><strong>Tutor:</strong> ${escapeHtml(assignment.tutorName || 'Tutor')}</p>
+      <p><strong>Due Date:</strong> <span style="color:${isPastDue ? '#e74c3c' : 'inherit'};">${fmtDate(assignment.dueDate) || 'No due date'}</span></p>
+      ${assignment.description ? `
+        <div style="margin-top:12px;padding:12px;background:white;border-radius:6px;">
+          <strong>Instructions:</strong>
+          <p style="margin:8px 0 0 0;white-space:pre-wrap;">${escapeHtml(assignment.description)}</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 
 // ============================================
 // BOOT FUNCTIONS - TUTOR (FIXES INTEGRATED HERE)
@@ -2787,6 +3049,10 @@ async function bootTutorDashboard() {
   
   document.getElementById('page-content').innerHTML = renderTutorDashboard(students, assignments, assessments, classrooms);
 }
+
+// ============================================
+// UPDATED: TUTOR ASSIGNMENTS PAGE (FIXED)
+// ============================================
 
 async function bootTutorAssignmentsPage() {
   const bundle = await requireAuth();
@@ -2825,28 +3091,48 @@ async function bootTutorAssignmentsPage() {
         const target = document.getElementById('assignTarget').value;
         const classroomId = document.getElementById('assignClassroomId')?.value;
         const studentId = document.getElementById('assignStudentId')?.value;
+        const subject = document.getElementById('assignSubject').value;
+        const description = document.getElementById('assignDescription').value;
+        const dueDate = document.getElementById('assignDueDate').value;
         
+        // Create assignment data with proper fields for student visibility
         const assignmentData = {
-          tutorId: user.uid, tutorName: profile?.name || profile?.full_name || user.email,
-          title, subject: document.getElementById('assignSubject').value,
-          description: document.getElementById('assignDescription').value,
-          dueDate: document.getElementById('assignDueDate').value || null,
-          targetType: target, status: 'Active', createdAt: serverTimestamp()
+          tutorId: user.uid, 
+          tutorName: profile?.name || profile?.full_name || user.email,
+          title, 
+          subject,
+          description,
+          dueDate: dueDate || null,
+          status: 'Active', 
+          createdAt: serverTimestamp(),
+          published: true  // CRITICAL: This makes it visible to students
         };
         
         if (target === 'classroom' && classroomId) {
           const classroom = classrooms.find(c => c.id === classroomId);
           assignmentData.classroomId = classroomId;
           assignmentData.classroomName = classroom?.name;
+          assignmentData.targetType = 'classroom';
+          
+          // Notify classroom students
           const classroomStudents = students.filter(s => s.classroomId === classroomId);
-          for (const s of classroomStudents) await createAssignmentNotification(s.id, title, 'pending');
+          for (const s of classroomStudents) {
+            await createAssignmentNotification(s.id, title, 'pending');
+          }
         } else if (target === 'student' && studentId) {
           assignmentData.studentId = studentId;
           const student = students.find(s => s.id === studentId);
           assignmentData.studentName = student?.full_name || student?.name;
+          assignmentData.targetType = 'student';
+          
+          // Notify specific student
           await createAssignmentNotification(studentId, title, 'pending');
         } else {
-          for (const s of students) await createAssignmentNotification(s.id, title, 'pending');
+          assignmentData.targetType = 'all_students';
+          // Notify all students
+          for (const s of students) {
+            await createAssignmentNotification(s.id, title, 'pending');
+          }
         }
         
         await addDoc(collection(db, 'assignments'), assignmentData);
@@ -2858,22 +3144,65 @@ async function bootTutorAssignmentsPage() {
     });
   }
   
+  // View Submissions button handler
   document.querySelectorAll('.view-submissions-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
       const row = document.getElementById(`submissions-${id}`);
-      if (row.style.display === 'none') {
+      if (row.style.display === 'none' || !row.style.display) {
         row.style.display = 'table-row';
         const container = document.querySelector(`.submissions-container[data-assignment-id="${id}"]`);
-        const subs = await getDocs(query(collection(db, 'submissions'), where('assignmentId', '==', id)));
-        container.innerHTML = subs.docs.map(d => {
-          const sub = d.data();
-          return `<div class="submission-item"><div style="display:flex;justify-content:space-between;"><div><strong>${escapeHtml(sub.studentName)}</strong><br><small>${fmtDate(sub.submittedAt)}</small>${sub.note ? `<p>${escapeHtml(sub.note)}</p>` : ''}${sub.fileUrl ? `<a href="${sub.fileUrl}" target="_blank" class="btn small ghost">📎 View File</a>` : ''}</div><div><span class="badge warn">${sub.status || 'Submitted'}</span></div></div></div>`;
-        }).join('') || '<p class="empty">No submissions yet.</p>';
-      } else { row.style.display = 'none'; }
+        container.innerHTML = '<div class="loading">Loading submissions...</div>';
+        
+        try {
+          const subs = await getDocs(query(collection(db, 'submissions'), where('assignmentId', '==', id)));
+          const submissionsList = subs.docs.map(d => {
+            const sub = d.data();
+            return `
+              <div class="submission-item" style="background:#fff;padding:16px;margin-bottom:12px;border-radius:8px;border-left:4px solid #3498db;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <div>
+                    <strong style="font-size:16px;">${escapeHtml(sub.studentName || 'Student')}</strong>
+                    <span class="badge ${sub.status === 'Submitted' ? 'success' : 'warn'}" style="margin-left:10px;">${escapeHtml(sub.status || 'Submitted')}</span>
+                  </div>
+                  <small>${fmtDate(sub.submittedAt)}</small>
+                </div>
+                ${sub.note ? `<p style="margin:8px 0;padding:8px;background:#f8f9fa;border-radius:4px;"><strong>Notes:</strong> ${escapeHtml(sub.note)}</p>` : ''}
+                ${sub.fileUrl ? `
+                  <div style="margin-top:10px;">
+                    <a href="${sub.fileUrl}" target="_blank" class="btn small">📎 View File</a>
+                    <a href="${sub.fileUrl}" download class="btn small ghost">⬇️ Download</a>
+                    <span style="margin-left:10px;font-size:12px;color:#666;">${escapeHtml(sub.fileName || 'attachment')}</span>
+                  </div>
+                ` : '<p style="color:#666;font-size:14px;">No file attached</p>'}
+                <button class="btn small ghost mark-reviewed-btn" data-submission-id="${d.id}" style="margin-top:8px;">✓ Mark as Reviewed</button>
+              </div>
+            `;
+          }).join('');
+          
+          container.innerHTML = submissionsList || '<p class="empty">No submissions yet.</p>';
+          
+          // Add mark as reviewed handlers
+          container.querySelectorAll('.mark-reviewed-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              await updateDoc(doc(db, 'submissions', btn.dataset.submissionId), { 
+                status: 'Reviewed',
+                reviewedAt: serverTimestamp()
+              });
+              btn.textContent = '✓ Reviewed';
+              btn.disabled = true;
+            });
+          });
+        } catch (err) {
+          container.innerHTML = `<p class="error">Error loading submissions: ${err.message}</p>`;
+        }
+      } else {
+        row.style.display = 'none';
+      }
     });
   });
   
+  // Delete assignment handler
   document.querySelectorAll('.delete-assignment-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (confirm('Delete this assignment? This cannot be undone.')) {
@@ -2883,6 +3212,7 @@ async function bootTutorAssignmentsPage() {
     });
   });
 }
+
 
 async function bootTutorAssessmentsPage() {
   const bundle = await requireAuth();
