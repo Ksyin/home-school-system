@@ -216,33 +216,47 @@
         </div>
     </nav>
 
-    <!-- HERO SECTION -->
-    <section class="hero">
-        <div class="hero-content">
-            <div class="hero-text">
-                <h1>Learning that connects.<br>Growth that lasts.</h1>
-                <p>
-                    A modern platform where tutors, students, and parents collaborate in real time. 
-                    Structured lessons, meaningful feedback, and visible progress — all in one beautiful place.
-                </p>
-                
-                <div class="cta-buttons">
-                    <a href="/register.html" class="btn btn-hero primary">Start Teaching & Learning Today</a>
-                    <a href="/login.html" class="btn btn-hero secondary modern-outline" style="background:transparent;border:2px solid white;color:white;">Watch Demo</a>
-                </div>
+ <!-- HERO SECTION -->
+<section class="hero">
+    <!-- Video Background -->
+    <div class="hero-video">
+        <video autoplay muted loop playsinline>
+            <!-- Replace with your own video URL (MP4 recommended) -->
+            <source src="https://assets.mixkit.co/videos/preview/12345/12345-large.mp4" type="video/mp4">
+            <!-- Fallback video if needed -->
+            Your browser does not support the video tag.
+        </video>
+        
+        <!-- Dark overlay for text readability -->
+        <div class="hero-overlay"></div>
+    </div>
 
-                <div style="margin-top:40px;display:flex;gap:32px;align-items:center;color:#c8d5f5;">
-                    <div>✅ Trusted by tutors & families</div>
-                    <div>🔒 Secure & private</div>
-                </div>
+    <div class="hero-content">
+        <div class="hero-text">
+            <h1>Learning that connects.<br>Growth that lasts.</h1>
+            <p>
+                A modern platform where tutors, students, and parents collaborate in real time. 
+                Structured lessons, meaningful feedback, and visible progress — all in one beautiful place.
+            </p>
+            
+            <div class="cta-buttons">
+                <a href="/register.html" class="btn btn-hero primary">Start Teaching & Learning Today</a>
+                <a href="/login.html" class="btn btn-hero secondary modern-outline">Watch Demo</a>
             </div>
 
-            <div class="hero-image">
-                <img src="https://picsum.photos/id/1015/800/620" alt="HomeSchool Platform Dashboard" 
-                     style="border: 12px solid rgba(255,255,255,0.15);">
+            <div class="trust-badges">
+                <div>✅ Trusted by tutors & families</div>
+                <div>🔒 Secure & private</div>
             </div>
         </div>
-    </section>
+
+        <!-- Optional: Keep a subtle dashboard preview on the side (or remove if you want full focus on video) -->
+        <div class="hero-image">
+            <img src="https://picsum.photos/id/1015/800/620" alt="Platform Dashboard" 
+                 style="border: 12px solid rgba(255,255,255,0.15); border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+        </div>
+    </div>
+</section>
 
     <!-- FEATURES -->
     <section id="features" class="features">
