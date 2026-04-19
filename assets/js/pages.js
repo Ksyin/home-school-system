@@ -1126,6 +1126,7 @@ function renderStudentDashboard(profile, assignments, submissions, assessments, 
       .notification-item.unread { background: #f0f7ff; border-left: 3px solid #3498db; }
       .notification-item:hover { background: #e8f0fe; }
       .assignment-dash-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+      .join-class-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 24px; }
     </style>
     
     <div class="stats-grid">
@@ -1150,14 +1151,6 @@ function renderStudentDashboard(profile, assignments, submissions, assessments, 
         <p>Resources</p>
       </div>
     </div>
-
-    <div class="card panel" style="margin-top:24px;">
-  <h3>Join a Class</h3>
-  <p>Enter the class code your tutor gave you:</p>
-  <input id="joinClassCode" type="text" placeholder="e.g. ABC123" style="padding:12px; width:100%; border:1px solid #ddd; border-radius:8px; margin-bottom:12px; font-family:monospace; font-size:18px; text-transform:uppercase;">
-  <button class="btn" onclick="joinClassByCode()">Join Class</button>
-  <span id="joinMsg"></span>
-</div>
     
     <div class="dashboard-grid">
       <div class="card panel">
@@ -1219,9 +1212,18 @@ function renderStudentDashboard(profile, assignments, submissions, assessments, 
         </div>
       `).join('') : '<p class="empty">No submissions yet. Start working on your assignments!</p>'}
     </div>
+
+    <!-- NEW: Join a Class Card -->
+    <div class="join-class-card">
+      <h3>🔑 Join a Class</h3>
+      <p>Enter the class code provided by your tutor to join their classroom.</p>
+      <input id="joinClassCode" type="text" placeholder="e.g. ABC123" 
+             style="padding:14px; width:100%; border:1px solid #ddd; border-radius:8px; margin-bottom:12px; font-family:monospace; font-size:18px; text-transform:uppercase; letter-spacing:2px;">
+      <button class="btn" onclick="joinClassByCode()">Join Class</button>
+      <span id="joinMsg" style="margin-left:12px;"></span>
+    </div>
   `;
 }
-
 async function refreshStudentDashboard(bundle) {
   const { user, profile } = bundle;
   const pageContent = document.getElementById('page-content');
