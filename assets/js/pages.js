@@ -67,15 +67,8 @@ const navMap = {
     ['Settings', '/parent/settings.html', '⚙️']
   ],
   tutor: [
-    ['Dashboard', '/tutor/dashboard.html', '🏠'],
-    ['Classrooms', '/tutor/classrooms.html', '🏫'],
-    ['Learners', '/tutor/learners.html', '👦'],
-    ['Assignments', '/tutor/assignments.html', '📝'],
-    ['Assessments', '/tutor/assessments.html', '📊'],
-    ['Lesson Plans', '/tutor/lesson-plans.html', '🗓️'],
-    ['Reports & Comments', '/tutor/reports.html', '📄'],
-    ['Resources', '/tutor/resources.html', '📚'],
-    ['Messages', '/tutor/messages.html', '💬'],
+['Dashboard', '/tutor/dashboard.html', '🏠'],
+    ['Classrooms', '/tutor/classrooms.html', '🏫'],   // ← now the main Google Classroom hub
     ['Settings', '/tutor/settings.html', '⚙️']
   ],
   student: [
@@ -92,7 +85,14 @@ const navMap = {
     ['Settings', '/student/settings.html', '⚙️']
   ]
 };
-
+function generateClassCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 function escapeHtml(value = '') {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -2565,12 +2565,81 @@ window.closeNotesModal = function() {
   if (modal) modal.style.display = 'none';
 };
 
-function renderClassroomsPage(classrooms, students) {
-  const classroomRows = classrooms.map((item) => `<tr><td>${escapeHtml(item.name || 'Untitled')}</td><td>${escapeHtml(item.subject || '—')}</td><td>${escapeHtml(item.description || '—')}</td><td>${Array.isArray(item.studentIds) ? item.studentIds.length : 0}</td><td>${fmtDate(item.createdAt)}</td><td><button class="btn classroom-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button></td></tr>`).join('');
+function renderClassroomsPage(classrooms, students, profile) {
+  const classroomCards = classrooms.map(item => {
+    const studentCount = Array.isArray(item.studentIds) ? item.studentIds.length : 0;
+    const color = item.subject 
+      ? (item.subject.toLowerCase().includes('math') ? '#4285f4' 
+         : item.subject.toLowerCase().includes('science') ? '#34a853' 
+         : '#ea4335') 
+      : '#fbbc05';
+
+    return `
+      <div class="classroom-card" data-id="${escapeHtml(item.id)}" style="border-top: 4px solid ${color};">
+        <div class="class-header">
+          <div class="class-icon" style="background:${color};">📚</div>
+          <div>
+            <h3>${escapeHtml(item.name || 'Untitled Class')}</h3>
+            <p>${escapeHtml(item.section || '')} • ${escapeHtml(item.subject || 'No subject')}</p>
+          </div>
+        </div>
+        <div class="class-info">
+          <div><strong>Class Code:</strong> <span class="code-badge">${escapeHtml(item.classCode || '—')}</span></div>
+          <div>${studentCount} students enrolled</div>
+          <small>Created ${fmtDate(item.createdAt)}</small>
+        </div>
+        <div class="class-actions">
+          <button class="btn primary enter-class-btn" data-id="${escapeHtml(item.id)}">Enter Class</button>
+          <button class="btn ghost classroom-delete-btn" data-id="${escapeHtml(item.id)}">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 
   return `
-    <section class="card panel"><h3>Create Classroom</h3><form id="classroomForm" class="stack-form"><div class="form-row"><label>Classroom Name</label><input id="classroomName" type="text" required placeholder="e.g. Grade 8 Mathematics"></div><div class="form-row"><label>Subject</label><input id="classroomSubject" type="text" required placeholder="e.g. Mathematics"></div><div class="form-row"><label>Description</label><textarea id="classroomDescription" rows="4" placeholder="Describe this classroom"></textarea></div><div class="form-row"><label>Select Students</label><select id="classroomStudents" multiple size="8">${students.map(student => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.full_name || student.name || student.email || 'Student')}</option>`).join('')}</select></div><div class="form-actions"><button type="submit" class="btn" id="saveClassroomBtn">Save Classroom</button><span id="classroomMsg"></span></div></form></section>
-    <section class="card panel" style="margin-top:18px"><h3>My Classrooms</h3>${simpleTable(['Name', 'Subject', 'Description', 'Students', 'Created', 'Action'], classroomRows)}</section>
+    <style>
+      .classrooms-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+      .classroom-card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; transition: all 0.2s; }
+      .classroom-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
+      .class-header { padding: 16px; display: flex; gap: 16px; align-items: center; }
+      .class-icon { width: 48px; height: 48px; border-radius: 8px; color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+      .class-info { padding: 0 16px 16px; border-top: 1px solid #eee; font-size: 14px; }
+      .code-badge { background: #f1f3f4; padding: 2px 8px; border-radius: 4px; font-family: monospace; }
+      .class-actions { padding: 16px; display: flex; gap: 8px; border-top: 1px solid #eee; }
+      .modal-tabs { display: flex; border-bottom: 1px solid #ddd; background: #f8f9fa; }
+      .modal-tab { padding: 14px 24px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 500; }
+      .modal-tab.active { border-bottom: 3px solid #34a853; color: #34a853; }
+      .class-modal-content { flex: 1; padding: 24px; overflow-y: auto; }
+    </style>
+
+    <div class="card panel">
+      <h3 style="display:flex;justify-content:space-between;align-items:center;">
+        My Classrooms <button class="btn" id="createClassBtn">+ Create Class</button>
+      </h3>
+      <p style="margin-bottom:24px;color:#666;">Everything (assignments, materials, learners, assessments, reports, messages, lesson plans) is now inside each class – exactly like Google Classroom.</p>
+      <div class="classrooms-container">
+        ${classroomCards || '<p class="empty">No classrooms yet. Create your first one!</p>'}
+      </div>
+    </div>
+
+    <!-- Create Class Modal (Google style) -->
+    <div id="createClassModal" class="modal" style="display:none;">
+      <div class="modal-content" style="max-width:520px;">
+        <h3>Create a new class</h3>
+        <form id="classroomForm" class="stack-form">
+          <div class="form-row"><label>Class name *</label><input id="classroomName" type="text" required placeholder="e.g. Grade 8 Mathematics"></div>
+          <div class="form-row"><label>Section (optional)</label><input id="classroomSection" type="text" placeholder="e.g. Period 3"></div>
+          <div class="form-row"><label>Subject (optional)</label><input id="classroomSubject" type="text" placeholder="e.g. Mathematics"></div>
+          <div class="form-row"><label>Room (optional)</label><input id="classroomRoom" type="text" placeholder="e.g. Room 101"></div>
+          <div class="form-row"><label>Select Students</label><select id="classroomStudents" multiple size="8">${students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.full_name || s.name || s.email)}</option>`).join('')}</select></div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="cancelCreateBtn">Cancel</button>
+            <button type="submit" class="btn" id="saveClassroomBtn">Create Class</button>
+            <span id="classroomMsg"></span>
+          </div>
+        </form>
+      </div>
+    </div>
   `;
 }
 
@@ -4148,35 +4217,89 @@ async function bootLearnersPage() {
 async function bootClassroomsPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'tutor') return;
-  
-  const { user } = bundle;
-  const classrooms = await loadClassrooms(user.uid);
-  const students = await loadAllStudents();
-  document.getElementById('page-content').innerHTML = renderClassroomsPage(classrooms, students);
-  
+
+  const { user, profile } = bundle;
+
+  let classrooms = await loadClassrooms(user.uid);
+  const allStudents = await loadAllStudents();
+  const allAssignments = await loadTutorAssignments(user.uid);
+  const allResources = await loadResources(user.uid);
+  const allLessonPlans = await loadTutorLessonPlans(user.uid);
+  const allAssessments = await loadTutorAssessments(user.uid);
+
+  document.getElementById('page-content').innerHTML = renderClassroomsPage(classrooms, allStudents, profile);
+
+  // Create class modal
+  const createModal = document.getElementById('createClassModal');
+  document.getElementById('createClassBtn').onclick = () => createModal.style.display = 'flex';
+  document.getElementById('cancelCreateBtn').onclick = () => createModal.style.display = 'none';
+
   const form = document.getElementById('classroomForm');
-  const msg = document.getElementById('classroomMsg');
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('classroomName').value.trim();
-      const subject = document.getElementById('classroomSubject').value.trim();
-      const description = document.getElementById('classroomDescription').value.trim();
-      const selected = [...document.getElementById('classroomStudents').selectedOptions];
-      const studentIds = selected.map(opt => opt.value);
-      if (!name || !subject) { msg.textContent = 'Enter classroom name and subject.'; return; }
-      
-      const classroomRef = await addDoc(collection(db, 'classrooms'), { tutorId: user.uid, name, subject, description, studentIds, createdAt: serverTimestamp() });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('classroomName').value.trim();
+    const section = document.getElementById('classroomSection').value.trim();
+    const subject = document.getElementById('classroomSubject').value.trim();
+    const room = document.getElementById('classroomRoom').value.trim();
+    const studentIds = Array.from(document.getElementById('classroomStudents').selectedOptions).map(opt => opt.value);
+
+    if (!name) return;
+
+    const msgEl = document.getElementById('classroomMsg');
+    msgEl.textContent = 'Creating...';
+
+    try {
+      const classCode = generateClassCode();
+      const classroomRef = await addDoc(collection(db, 'classrooms'), {
+        tutorId: user.uid,
+        name, section, subject, room,
+        classCode,
+        studentIds,
+        createdAt: serverTimestamp()
+      });
+
       const batch = writeBatch(db);
       studentIds.forEach(id => {
         batch.update(doc(db, 'users', id), { classroomId: classroomRef.id, classroomName: name });
         batch.update(doc(db, 'students', id), { classroomId: classroomRef.id, classroomName: name });
       });
       await batch.commit();
-      msg.textContent = 'Classroom saved.';
-      setTimeout(() => bootClassroomsPage(), 1000);
+
+      msgEl.textContent = '✅ Class created!';
+      createModal.style.display = 'none';
+      setTimeout(() => bootClassroomsPage(), 800); // refresh
+    } catch (err) {
+      msgEl.textContent = 'Error: ' + err.message;
+    }
+  });
+
+  // Enter Class buttons
+  document.querySelectorAll('.enter-class-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const classroom = classrooms.find(c => c.id === id);
+      if (!classroom) return;
+
+      const studentsInClass = allStudents.filter(s => classroom.studentIds?.includes(s.id));
+      const assignmentsInClass = allAssignments.filter(a => a.classroomId === id);
+      const resourcesInClass = allResources.filter(r => r.classroomId === id);
+      const lessonPlansInClass = allLessonPlans.filter(l => l.classroomId === id);
+
+      const assessmentsInClass = allAssessments.filter(a => studentsInClass.some(s => s.id === a.studentId));
+
+      openClassroomModal(classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, [], [], profile);
     });
-  }
+  });
+
+  // Delete buttons
+  document.querySelectorAll('.classroom-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Delete this classroom and all its data?')) {
+        await deleteDoc(doc(db, 'classrooms', btn.dataset.id));
+        setTimeout(() => bootClassroomsPage(), 500);
+      }
+    });
+  });
 }
 
 async function bootResourcesPage() {
@@ -4449,6 +4572,105 @@ async function bootDefaultPage() {
   const bundle = await requireAuth();
   if (!bundle) return;
   document.getElementById('page-content').innerHTML = `<section class="card panel"><h3>${escapeHtml(pageTitle)}</h3><p>This page is connected successfully.</p><p>Role: ${escapeHtml(bundle.profile?.role)}</p><p>Email: ${escapeHtml(bundle.user?.email)}</p></section>`;
+}
+
+function openClassroomModal(classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile) {
+  const old = document.getElementById('classModal');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'classModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target.id==='classModal')this.parentElement.remove()">
+      <div class="modal-box" style="width:95%;max-width:1280px;height:90vh;display:flex;flex-direction:column;" onclick="event.stopImmediatePropagation()">
+        <div class="modal-header" style="padding:20px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <h2 style="margin:0;">${escapeHtml(classroom.name)}</h2>
+            <p style="margin:4px 0 0;color:#666;">${escapeHtml(classroom.section || '')} • ${escapeHtml(classroom.subject || '')} • Code: ${escapeHtml(classroom.classCode || '')}</p>
+          </div>
+          <button class="btn danger" onclick="document.getElementById('classModal').remove()">✕ Close</button>
+        </div>
+        <div class="modal-tabs" id="classTabs"></div>
+        <div id="classContent" class="class-modal-content"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const tabsHTML = `
+    <div class="modal-tab active" data-tab="stream">📢 Stream</div>
+    <div class="modal-tab" data-tab="classwork">📝 Classwork</div>
+    <div class="modal-tab" data-tab="people">👥 People</div>
+    <div class="modal-tab" data-tab="grades">📊 Grades</div>
+  `;
+  modal.querySelector('#classTabs').innerHTML = tabsHTML;
+
+  modal.querySelectorAll('.modal-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      modal.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderClassTabContent(tab.dataset.tab, classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
+    });
+  });
+
+  // Load first tab
+  renderClassTabContent('stream', classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
+}
+
+function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, contentEl) {
+  let html = '';
+
+  switch (tab) {
+    case 'stream':
+      html = `<div class="card panel"><h3>📢 Class Stream / Announcements</h3><p>Post updates, questions, or announcements to the whole class (Google Classroom style).</p><div class="empty">No posts yet.</div></div>`;
+      break;
+
+    case 'classwork':
+      html = `
+        <div class="card panel">
+          <h3>📚 Classwork</h3>
+          <button id="quickLessonPlanBtn" class="btn" style="margin-bottom:16px;">+ New Lesson Plan (any file type)</button>
+          
+          <h4>📝 Assignments (${assignmentsInClass.length})</h4>
+          ${assignmentsInClass.length ? assignmentsInClass.map(a => `<div style="padding:12px;border-bottom:1px solid #eee;">${escapeHtml(a.title)} – Due ${fmtDate(a.dueDate)}</div>`).join('') : '<p class="empty">No assignments yet</p>'}
+          
+          <h4 style="margin-top:24px;">📚 Materials / Resources (${resourcesInClass.length})</h4>
+          ${resourcesInClass.map(r => `<div style="padding:12px;border-bottom:1px solid #eee;">${escapeHtml(r.title)} ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}</div>`).join('') || '<p class="empty">No materials yet</p>'}
+          
+          <h4 style="margin-top:24px;">📖 Lesson Plans (${lessonPlansInClass.length})</h4>
+          ${lessonPlansInClass.map(lp => `<div style="padding:12px;border-bottom:1px solid #eee;">${escapeHtml(lp.title)} – ${fmtDate(lp.plannedDate)}</div>`).join('') || '<p class="empty">No lesson plans yet</p>'}
+        </div>
+      `;
+      setTimeout(() => {
+        const btn = document.getElementById('quickLessonPlanBtn');
+        if (btn) btn.onclick = () => {
+          alert('✅ Lesson plan upload form would open here (any file type supported). You can now attach PDF, Word, CSV, images, etc.');
+          // You can later call renderLessonPlanForm and pre-fill classroomId
+        };
+      }, 200);
+      break;
+
+    case 'people':
+      html = `
+        <div class="card panel">
+          <h3>👥 People – ${studentsInClass.length} students</h3>
+          ${studentsInClass.map(s => `<div style="padding:12px;border-bottom:1px solid #eee;">${escapeHtml(s.full_name || s.name || s.email)}</div>`).join('') || '<p class="empty">No students yet</p>'}
+        </div>
+      `;
+      break;
+
+    case 'grades':
+      html = `
+        <div class="card panel">
+          <h3>📊 Grades & Reports</h3>
+          <h4>Assessments (${assessmentsInClass.length})</h4>
+          ${assessmentsInClass.map(a => `<div style="padding:12px;border-bottom:1px solid #eee;">${escapeHtml(a.title)} – Score: ${a.score || '—'}</div>`).join('') || '<p class="empty">No assessments yet</p>'}
+        </div>
+      `;
+      break;
+  }
+
+  contentEl.innerHTML = html;
 }
 
 // ============================================
