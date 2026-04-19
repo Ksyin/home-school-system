@@ -4553,38 +4553,32 @@ function openClassroomModal(classroom, studentsInClass, assignmentsInClass, reso
   const modal = document.createElement('div');
   modal.id = 'classModal';
   modal.innerHTML = `
-    <div class="modal-overlay" onclick="if(event.target.id==='classModal') this.parentElement.remove()">
-      <div class="modal-box" style="width:96%; max-width:1300px; height:92vh; display:flex; flex-direction:column; background:#fff; border-radius:8px; overflow:hidden;" onclick="event.stopImmediatePropagation()">
-        
-        <!-- Header -->
-        <div class="modal-header" style="padding:20px 24px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
+    <div class="modal-overlay" onclick="if(event.target.id==='classModal')this.parentElement.remove()">
+      <div class="modal-box" style="width:96%;max-width:1300px;height:92vh;display:flex;flex-direction:column;background:#fff;border-radius:8px;overflow:hidden;" onclick="event.stopImmediatePropagation()">
+        <div class="modal-header" style="padding:20px 24px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;background:#f8f9fa;">
           <div>
-            <h2 style="margin:0; font-size:24px;">${escapeHtml(classroom.name)}</h2>
-            <p style="margin:4px 0 0; color:#555; font-size:14px;">
+            <h2 style="margin:0;font-size:24px;">${escapeHtml(classroom.name)}</h2>
+            <p style="margin:4px 0 0;color:#555;font-size:14px;">
               ${escapeHtml(classroom.section || '')} • ${escapeHtml(classroom.subject || 'No subject')} • 
-              Code: <span style="font-family:monospace; background:#e8f0fe; padding:2px 8px; border-radius:4px;">${escapeHtml(classroom.classCode || '')}</span>
+              Code: <span style="font-family:monospace;background:#e8f0fe;padding:2px 8px;border-radius:4px;">${escapeHtml(classroom.classCode || '')}</span>
             </p>
           </div>
           <button class="btn danger" onclick="document.getElementById('classModal').remove()">✕ Close</button>
         </div>
 
-        <!-- Tabs -->
-        <div class="modal-tabs" id="classTabs" style="display:flex; background:#f1f3f4; border-bottom:1px solid #ddd;">
-          <div class="modal-tab active" data-tab="stream" style="padding:14px 28px; cursor:pointer; font-weight:500;">📢 Stream</div>
-          <div class="modal-tab" data-tab="classwork" style="padding:14px 28px; cursor:pointer; font-weight:500;">📝 Classwork</div>
-          <div class="modal-tab" data-tab="people" style="padding:14px 28px; cursor:pointer; font-weight:500;">👥 People</div>
-          <div class="modal-tab" data-tab="grades" style="padding:14px 28px; cursor:pointer; font-weight:500;">📊 Grades</div>
+        <div class="modal-tabs" id="classTabs" style="display:flex;background:#f1f3f4;border-bottom:1px solid #ddd;">
+          <div class="modal-tab active" data-tab="stream" style="padding:14px 28px;cursor:pointer;font-weight:500;">📢 Stream</div>
+          <div class="modal-tab" data-tab="classwork" style="padding:14px 28px;cursor:pointer;font-weight:500;">📝 Classwork</div>
+          <div class="modal-tab" data-tab="people" style="padding:14px 28px;cursor:pointer;font-weight:500;">👥 People</div>
+          <div class="modal-tab" data-tab="grades" style="padding:14px 28px;cursor:pointer;font-weight:500;">📊 Grades</div>
         </div>
 
-        <!-- Content Area -->
-        <div id="classContent" class="class-modal-content" style="flex:1; padding:24px; overflow-y:auto; background:#fafafa;"></div>
+        <div id="classContent" class="class-modal-content" style="flex:1;padding:24px;overflow-y:auto;background:#fafafa;"></div>
       </div>
     </div>
   `;
-
   document.body.appendChild(modal);
 
-  // Tab switching
   modal.querySelectorAll('.modal-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       modal.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
@@ -4593,7 +4587,6 @@ function openClassroomModal(classroom, studentsInClass, assignmentsInClass, reso
     });
   });
 
-  // Load default tab (Stream)
   renderClassTabContent('stream', classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
 }
 
@@ -4605,59 +4598,48 @@ function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInCla
     case 'stream':
       html = `
         <div class="card panel">
-          <h3>📢 Class Stream</h3>
-          <p style="color:#666;">Post announcements, questions, or start discussions. Everyone in the class can see and reply.</p>
-          <textarea id="streamPost" rows="3" placeholder="Share something with the class..." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; margin-bottom:12px;"></textarea>
+          <h3>📢 Class Stream & Chat</h3>
+          <textarea id="streamInput" rows="2" placeholder="Post an announcement or message to the class..." style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;"></textarea>
           <button class="btn" onclick="postToStream('${classroom.id}')">Post to Stream</button>
-          
-          <div style="margin-top:30px;">
-            <h4>Recent Activity</h4>
-            <div class="empty">No posts yet. Be the first to post!</div>
-          </div>
+          <div id="streamFeed" style="margin-top:24px;max-height:500px;overflow-y:auto;"></div>
         </div>
       `;
+      // Load existing messages (you can expand later)
+      setTimeout(() => loadStreamFeed(classroom.id), 100);
       break;
 
     case 'classwork':
       html = `
         <div class="card panel">
           <h3>📚 Classwork</h3>
-          
-          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px;">
-            <button class="btn" onclick="createClassItem('${classroom.id}', 'assignment')">📝 Assignment</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}', 'quiz')">📝 Quiz</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}', 'question')">❓ Question</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}', 'material')">📚 Material</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}', 'topic')">📑 Topic</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}', 'lessonplan')">📖 Lesson Plan</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
+            <button class="btn" onclick="createClassItem('${classroom.id}','assignment')">📝 Assignment</button>
+            <button class="btn" onclick="createClassItem('${classroom.id}','quiz')">📝 Quiz</button>
+            <button class="btn" onclick="createClassItem('${classroom.id}','question')">❓ Question</button>
+            <button class="btn" onclick="createClassItem('${classroom.id}','material')">📚 Material</button>
+            <button class="btn" onclick="createClassItem('${classroom.id}','topic')">📑 Topic</button>
+            <button class="btn" onclick="createClassItem('${classroom.id}','lessonplan')">📖 Lesson Plan</button>
           </div>
 
-          <!-- Assignments -->
           <h4>📝 Assignments (${assignmentsInClass.length})</h4>
           ${assignmentsInClass.length ? assignmentsInClass.map(a => `
-            <div style="padding:14px; background:#fff; border-radius:8px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
               <strong>${escapeHtml(a.title)}</strong><br>
               <small>Due: ${fmtDate(a.dueDate) || 'No due date'}</small>
-            </div>
-          `).join('') : '<p class="empty">No assignments yet</p>'}
+            </div>`).join('') : '<p class="empty">No assignments yet</p>'}
 
-          <!-- Materials -->
           <h4 style="margin-top:28px;">📚 Materials (${resourcesInClass.length})</h4>
           ${resourcesInClass.map(r => `
-            <div style="padding:14px; background:#fff; border-radius:8px; margin-bottom:12px;">
-              ${escapeHtml(r.title)} 
-              ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
-            </div>
-          `).join('') || '<p class="empty">No materials yet</p>'}
+            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;">
+              ${escapeHtml(r.title)} ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
+            </div>`).join('') || '<p class="empty">No materials yet</p>'}
 
-          <!-- Lesson Plans -->
           <h4 style="margin-top:28px;">📖 Lesson Plans (${lessonPlansInClass.length})</h4>
           ${lessonPlansInClass.map(lp => `
-            <div style="padding:14px; background:#fff; border-radius:8px; margin-bottom:12px;">
+            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;">
               ${escapeHtml(lp.title)} — ${fmtDate(lp.plannedDate)}
               ${lp.attachmentUrl ? `<br><small><a href="${lp.attachmentUrl}" target="_blank">📎 View Attachment</a></small>` : ''}
-            </div>
-          `).join('') || '<p class="empty">No lesson plans yet</p>'}
+            </div>`).join('') || '<p class="empty">No lesson plans yet</p>'}
         </div>
       `;
       break;
@@ -4666,18 +4648,11 @@ function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInCla
       html = `
         <div class="card panel">
           <h3>👥 People (${studentsInClass.length} students)</h3>
-          
-          <div style="margin-bottom:20px;">
-            <button class="btn" onclick="showJoinCode('${classroom.classCode}')">Share Class Code</button>
-            <button class="btn ghost" onclick="addCoTeacher('${classroom.id}')">+ Add Co-Teacher</button>
+          <div style="margin:16px 0;">
+            <button class="btn" onclick="showJoinCode('${classroom.classCode}')">Share Class Code with Students</button>
           </div>
-
-          <h4>Students</h4>
-          ${studentsInClass.map(s => `
-            <div style="padding:12px; background:#fff; border-radius:8px; margin-bottom:8px;">
-              ${escapeHtml(s.full_name || s.name || s.email)}
-            </div>
-          `).join('') || '<p class="empty">No students joined yet</p>'}
+          <h4>Students in this class</h4>
+          ${studentsInClass.map(s => `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:8px;">${escapeHtml(s.full_name || s.name || s.email)}</div>`).join('') || '<p class="empty">No students yet</p>'}
         </div>
       `;
       break;
@@ -4688,10 +4663,9 @@ function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInCla
           <h3>📊 Grades & Reports</h3>
           <h4>Assessments (${assessmentsInClass.length})</h4>
           ${assessmentsInClass.map(a => `
-            <div style="padding:12px; background:#fff; border-radius:8px; margin-bottom:10px;">
+            <div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:10px;">
               ${escapeHtml(a.title)} — Score: ${a.score || '—'} / ${a.maxScore || '—'}
-            </div>
-          `).join('') || '<p class="empty">No graded assessments yet</p>'}
+            </div>`).join('') || '<p class="empty">No assessments yet</p>'}
         </div>
       `;
       break;
@@ -4756,6 +4730,98 @@ async function initRouter() {
 }
 
 initRouter();
+
+// ====================== CLASSROOM HELPER FUNCTIONS ======================
+
+window.createClassItem = async function(classroomId, type) {
+  const title = prompt(`Create new ${type.toUpperCase()}\nEnter title:`);
+  if (!title) return;
+
+  try {
+    if (type === 'assignment' || type === 'quiz' || type === 'question') {
+      await addDoc(collection(db, 'assignments'), {
+        classroomId: classroomId,
+        tutorId: auth.currentUser.uid,
+        title: title,
+        type: type,
+        createdAt: serverTimestamp(),
+        published: true
+      });
+    } 
+    else if (type === 'material') {
+      const file = await new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = e => resolve(e.target.files[0]);
+        input.click();
+      });
+      if (file) {
+        const upload = await uploadFile(file, `classroom-materials/${classroomId}`);
+        await addDoc(collection(db, 'resources'), {
+          classroomId: classroomId,
+          tutorId: auth.currentUser.uid,
+          title: title,
+          fileUrl: upload.url,
+          fileName: upload.name,
+          createdAt: serverTimestamp()
+        });
+      }
+    } 
+    else if (type === 'lessonplan') {
+      await addDoc(collection(db, 'lesson-plans'), {
+        classroomId: classroomId,
+        tutorId: auth.currentUser.uid,
+        title: title,
+        status: 'Draft',
+        createdAt: serverTimestamp()
+      });
+    } 
+    else if (type === 'topic') {
+      await addDoc(collection(db, 'classroom-topics'), {
+        classroomId: classroomId,
+        title: title,
+        createdAt: serverTimestamp()
+      });
+    }
+
+    alert(`✅ ${type.toUpperCase()} created successfully!`);
+    setTimeout(() => location.reload(), 800);   // refresh modal
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+};
+
+window.postToStream = async function(classroomId) {
+  const input = document.getElementById('streamInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  await addDoc(collection(db, 'classroom-messages'), {
+    classroomId: classroomId,
+    fromId: auth.currentUser.uid,
+    fromName: 'Tutor',   // you can pull real name later
+    message: text,
+    createdAt: serverTimestamp()
+  });
+
+  input.value = '';
+  loadStreamFeed(classroomId);
+};
+
+async function loadStreamFeed(classroomId) {
+  const snap = await getDocs(query(collection(db, 'classroom-messages'), where('classroomId', '==', classroomId)));
+  const feed = document.getElementById('streamFeed');
+  if (!feed) return;
+
+  feed.innerHTML = snap.docs.map(doc => {
+    const m = doc.data();
+    return `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:12px;">${escapeHtml(m.message)} <small style="color:#666;">${fmtDate(m.createdAt)}</small></div>`;
+  }).join('') || '<p class="empty">No messages yet</p>';
+}
+
+window.showJoinCode = function(code) {
+  alert(`📋 Class Code: ${code}\n\nShare this code with your students so they can join from their dashboard.`);
+};
 
 // ============================================
 // GLOBALS
