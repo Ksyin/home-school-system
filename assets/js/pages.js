@@ -2667,94 +2667,9 @@ function renderResourcesPage(resources, classrooms, students) {
     <section class="card panel" style="margin-top:20px"><h3>Resources (${resources.length})</h3>${simpleTable(['Title', 'Type', 'Classroom', 'Student', 'File', 'Created', 'Action'], rowsHtml)}</section>
   `;
 }
-async function createNewPortfolio(studentUid, data) {
-  return await addDoc(collection(db, 'portfolios'), {
-    studentId: studentUid,
-    title: data.title,
-    description: data.description || '',
-    subject: data.subject || 'General',
-    emoji: data.emoji || '📚',
-    color: data.color || '#3498db',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-}
 
-async function addPortfolioCard(studentUid, portfolioId, cardData, files = []) {
-  let uploadedFiles = [];
-  if (files.length > 0) {
-    for (const file of files) {
-      const upload = await uploadFile(file, `portfolio/${studentUid}/${portfolioId}`);
-      uploadedFiles.push({ url: upload.url, name: upload.name, type: file.type });
-    }
-  }
 
-  const cardRef = await addDoc(collection(db, 'portfolio'), {
-    studentId: studentUid,
-    portfolioId: portfolioId,
-    cardType: cardData.cardType || 'text',
-    title: cardData.title,
-    content: cardData.content || '',
-    feeling: cardData.feeling || '',
-    milestone: cardData.milestone || '',
-    files: uploadedFiles,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-  return cardRef.id;
-}
 
-async function loadStudentPortfolios(studentUid) {
-  // 1. Load all portfolio containers
-  const portfoliosSnap = await getDocs(
-    query(collection(db, 'portfolios'), where('studentId', '==', studentUid))
-  );
-  let portfolios = portfoliosSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // 2. Auto-create “My Diary” if user has never created a portfolio
-  if (portfolios.length === 0) {
-    const defaultRef = await addDoc(collection(db, 'portfolios'), {
-      studentId: studentUid,
-      title: 'My Diary',
-      description: 'My general learning journey, reflections & daily growth',
-      subject: 'General',
-      emoji: '📖',
-      color: '#3498db',
-      isDefault: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    portfolios = [{ id: defaultRef.id, title: 'My Diary', description: '...', emoji: '📖', color: '#3498db', isDefault: true }];
-  }
-
-  // 3. Load ALL entries (old + new) and group them
-  const allEntriesSnap = await getDocs(
-    query(collection(db, 'portfolio'), where('studentId', '==', studentUid))
-  );
-  const allEntries = allEntriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // Group by portfolioId (null/undefined = legacy → goes to My Diary)
-  const grouped = {};
-  portfolios.forEach(p => { grouped[p.id] = { ...p, entries: [] }; });
-
-  allEntries.forEach(entry => {
-    const pid = entry.portfolioId || 'legacy';
-    if (grouped[pid]) {
-      grouped[pid].entries.push(entry);
-    } else {
-      // legacy entries go into My Diary (first default portfolio)
-      const diary = portfolios.find(p => p.isDefault);
-      if (diary) grouped[diary.id].entries.push({ ...entry, portfolioId: diary.id });
-    }
-  });
-
-  // Sort entries newest first inside each portfolio
-  Object.keys(grouped).forEach(key => {
-    grouped[key].entries.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  });
-
-  return Object.values(grouped).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-}
 
 
 async function bootParentSuperDashboard() {
@@ -3647,163 +3562,59 @@ async function bootStudentResourcesPage() {
 async function bootStudentPortfolioPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'student') return;
+  
   await ensureStudentMirror(bundle.user, bundle.profile);
-
-  const { user } = bundle;
-  const portfolios = await loadStudentPortfolios(user.uid);
-
-  document.getElementById('page-content').innerHTML = renderStudentPortfolioPage(portfolios);
-
-  // Click on preview → open Sutori viewer
-  document.querySelectorAll('.portfolio-preview-card').forEach(card => {
-    card.addEventListener('click', () => openSutoriViewer(card.dataset.id, portfolios, user.uid));
-  });
-
-  // Create new portfolio
-  document.getElementById('createPortfolioBtn').addEventListener('click', async () => {
-    const title = prompt('Portfolio Title (e.g. Science Project – Photosynthesis)', 'New Portfolio');
-    if (!title) return;
-
-    const subject = prompt('Subject / Project name?', 'General');
-    const emoji = prompt('Emoji for this portfolio?', '🌱');
-
-    const newPortfolioRef = await createNewPortfolio(user.uid, { title, subject, emoji });
-    alert('✅ Portfolio created! Now add your first card.');
-    bootStudentPortfolioPage(); // refresh
-  });
+  const { user, profile } = bundle;
+  const items = await loadStudentPortfolio(user.uid);
+  document.getElementById('page-content').innerHTML = renderStudentPortfolioPage(items);
+  
+  const form = document.getElementById('portfolioForm');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const type = document.getElementById('portfolioType').value;
+      const title = document.getElementById('portfolioTitle').value;
+      const note = document.getElementById('portfolioNote').value;
+      const file = document.getElementById('portfolioFile').files[0];
+      const feeling = document.getElementById('portfolioFeeling')?.value || '';
+      const milestone = document.getElementById('portfolioMilestone')?.value || '';
+      
+      if (!title || !note) {
+        document.getElementById('portfolioMsg').innerHTML = '<span style="color:#e74c3c;">❌ Please add a title and reflection</span>';
+        return;
+      }
+      
+      document.getElementById('portfolioMsg').innerHTML = '<span style="color:#3498db;">⏳ Saving your journey entry...</span>';
+      
+      try {
+        let upload = { url: '', name: '' };
+        if (file) {
+          upload = await uploadFile(file, `portfolio/${user.uid}`);
+        }
+        
+        await addDoc(collection(db, 'portfolio'), {
+          studentId: user.uid,
+          studentName: getStudentDisplayName(profile, user),
+          type: type,
+          title: title,
+          note: note,
+          feeling: feeling,
+          milestone: milestone,
+          fileUrl: upload.url,
+          fileName: upload.name,
+          createdAt: serverTimestamp()
+        });
+        
+        document.getElementById('portfolioMsg').innerHTML = '<span style="color:#27ae60;">✅ Entry saved! Refreshing...</span>';
+        form.reset();
+        setTimeout(() => bootStudentPortfolioPage(), 1500);
+      } catch (err) {
+        document.getElementById('portfolioMsg').innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
+      }
+    });
+  }
 }
 
-window.openSutoriViewer = async function(portfolioId, allPortfolios, studentUid) {
-  const modal = document.getElementById('sutoriViewerModal');
-  const header = document.getElementById('sutoriHeader');
-  const content = document.getElementById('sutoriContent');
-
-  const portfolio = allPortfolios.find(p => p.id === portfolioId);
-  if (!portfolio) return;
-
-  header.innerHTML = `
-    <div style="display:flex;gap:16px;align-items:center;">
-      <span style="font-size:48px;">${portfolio.emoji || '📖'}</span>
-      <div>
-        <h2 style="margin:0;">${escapeHtml(portfolio.title)}</h2>
-        <p style="margin:0;color:#666;">${escapeHtml(portfolio.description || portfolio.subject)}</p>
-      </div>
-    </div>
-    <button class="btn danger" onclick="closeSutoriViewer()">✕</button>
-  `;
-
-  let cardsHTML = portfolio.entries.map(entry => {
-    const fileHTML = entry.files && entry.files.length ? `
-      <div class="file-grid">
-        ${entry.files.map(f => `
-          <div class="file-thumb" onclick="openFileModal('${f.url}', '${f.type.startsWith('image') ? 'image' : (f.type.startsWith('video') ? 'video' : 'file')}', '${f.name}')">
-            ${f.type.startsWith('image') ? `<img src="${f.url}" style="width:100%;height:120px;object-fit:cover;">` : 
-              f.type.startsWith('video') ? `<video src="${f.url}" style="width:100%;height:120px;object-fit:cover;"></video>` : 
-              `<div style="height:120px;background:#f1f3f4;display:flex;align-items:center;justify-content:center;font-size:40px;">📎</div>`}
-            <small style="display:block;text-align:center;padding:4px;">${escapeHtml(f.name)}</small>
-          </div>
-        `).join('')}
-      </div>` : '';
-
-    return `
-      <div class="sutori-card">
-        <div class="card-header">
-          <span style="font-size:28px;">${getCardEmoji(entry.cardType)}</span>
-          <div style="flex:1;">
-            <strong>${escapeHtml(entry.title || 'Untitled Card')}</strong>
-            <small style="color:#777;display:block;">${fmtDate(entry.createdAt)}</small>
-          </div>
-          ${entry.feeling ? `<span style="font-size:24px;">${entry.feeling}</span>` : ''}
-        </div>
-        <p style="line-height:1.6;margin-bottom:16px;">${escapeHtml(entry.content || entry.note || '')}</p>
-        ${fileHTML}
-      </div>
-    `;
-  }).join('') || `<div class="empty" style="text-align:center;padding:80px 40px;"><div style="font-size:90px;">🌟</div><p>This portfolio is empty.<br>Be the first to add a card!</p></div>`;
-
-  content.innerHTML = cardsHTML;
-
-  // Add card button inside viewer
-  document.getElementById('addCardToCurrentBtn').onclick = () => showAddCardForm(portfolioId, studentUid);
-
-  modal.style.display = 'flex';
-};
-
-window.closeSutoriViewer = function() {
-  document.getElementById('sutoriViewerModal').style.display = 'none';
-};
-
-
-
-
-
-function getCardEmoji(type) {
-  const map = {
-    text: '📝',
-    image: '🖼️',
-    video: '🎥',
-    file: '📎',
-    reflection: '🤔',
-    achievement: '🏆',
-    milestone: '🎯'
-  };
-  return map[type] || '📌';
-}
-function renderStudentPortfolioPage(portfolios) {
-  const portfolioPreviews = portfolios.map(p => `
-    <div class="portfolio-preview-card" data-id="${escapeHtml(p.id)}" style="background:white;border-radius:16px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.08);cursor:pointer;transition:all .3s;border:3px solid transparent;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-        <div style="font-size:42px;width:60px;height:60px;background:${p.color || '#3498db'};border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;">${p.emoji || '📖'}</div>
-        <div style="flex:1;">
-          <h3 style="margin:0;font-size:22px;">${escapeHtml(p.title)}</h3>
-          <small style="color:#666;">${escapeHtml(p.subject || 'General')}</small>
-        </div>
-        <div class="badge" style="background:#e3f2fd;color:#1976d2;">${p.entries.length} cards</div>
-      </div>
-      <p style="margin:0 0 16px 0;color:#555;line-height:1.4;">${escapeHtml(p.description || 'No description yet')}</p>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#777;">
-        <span>Last updated ${fmtDate(p.updatedAt || p.createdAt)}</span>
-        <span class="btn small ghost" style="font-size:12px;">Open →</span>
-      </div>
-    </div>
-  `).join('');
-
-  return `
-    <style>
-      .portfolio-hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
-      .portfolio-preview-card:hover { transform: translateY(-8px); box-shadow: 0 12px 30px rgba(0,0,0,0.15); border-color: #3498db; }
-      .sutori-viewer { background:#f8f9fa; border-radius:20px; padding:24px; max-height:85vh; overflow-y:auto; }
-      .sutori-card { background:white; border-radius:16px; padding:24px; margin-bottom:24px; box-shadow:0 6px 20px rgba(0,0,0,0.1); transition:all .3s; }
-      .sutori-card:hover { box-shadow:0 12px 30px rgba(0,0,0,0.15); }
-      .card-header { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
-      .file-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; margin-top:16px; }
-      .file-thumb { border-radius:12px; overflow:hidden; border:2px solid #eee; cursor:pointer; }
-    </style>
-
-    <div class="card panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
-        <h2 style="margin:0;">📚 My Portfolios</h2>
-        <button class="btn" id="createPortfolioBtn" style="padding:12px 28px;font-size:16px;">✨ Create New Portfolio (Sutori Style)</button>
-      </div>
-
-      <div class="portfolio-hub">
-        ${portfolioPreviews || '<div class="empty" style="grid-column:1/-1;text-align:center;padding:60px;"><div style="font-size:80px;">📖</div><h3>No portfolios yet</h3><p>Click the button above to create your first Sutori-style portfolio!</p></div>'}
-      </div>
-    </div>
-
-    <!-- Full-screen Sutori Viewer Modal -->
-    <div id="sutoriViewerModal" class="modal" style="display:none;">
-      <div class="modal-box" style="width:98%;max-width:1280px;height:94vh;display:flex;flex-direction:column;background:#fff;border-radius:20px;overflow:hidden;">
-        <div id="sutoriHeader" style="padding:20px 30px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;"></div>
-        <div id="sutoriContent" class="sutori-viewer" style="flex:1;overflow-y:auto;padding:30px;"></div>
-        <div style="padding:20px 30px;border-top:1px solid #ddd;text-align:right;">
-          <button class="btn ghost" onclick="closeSutoriViewer()">Close Portfolio</button>
-          <button class="btn" id="addCardToCurrentBtn">+ Add New Card</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
 
 async function bootStudentReportsPage() {
   const bundle = await requireAuth();
