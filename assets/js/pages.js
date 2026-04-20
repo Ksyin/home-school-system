@@ -4573,49 +4573,92 @@ function openClassroomModal(classroom, studentsInClass, assignmentsInClass, reso
   const modal = document.createElement('div');
   modal.id = 'classModal';
   modal.innerHTML = `
-    <div class="modal-overlay" onclick="if(event.target.id==='classModal')this.parentElement.remove()">
-      <div class="modal-box" style="width:96%;max-width:1300px;height:92vh;display:flex;flex-direction:column;background:#fff;border-radius:8px;overflow:hidden;" onclick="event.stopImmediatePropagation()">
-        <div class="modal-header" style="padding:20px 24px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;background:#f8f9fa;">
+    <div class="modal-overlay" onclick="if(event.target.classList.contains('modal-overlay'))this.remove()">
+      <div class="modal-box" style="width:98%;max-width:1400px;height:95vh;display:flex;flex-direction:column;background:#fff;border-radius:16px;overflow:hidden;">
+        
+        <!-- Header -->
+        <div class="modal-header" style="padding:20px 28px;border-bottom:2px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;">
           <div>
-            <h2 style="margin:0;font-size:24px;">${escapeHtml(classroom.name)}</h2>
-            <p style="margin:4px 0 0;color:#555;font-size:14px;">
+            <h2 style="margin:0;font-size:26px;color:white;">${escapeHtml(classroom.name)}</h2>
+            <p style="margin:4px 0 0;opacity:0.9;font-size:14px;">
               ${escapeHtml(classroom.section || '')} • ${escapeHtml(classroom.subject || 'No subject')} • 
-              Code: <span style="font-family:monospace;background:#e8f0fe;padding:2px 8px;border-radius:4px;">${escapeHtml(classroom.classCode || '')}</span>
+              <span style="background:rgba(255,255,255,0.2);padding:4px 12px;border-radius:20px;font-family:monospace;">
+                Code: ${escapeHtml(classroom.classCode)}
+              </span>
             </p>
           </div>
-          <button class="btn danger" onclick="document.getElementById('classModal').remove()">✕ Close</button>
+          <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:none;" onclick="document.getElementById('classModal').remove()">✕ Close</button>
         </div>
 
-        <div class="modal-tabs" id="classTabs" style="display:flex;background:#f1f3f4;border-bottom:1px solid #ddd;">
-          <div class="modal-tab active" data-tab="stream" style="padding:14px 28px;cursor:pointer;font-weight:500;">📢 Stream</div>
-          <div class="modal-tab" data-tab="classwork" style="padding:14px 28px;cursor:pointer;font-weight:500;">📝 Classwork</div>
-          <div class="modal-tab" data-tab="people" style="padding:14px 28px;cursor:pointer;font-weight:500;">👥 People</div>
-          <div class="modal-tab" data-tab="grades" style="padding:14px 28px;cursor:pointer;font-weight:500;">📊 Grades</div>
+        <!-- Tabs Navigation -->
+        <div class="modal-tabs" id="classTabs" style="display:flex;background:#f8f9fa;border-bottom:1px solid #ddd;padding:0 16px;">
+          ${renderTabNav('stream', '📢 Stream', true)}
+          ${renderTabNav('classwork', '📝 Classwork')}
+          ${renderTabNav('people', '👥 People')}
+          ${renderTabNav('learners', '🎓 Learners')}
+          ${renderTabNav('grades', '📊 Grades')}
+          ${renderTabNav('messages', '💬 Messages')}
+          ${renderTabNav('reports', '📄 Reports')}
         </div>
 
-        <div id="classContent" class="class-modal-content" style="flex:1;padding:24px;overflow-y:auto;background:#fafafa;"></div>
+        <!-- Content Area -->
+        <div id="classContent" class="class-modal-content" style="flex:1;padding:24px;overflow-y:auto;background:#f5f7fa;"></div>
       </div>
     </div>
   `;
+  
   document.body.appendChild(modal);
 
+  // Tab switching
   modal.querySelectorAll('.modal-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       modal.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      renderClassTabContent(tab.dataset.tab, classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
+      renderClassTabContent(
+        tab.dataset.tab, 
+        classroom, 
+        studentsInClass, 
+        assignmentsInClass, 
+        resourcesInClass, 
+        lessonPlansInClass, 
+        assessmentsInClass, 
+        reportsInClass, 
+        messagesInClass, 
+        profile, 
+        modal.querySelector('#classContent')
+      );
     });
   });
 
+  // Load initial tab
   renderClassTabContent('stream', classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
 }
+
+
+function renderTabNav(tabId, label, active = false) {
+  return `
+    <div class="modal-tab ${active ? 'active' : ''}" data-tab="${tabId}" style="
+      padding:16px 24px;
+      cursor:pointer;
+      font-weight:500;
+      border-bottom:3px solid ${active ? '#667eea' : 'transparent'};
+      transition:all 0.2s;
+      color:${active ? '#667eea' : '#555'};
+    ">
+      ${label}
+    </div>
+  `;
+}
+
+
+
 
 function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, contentEl) {
   let html = '';
 
   switch (tab) {
     case 'stream':
-      html = renderStreamTab(classroom, messagesInClass, profile);
+      html = renderStreamTab(classroom, profile);
       setTimeout(() => loadStreamFeed(classroom.id), 100);
       break;
 
@@ -4627,18 +4670,820 @@ function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInCla
       html = renderPeopleTab(classroom, studentsInClass);
       break;
 
+    case 'learners':
+      html = renderLearnersTab(classroom, studentsInClass);
+      break;
+
     case 'grades':
       html = renderGradesTab(classroom, assessmentsInClass, studentsInClass);
+      break;
+
+    case 'messages':
+      html = renderMessagesTab(classroom, studentsInClass, profile);
+      setTimeout(() => initializeChat(classroom.id, profile), 100);
+      break;
+
+    case 'reports':
+      html = renderReportsTab(classroom, studentsInClass, reportsInClass, assessmentsInClass);
       break;
   }
 
   contentEl.innerHTML = html;
   
-  // Attach event listeners after rendering
   if (tab === 'classwork') {
     attachClassworkEventListeners(classroom, studentsInClass);
   }
+  if (tab === 'learners') {
+    attachLearnersEventListeners(classroom);
+  }
+  if (tab === 'reports') {
+    attachReportsEventListeners(classroom, studentsInClass);
+  }
 }
+
+
+// Initialize chat system
+async function initializeChat(classroomId, profile) {
+  window.currentClassroomId = classroomId;
+  window.currentProfile = profile;
+  window.currentConversationId = null;
+  
+  await loadConversations(classroomId, profile);
+  setupChatSearch();
+  setupRealtimeChat(classroomId);
+}
+
+async function loadConversations(classroomId, profile) {
+  const listEl = document.getElementById('conversationList');
+  if (!listEl) return;
+
+  try {
+    // Get conversations where user is a participant
+    const q = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', auth.currentUser.uid)
+    );
+    
+    const snap = await getDocs(q);
+    const conversations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    // Filter by classroom
+    const classConversations = conversations.filter(c => c.classroomId === classroomId);
+    
+    if (classConversations.length === 0) {
+      listEl.innerHTML = '<p style="padding:20px;text-align:center;color:#999;">No conversations yet</p>';
+      return;
+    }
+
+    listEl.innerHTML = classConversations.map(conv => {
+      const otherParticipant = conv.participantNames?.find(p => p.id !== auth.currentUser.uid);
+      const unreadCount = conv.unreadCount?.[auth.currentUser.uid] || 0;
+      
+      return `
+        <div class="conversation-item" data-conv-id="${conv.id}" onclick="selectConversation('${conv.id}')">
+          <div class="conversation-avatar">
+            ${escapeHtml((otherParticipant?.name || '?').charAt(0).toUpperCase())}
+          </div>
+          <div class="conversation-info">
+            <div class="conversation-name">
+              ${escapeHtml(otherParticipant?.name || 'Conversation')}
+              ${conv.type === 'group' ? '<span style="font-size:11px;color:#666;"> (Group)</span>' : ''}
+            </div>
+            <div class="conversation-last">${escapeHtml(conv.lastMessage || 'No messages yet')}</div>
+          </div>
+          ${unreadCount > 0 ? `<span class="conversation-badge">${unreadCount}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('Load conversations error:', err);
+    listEl.innerHTML = '<p class="error">Error loading conversations</p>';
+  }
+}
+
+window.selectConversation = async function(conversationId) {
+  window.currentConversationId = conversationId;
+  
+  // Update active state
+  document.querySelectorAll('.conversation-item').forEach(el => {
+    el.classList.remove('active');
+    if (el.dataset.convId === conversationId) {
+      el.classList.add('active');
+    }
+  });
+  
+  await loadMessages(conversationId);
+  markConversationRead(conversationId);
+};
+
+async function loadMessages(conversationId) {
+  const chatMain = document.getElementById('chatMain');
+  if (!chatMain) return;
+
+  try {
+    // Get conversation details
+    const convDoc = await getDoc(doc(db, 'conversations', conversationId));
+    const conv = convDoc.data();
+    
+    const otherParticipant = conv.participantNames?.find(p => p.id !== auth.currentUser.uid);
+    
+    chatMain.innerHTML = `
+      <div class="chat-header">
+        <div class="conversation-avatar" style="width:40px;height:40px;">
+          ${escapeHtml((otherParticipant?.name || '?').charAt(0).toUpperCase())}
+        </div>
+        <div>
+          <strong>${escapeHtml(otherParticipant?.name || 'Conversation')}</strong>
+          <br><small style="color:#666;">${conv.type === 'group' ? 'Group chat' : 'Direct message'}</small>
+        </div>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="loading">Loading messages...</div>
+      </div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+        <input type="file" id="chatFileInput" accept="*/*" style="display:none;">
+        <button class="btn ghost" onclick="document.getElementById('chatFileInput').click()">📎</button>
+        <button class="btn" onclick="sendChatMessage()">Send</button>
+      </div>
+    `;
+
+    // Load messages
+    const messagesSnap = await getDocs(
+      query(
+        collection(db, 'chat_messages'),
+        where('conversationId', '==', conversationId),
+        orderBy('createdAt', 'asc')
+      )
+    );
+    
+    const messagesEl = document.getElementById('chatMessages');
+    messagesEl.innerHTML = messagesSnap.docs.map(doc => {
+      const msg = doc.data();
+      const isOutgoing = msg.senderId === auth.currentUser.uid;
+      
+      return `
+        <div class="message ${isOutgoing ? 'outgoing' : ''}">
+          <div class="message-avatar">
+            ${escapeHtml((msg.senderName || '?').charAt(0).toUpperCase())}
+          </div>
+          <div class="message-content">
+            ${msg.text ? `<div>${escapeHtml(msg.text)}</div>` : ''}
+            ${msg.fileUrl ? renderFilePreview(msg.fileUrl, msg.fileName) : ''}
+            <div class="message-time">${fmtDate(msg.createdAt)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    // Scroll to bottom
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    
+    // Setup file upload
+    document.getElementById('chatFileInput').addEventListener('change', handleChatFileUpload);
+    
+    // Enter to send
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+  } catch (err) {
+    console.error('Load messages error:', err);
+    chatMain.innerHTML = '<p class="error">Error loading messages</p>';
+  }
+}
+
+window.sendChatMessage = async function() {
+  const input = document.getElementById('messageInput');
+  const text = input?.value.trim();
+  const conversationId = window.currentConversationId;
+  
+  if (!text || !conversationId) return;
+  
+  try {
+    await addDoc(collection(db, 'chat_messages'), {
+      conversationId,
+      senderId: auth.currentUser.uid,
+      senderName: window.currentProfile?.name || auth.currentUser.displayName || 'User',
+      text,
+      createdAt: serverTimestamp()
+    });
+    
+    // Update conversation last message
+    await updateDoc(doc(db, 'conversations', conversationId), {
+      lastMessage: text,
+      lastMessageTime: serverTimestamp(),
+      [`unreadCount.${getOtherParticipantId(conversationId)}`]: increment(1)
+    });
+    
+    input.value = '';
+    await loadMessages(conversationId);
+  } catch (err) {
+    alert('Error sending message: ' + err.message);
+  }
+};
+
+function attachReportsEventListeners(classroom, students) {
+  const form = document.getElementById('generateReportForm');
+  if (!form) return;
+  
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('reportMsg');
+    msg.innerHTML = '<span style="color:#3498db;">Generating report...</span>';
+    
+    try {
+      const studentId = document.getElementById('reportStudentId').value;
+      const student = students.find(s => s.id === studentId);
+      
+      const reportData = {
+        classroomId: classroom.id,
+        studentId,
+        studentName: student?.full_name || student?.name,
+        type: document.getElementById('reportType').value,
+        startDate: document.getElementById('reportStartDate').value,
+        endDate: document.getElementById('reportEndDate').value,
+        strengths: document.getElementById('reportStrengths').value,
+        improvements: document.getElementById('reportImprovements').value,
+        summary: document.getElementById('reportSummary').value,
+        generatedBy: auth.currentUser.uid,
+        generatorName: auth.currentUser.displayName || 'Tutor',
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(collection(db, 'reports'), reportData);
+      
+      // Notify student
+      await addDoc(collection(db, 'notifications'), {
+        studentId,
+        title: 'New Report Available',
+        message: `Your ${reportData.type} report has been generated`,
+        type: 'report',
+        read: false,
+        createdAt: serverTimestamp()
+      });
+      
+      msg.innerHTML = '<span style="color:#27ae60;">✅ Report generated!</span>';
+      setTimeout(() => {
+        // Refresh reports tab
+        const contentEl = document.querySelector('#classContent');
+        if (contentEl) {
+          renderClassTabContent('reports', classroom, students, [], [], [], [], [], [], {}, contentEl);
+        }
+      }, 1000);
+      
+    } catch (err) {
+      msg.innerHTML = `<span style="color:#e74c3c;">Error: ${err.message}</span>`;
+    }
+  });
+}
+
+
+
+
+function renderReportsTab(classroom, students, reports, assessments) {
+  return `
+    <style>
+      .reports-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .report-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+      .report-form label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+      .report-form select, .report-form textarea, .report-form input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+      .generated-report {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border-left: 4px solid #667eea;
+      }
+      .report-meta {
+        display: flex;
+        justify-content: space-between;
+        color: #666;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+    </style>
+
+    <div class="reports-container">
+      <div class="report-card">
+        <h3>📊 Generate Report</h3>
+        <form class="report-form" id="generateReportForm">
+          <label>Select Student</label>
+          <select id="reportStudentId" required>
+            <option value="">-- Choose student --</option>
+            ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}
+          </select>
+          
+          <label>Report Type</label>
+          <select id="reportType">
+            <option value="progress">Progress Report</option>
+            <option value="attendance">Attendance Report</option>
+            <option value="assessment">Assessment Summary</option>
+            <option value="comprehensive">Comprehensive Report</option>
+          </select>
+          
+          <label>Date Range</label>
+          <div style="display:flex;gap:12px;">
+            <input type="date" id="reportStartDate" placeholder="Start">
+            <input type="date" id="reportEndDate" placeholder="End">
+          </div>
+          
+          <label>Strengths / Achievements</label>
+          <textarea id="reportStrengths" rows="3" placeholder="What is the student doing well?"></textarea>
+          
+          <label>Areas for Improvement</label>
+          <textarea id="reportImprovements" rows="3" placeholder="What can the student work on?"></textarea>
+          
+          <label>Summary / Comments</label>
+          <textarea id="reportSummary" rows="4" placeholder="Overall assessment and recommendations..."></textarea>
+          
+          <button type="submit" class="btn" style="width:100%;">Generate Report</button>
+          <span id="reportMsg"></span>
+        </form>
+      </div>
+      
+      <div class="report-card">
+        <h3>📄 Recent Reports</h3>
+        <div id="recentReportsList">
+          ${reports && reports.length > 0 ? reports.map(r => `
+            <div class="generated-report">
+              <div class="report-meta">
+                <span><strong>${escapeHtml(r.studentName || 'Student')}</strong></span>
+                <span>${fmtDate(r.createdAt)}</span>
+              </div>
+              <p><strong>Strengths:</strong> ${escapeHtml(r.strengths || '—')}</p>
+              <p><strong>Improvements:</strong> ${escapeHtml(r.improvements || r.lows || '—')}</p>
+              <p><strong>Summary:</strong> ${escapeHtml(r.summary || '—')}</p>
+              <div style="margin-top:12px;">
+                <button class="btn small ghost" onclick="downloadReport('${r.id}')">📥 Download</button>
+                <button class="btn small ghost" onclick="emailReport('${r.id}')">📧 Email</button>
+              </div>
+            </div>
+          `).join('') : '<p class="empty">No reports generated yet</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+
+function renderLearnersTab(classroom, students) {
+  return `
+    <style>
+      .learners-container {
+        display: grid;
+        grid-template-columns: 350px 1fr;
+        gap: 24px;
+      }
+      .learners-sidebar {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+      .learners-main {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+      .learner-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-bottom: 8px;
+      }
+      .learner-card:hover {
+        background: #f0f7ff;
+      }
+      .learner-card.active {
+        background: #e3f2fd;
+        border-left: 3px solid #667eea;
+      }
+      .learner-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg,#667eea,#764ba2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+      }
+      .learner-info {
+        flex: 1;
+      }
+      .learner-name {
+        font-weight: 600;
+      }
+      .learner-status {
+        font-size: 12px;
+        color: #27ae60;
+      }
+      .learner-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .stat-box {
+        text-align: center;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 12px;
+      }
+      .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #667eea;
+      }
+      .stat-label {
+        font-size: 12px;
+        color: #666;
+      }
+      .progress-section {
+        margin-top: 24px;
+      }
+      .progress-item {
+        margin-bottom: 16px;
+      }
+      .progress-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .progress-bar {
+        height: 8px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg,#667eea,#764ba2);
+        border-radius: 4px;
+      }
+    </style>
+
+    <div class="learners-container">
+      <div class="learners-sidebar">
+        <h4 style="margin:0 0 16px 0;">Students (${students.length})</h4>
+        <div style="max-height:500px;overflow-y:auto;">
+          ${students.map(s => `
+            <div class="learner-card" data-student-id="${s.id}" onclick="selectLearner('${s.id}')">
+              <div class="learner-avatar">
+                ${escapeHtml((s.full_name || s.name || 'S').charAt(0).toUpperCase())}
+              </div>
+              <div class="learner-info">
+                <div class="learner-name">${escapeHtml(s.full_name || s.name || 'Student')}</div>
+                <div class="learner-status">● Active</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="learners-main">
+        <div id="learnerDetailView">
+          <p style="text-align:center;color:#999;padding:40px;">Select a student to view details</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.selectLearner = async function(studentId) {
+  const detailView = document.getElementById('learnerDetailView');
+  if (!detailView) return;
+
+  detailView.innerHTML = '<div class="loading">Loading student data...</div>';
+
+  try {
+    // Load student data
+    const studentDoc = await getDoc(doc(db, 'students', studentId));
+    const student = studentDoc.data();
+    
+    // Load student's submissions, assessments, attendance
+    const [submissions, assessments, attendance, portfolio] = await Promise.all([
+      getDocs(query(collection(db, 'submissions'), where('studentId', '==', studentId))),
+      getDocs(query(collection(db, 'assessments'), where('studentId', '==', studentId))),
+      getDocs(query(collection(db, 'attendance'), where('studentId', '==', studentId))),
+      getDocs(query(collection(db, 'portfolio'), where('studentId', '==', studentId)))
+    ]);
+
+    const submissionCount = submissions.size;
+    const gradedCount = assessments.docs.filter(d => d.data().status === 'Graded').length;
+    const presentCount = attendance.docs.filter(d => d.data().status === 'Present').length;
+    const avgScore = assessments.docs.length > 0 
+      ? assessments.docs.reduce((sum, d) => sum + (d.data().score || 0), 0) / assessments.docs.length 
+      : 0;
+
+    detailView.innerHTML = `
+      <div class="learner-header" style="display:flex;align-items:center;gap:20px;margin-bottom:24px;">
+        <div class="learner-avatar" style="width:64px;height:64px;font-size:24px;">
+          ${escapeHtml((student?.full_name || student?.name || 'S').charAt(0).toUpperCase())}
+        </div>
+        <div>
+          <h3 style="margin:0;">${escapeHtml(student?.full_name || student?.name || 'Student')}</h3>
+          <p style="margin:4px 0;color:#666;">${escapeHtml(student?.email || '—')}</p>
+        </div>
+        <div style="margin-left:auto;">
+          <button class="btn" onclick="sendMessageToStudent('${studentId}', '${escapeHtml(student?.full_name || student?.name)}')">
+            💬 Message
+          </button>
+          <button class="btn ghost" onclick="generateLearnerReport('${studentId}')">
+            📄 Generate Report
+          </button>
+        </div>
+      </div>
+
+      <div class="learner-stats">
+        <div class="stat-box">
+          <div class="stat-value">${submissionCount}</div>
+          <div class="stat-label">Submissions</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">${gradedCount}</div>
+          <div class="stat-label">Assessments</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">${presentCount}</div>
+          <div class="stat-label">Days Present</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">${Math.round(avgScore)}%</div>
+          <div class="stat-label">Avg Score</div>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <h4>Assignment Completion</h4>
+        <div class="progress-item">
+          <div class="progress-header">
+            <span>Overall Progress</span>
+            <span>${submissionCount} completed</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${Math.min(submissionCount * 10, 100)}%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;">
+        <h4>Recent Activity</h4>
+        <div id="learnerActivityFeed">Loading...</div>
+      </div>
+    `;
+
+    // Load activity feed
+    const activities = await loadStudentActivities(studentId);
+    const activityFeed = document.getElementById('learnerActivityFeed');
+    activityFeed.innerHTML = activities.slice(0, 10).map(a => `
+      <div style="padding:12px;border-bottom:1px solid #eee;">
+        <span>${a.icon}</span>
+        <strong>${escapeHtml(a.title)}</strong>
+        <small style="float:right;">${fmtDate(a.createdAt)}</small>
+        <p style="margin:4px 0 0;font-size:13px;color:#666;">${escapeHtml(a.description)}</p>
+      </div>
+    `).join('') || '<p class="empty">No recent activity</p>';
+
+  } catch (err) {
+    detailView.innerHTML = `<p class="error">Error loading student data: ${err.message}</p>`;
+  }
+};
+
+// ============================================
+// MESSAGES TAB (Real-time Chat)
+// ============================================
+
+function renderMessagesTab(classroom, students, profile) {
+  return `
+    <style>
+      .chat-container {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 0;
+        height: 100%;
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+      .chat-sidebar {
+        background: #f8f9fa;
+        border-right: 1px solid #e0e0e0;
+        display: flex;
+        flex-direction: column;
+      }
+      .chat-sidebar-header {
+        padding: 16px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .chat-search {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        font-size: 14px;
+      }
+      .conversation-list {
+        flex: 1;
+        overflow-y: auto;
+      }
+      .conversation-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+        transition: background 0.2s;
+      }
+      .conversation-item:hover {
+        background: #e8f0fe;
+      }
+      .conversation-item.active {
+        background: #e3f2fd;
+        border-left: 3px solid #667eea;
+      }
+      .conversation-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: linear-gradient(135deg,#667eea,#764ba2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+      .conversation-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .conversation-name {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .conversation-last {
+        font-size: 12px;
+        color: #666;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .conversation-badge {
+        background: #667eea;
+        color: white;
+        border-radius: 12px;
+        padding: 2px 8px;
+        font-size: 11px;
+      }
+      .chat-main {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .chat-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: #f5f7fa;
+      }
+      .message {
+        display: flex;
+        gap: 12px;
+        max-width: 70%;
+      }
+      .message.outgoing {
+        margin-left: auto;
+        flex-direction: row-reverse;
+      }
+      .message-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #667eea;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .message.outgoing .message-avatar {
+        background: #764ba2;
+      }
+      .message-content {
+        background: white;
+        padding: 12px 16px;
+        border-radius: 18px;
+        border-bottom-left-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      }
+      .message.outgoing .message-content {
+        background: #e3f2fd;
+        border-bottom-left-radius: 18px;
+        border-bottom-right-radius: 4px;
+      }
+      .message-time {
+        font-size: 10px;
+        color: #999;
+        margin-top: 4px;
+      }
+      .chat-input-area {
+        padding: 16px 20px;
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+      }
+      .chat-input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 1px solid #ddd;
+        border-radius: 24px;
+        resize: none;
+        font-size: 14px;
+      }
+      .chat-input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      .new-conversation-btn {
+        margin: 12px 16px;
+        padding: 10px;
+        background: white;
+        border: 1px dashed #ccc;
+        border-radius: 12px;
+        text-align: center;
+        cursor: pointer;
+      }
+    </style>
+
+    <div class="chat-container">
+      <div class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <input type="text" class="chat-search" placeholder="Search conversations..." id="chatSearchInput">
+        </div>
+        <div class="new-conversation-btn" onclick="showNewConversationModal('${classroom.id}', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          ➕ New Conversation
+        </div>
+        <div class="conversation-list" id="conversationList">
+          <div class="loading">Loading conversations...</div>
+        </div>
+      </div>
+      <div class="chat-main" id="chatMain">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">
+          Select a conversation to start messaging
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+
 
 
 function renderGradesTab(classroom, assessments, students) {
@@ -5269,36 +6114,150 @@ function renderAttachments(item) {
 }
 
 
-
-function renderStreamTab(classroom, messages, profile) {
+function renderStreamTab(classroom, profile) {
   return `
-    <div class="card panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h3 style="margin:0;">📢 Class Stream</h3>
-        <span class="badge">${escapeHtml(classroom.name)}</span>
-      </div>
-      
-      <div style="background:#f0f7ff;border-radius:12px;padding:16px;margin-bottom:20px;">
-        <textarea id="streamInput" rows="3" placeholder="Share something with your class..." 
-          style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;resize:vertical;"></textarea>
-        <div style="display:flex;gap:8px;margin-top:12px;">
-          <input type="file" id="streamFileInput" accept="*/*" style="display:none;">
-          <button class="btn small ghost" onclick="document.getElementById('streamFileInput').click()">
+    <style>
+      .stream-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .stream-post-box {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      }
+      .stream-post-box textarea {
+        width: 100%;
+        border: none;
+        resize: none;
+        font-size: 15px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 12px;
+      }
+      .stream-post-box textarea:focus {
+        outline: none;
+        background: #fff;
+        box-shadow: 0 0 0 2px #667eea20;
+      }
+      .stream-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+        align-items: center;
+      }
+      .stream-feed {
+        flex: 1;
+        overflow-y: auto;
+      }
+      .stream-post {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+      .post-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .post-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg,#667eea,#764ba2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+      }
+      .post-meta {
+        flex: 1;
+      }
+      .post-author {
+        font-weight: 600;
+        color: #2c3e50;
+      }
+      .post-time {
+        font-size: 12px;
+        color: #95a5a6;
+      }
+      .post-content {
+        margin-left: 52px;
+        line-height: 1.6;
+      }
+      .post-attachment {
+        margin-top: 16px;
+        margin-left: 52px;
+      }
+      .post-actions {
+        margin-left: 52px;
+        margin-top: 12px;
+        display: flex;
+        gap: 16px;
+      }
+      .comment-section {
+        margin-left: 52px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #eee;
+      }
+      .comment {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .comment-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #e0e0e0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+      }
+      .comment-content {
+        flex: 1;
+        background: #f8f9fa;
+        padding: 10px 14px;
+        border-radius: 12px;
+      }
+    </style>
+
+    <div class="stream-container">
+      <div class="stream-post-box">
+        <textarea id="streamInput" rows="2" placeholder="Announce something to your class..."></textarea>
+        <div class="stream-actions">
+          <input type="file" id="streamFileInput" accept="*/*" style="display:none;" multiple>
+          <button class="btn ghost" onclick="document.getElementById('streamFileInput').click()">
             📎 Attach
           </button>
+          <button class="btn ghost" onclick="showStreamLinkInput()">
+            🔗 Add Link
+          </button>
+          <div style="flex:1;"></div>
           <button class="btn" onclick="postToStream('${classroom.id}')">
-            Post to Stream
+            Post
           </button>
         </div>
-        <div id="streamFilePreview" style="margin-top:8px;"></div>
+        <div id="streamFilePreview" style="margin-top:12px;"></div>
+        <div id="streamLinkPreview" style="margin-top:12px;"></div>
       </div>
-      
-      <div id="streamFeed" style="max-height:500px;overflow-y:auto;">
+
+      <div id="streamFeed" class="stream-feed">
         <div class="loading">Loading stream...</div>
       </div>
     </div>
   `;
 }
+
 
 
 // ============================================
@@ -5441,7 +6400,191 @@ window.showJoinCode = function(code) {
   alert(`📋 Class Code: ${code}\n\nShare this code with your students so they can join from their dashboard.`);
 };
 
+window.showNewConversationModal = function(classroomId, students) {
+  const modal = document.createElement('div');
+  modal.id = 'newConvModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()">
+      <div class="modal-box" style="max-width:500px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3>New Conversation</h3>
+          <button class="btn danger" onclick="this.closest('.modal-overlay').parentElement.remove()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label>Select Recipient</label>
+            <select id="convRecipientId" style="width:100%;padding:12px;">
+              <option value="">-- Choose --</option>
+              ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Initial Message (optional)</label>
+            <textarea id="convInitialMessage" rows="3" placeholder="Type your first message..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn" onclick="createConversation('${classroomId}')">Start Conversation</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
 
+window.createConversation = async function(classroomId) {
+  const recipientId = document.getElementById('convRecipientId')?.value;
+  const initialMessage = document.getElementById('convInitialMessage')?.value;
+  
+  if (!recipientId) {
+    alert('Please select a recipient');
+    return;
+  }
+  
+  try {
+    // Get recipient name
+    const recipientDoc = await getDoc(doc(db, 'students', recipientId));
+    const recipient = recipientDoc.data();
+    
+    const convRef = await addDoc(collection(db, 'conversations'), {
+      classroomId,
+      type: 'direct',
+      participants: [auth.currentUser.uid, recipientId],
+      participantNames: [
+        { id: auth.currentUser.uid, name: auth.currentUser.displayName || 'Tutor' },
+        { id: recipientId, name: recipient?.full_name || recipient?.name || 'Student' }
+      ],
+      unreadCount: { [recipientId]: initialMessage ? 1 : 0 },
+      lastMessage: initialMessage || 'Conversation started',
+      lastMessageTime: serverTimestamp(),
+      createdAt: serverTimestamp()
+    });
+    
+    if (initialMessage) {
+      await addDoc(collection(db, 'chat_messages'), {
+        conversationId: convRef.id,
+        senderId: auth.currentUser.uid,
+        senderName: auth.currentUser.displayName || 'Tutor',
+        text: initialMessage,
+        createdAt: serverTimestamp()
+      });
+    }
+    
+    document.getElementById('newConvModal')?.remove();
+    await loadConversations(classroomId, window.currentProfile);
+    
+  } catch (err) {
+    alert('Error creating conversation: ' + err.message);
+  }
+};
+
+window.downloadReport = function(reportId) {
+  // Implement PDF generation or download
+  alert('Report download - coming soon!');
+};
+
+window.emailReport = function(reportId) {
+  // Implement email functionality
+  alert('Report emailed to parent/student!');
+};
+
+window.sendMessageToStudent = function(studentId, studentName) {
+  // Switch to messages tab and create conversation
+  const messagesTab = document.querySelector('[data-tab="messages"]');
+  if (messagesTab) {
+    messagesTab.click();
+    setTimeout(() => {
+      showNewConversationModal(window.currentClassroomId, [{ id: studentId, full_name: studentName }]);
+    }, 500);
+  }
+};
+
+window.generateLearnerReport = async function(studentId) {
+  const reportsTab = document.querySelector('[data-tab="reports"]');
+  if (reportsTab) {
+    reportsTab.click();
+    setTimeout(() => {
+      const select = document.getElementById('reportStudentId');
+      if (select) select.value = studentId;
+    }, 500);
+  }
+};
+
+function setupChatSearch() {
+  const searchInput = document.getElementById('chatSearchInput');
+  if (!searchInput) return;
+  
+  searchInput.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll('.conversation-item').forEach(el => {
+      const name = el.querySelector('.conversation-name')?.textContent.toLowerCase() || '';
+      el.style.display = name.includes(term) ? 'flex' : 'none';
+    });
+  });
+}
+
+function setupRealtimeChat(classroomId) {
+  // Listen for new messages
+  const q = query(
+    collection(db, 'chat_messages'),
+    where('conversationId', '==', window.currentConversationId || ''),
+    orderBy('createdAt', 'desc'),
+    limit(1)
+  );
+  
+  // You can implement real-time listeners here using onSnapshot
+}
+
+async function markConversationRead(conversationId) {
+  try {
+    await updateDoc(doc(db, 'conversations', conversationId), {
+      [`unreadCount.${auth.currentUser.uid}`]: 0
+    });
+  } catch (err) {
+    console.warn('Mark read error:', err);
+  }
+}
+
+function getOtherParticipantId(conversationId) {
+  // This would need to be implemented based on conversation data
+  return 'other-user-id';
+}
+
+async function handleChatFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  try {
+    const upload = await uploadFile(file, `chat/${window.currentConversationId}`);
+    
+    await addDoc(collection(db, 'chat_messages'), {
+      conversationId: window.currentConversationId,
+      senderId: auth.currentUser.uid,
+      senderName: window.currentProfile?.name || auth.currentUser.displayName || 'User',
+      fileUrl: upload.url,
+      fileName: upload.name,
+      createdAt: serverTimestamp()
+    });
+    
+    await loadMessages(window.currentConversationId);
+  } catch (err) {
+    alert('Error uploading file: ' + err.message);
+  }
+}
+
+function attachLearnersEventListeners(classroom) {
+  // Additional learner tab functionality
+}
+
+// ============================================
+// EXPOSE TO WINDOW
+// ============================================
+
+window.initializeChat = initializeChat;
+window.loadConversations = loadConversations;
+window.selectConversation = selectConversation;
+window.sendChatMessage = sendChatMessage;
+window.selectLearner = selectLearner;
 
 
 async function notifyClassStudents(classroomId, title, type) {
@@ -5601,6 +6744,89 @@ function attachClassworkEventListeners(classroom, students) {
   }
 }
 
+
+window.joinClassByCode = async function() {
+  const code = document.getElementById('joinClassCode')?.value.trim().toUpperCase();
+  const msg = document.getElementById('joinMsg');
+  
+  if (!code) {
+    if (msg) msg.innerHTML = '<span style="color:#e74c3c;">❌ Please enter a class code</span>';
+    return;
+  }
+
+  if (msg) msg.innerHTML = '<span style="color:#3498db;">🔍 Finding class...</span>';
+
+  try {
+    // Find classroom by classCode
+    const q = query(collection(db, 'classrooms'), where('classCode', '==', code));
+    const snap = await getDocs(q);
+    
+    if (snap.empty) {
+      if (msg) msg.innerHTML = '<span style="color:#e74c3c;">❌ Invalid class code. Please check and try again.</span>';
+      return;
+    }
+
+    const classroomDoc = snap.docs[0];
+    const classroomData = classroomDoc.data();
+    const studentId = auth.currentUser.uid;
+
+    // Check if already enrolled
+    const studentDoc = await getDoc(doc(db, 'students', studentId));
+    if (studentDoc.exists() && studentDoc.data().classroomId === classroomDoc.id) {
+      if (msg) msg.innerHTML = '<span style="color:#e67e22;">⚠️ You are already enrolled in this class!</span>';
+      return;
+    }
+
+    // Update student record with classroom
+    const batch = writeBatch(db);
+    
+    batch.set(doc(db, 'students', studentId), {
+      uid: studentId,
+      classroomId: classroomDoc.id,
+      classroomName: classroomData.name,
+      joinedAt: serverTimestamp()
+    }, { merge: true });
+
+    batch.set(doc(db, 'users', studentId), {
+      classroomId: classroomDoc.id,
+      classroomName: classroomData.name
+    }, { merge: true });
+
+    // Add student to classroom's studentIds array
+    const currentStudentIds = classroomData.studentIds || [];
+    if (!currentStudentIds.includes(studentId)) {
+      batch.update(doc(db, 'classrooms', classroomDoc.id), {
+        studentIds: [...currentStudentIds, studentId]
+      });
+    }
+
+    // Create notification for tutor
+    const studentName = auth.currentUser.displayName || 'A student';
+    batch.set(doc(collection(db, 'notifications')), {
+      tutorId: classroomData.tutorId,
+      title: 'New Student Joined',
+      message: `${studentName} joined ${classroomData.name}`,
+      type: 'student_joined',
+      studentId,
+      classroomId: classroomDoc.id,
+      read: false,
+      createdAt: serverTimestamp()
+    });
+
+    await batch.commit();
+
+    if (msg) msg.innerHTML = '<span style="color:#27ae60;">✅ Successfully joined the class! Refreshing...</span>';
+    
+    setTimeout(() => {
+      location.reload();
+    }, 1500);
+
+  } catch (err) {
+    console.error('Join class error:', err);
+    if (msg) msg.innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
+  }
+};
+
 // ============================================
 // EXPOSE TO WINDOW
 // ============================================
@@ -5615,44 +6841,4 @@ window.AppUtil = { auth, db, storage, requireAuth, getUserProfile, uploadFile, f
 window.openFileModal = openFileModal;
 
 
-window.joinClassByCode = async function() {
-  const code = document.getElementById('joinClassCode').value.trim().toUpperCase();
-  const msg = document.getElementById('joinMsg');
-  
-  if (!code) {
-    msg.innerHTML = '<span style="color:red;">Please enter a class code</span>';
-    return;
-  }
 
-  msg.innerHTML = 'Joining...';
-
-  try {
-    // Find classroom by classCode
-    const q = query(collection(db, 'classrooms'), where('classCode', '==', code));
-    const snap = await getDocs(q);
-    
-    if (snap.empty) {
-      msg.innerHTML = '<span style="color:red;">Invalid class code</span>';
-      return;
-    }
-
-    const classroomDoc = snap.docs[0];
-    const classroomData = classroomDoc.data();
-
-    // Add student to classroom
-    await updateDoc(doc(db, 'students', auth.currentUser.uid), {
-      classroomId: classroomDoc.id,
-      classroomName: classroomData.name
-    });
-
-    await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-      classroomId: classroomDoc.id,
-      classroomName: classroomData.name
-    });
-
-    msg.innerHTML = '<span style="color:green;">✅ Successfully joined the class!</span>';
-    setTimeout(() => location.reload(), 1500);
-  } catch (err) {
-    msg.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
-  }
-};
