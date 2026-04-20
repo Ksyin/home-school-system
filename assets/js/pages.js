@@ -69,8 +69,7 @@ const navMap = {
   tutor: [
 ['Dashboard', '/tutor/dashboard.html', '🏠'],
     ['Classrooms', '/tutor/classrooms.html', '🏫'],   // ← now the main Google Classroom hub
-    ['Portfolio', '/tutor/portfolio.html', '🗂️'],     // ← NEW: Portfolio for tutors
-    ['Settings', '/tutor/settings.html', '⚙️']
+['Portfolio', '/tutor/portfolios.html', '🗂️'],    ['Settings', '/tutor/settings.html', '⚙️']
 
   ],
   student: [
@@ -87,6 +86,102 @@ const navMap = {
     ['Settings', '/student/settings.html', '⚙️']
   ]
 };
+function renderTutorPortfoliosPage(portfolios) {
+  if (!portfolios.length) {
+    return `
+      <div class="card panel">
+        <h3>🗂️ Student Portfolios</h3>
+        <p class="empty">No portfolio entries found.</p>
+      </div>
+    `;
+  }
+
+  const grouped = {};
+
+  portfolios.forEach(item => {
+    if (!grouped[item.studentId]) {
+      grouped[item.studentId] = {
+        name: item.studentName || 'Student',
+        items: []
+      };
+    }
+    grouped[item.studentId].items.push(item);
+  });
+
+  const html = Object.entries(grouped).map(([studentId, data]) => `
+    <div class="card panel" style="margin-bottom:20px;">
+      <h3>👤 ${escapeHtml(data.name)}</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:12px;">
+        ${data.items.map(p => `
+          <div class="portfolio-card" style="
+            background:white;
+            border-radius:12px;
+            padding:16px;
+            box-shadow:0 2px 6px rgba(0,0,0,0.1);
+          ">
+            <div style="font-size:22px;">${p.emoji || '📖'}</div>
+            <h4>${escapeHtml(p.title || 'Untitled')}</h4>
+            <p style="font-size:13px;color:#555;">
+              ${escapeHtml((p.note || '').substring(0, 100))}
+            </p>
+
+            ${p.fileUrl ? `
+              <div style="margin-top:10px;">
+                <a href="${p.fileUrl}" target="_blank" class="btn small">📎 View File</a>
+              </div>
+            ` : ''}
+
+            <small style="display:block;margin-top:10px;color:#888;">
+              ${fmtDate(p.createdAt)}
+            </small>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="card panel">
+      <h2>🗂️ Tutor Portfolio Overview</h2>
+      <p>View all student portfolio entries grouped by learner.</p>
+    </div>
+    ${html}
+  `;
+}
+async function loadTutorPortfolios(tutorUid) {
+  try {
+    // 1. Get tutor classrooms
+    const classroomsSnap = await getDocs(
+      query(collection(db, 'classrooms'), where('tutorId', '==', tutorUid))
+    );
+
+    const classroomIds = classroomsSnap.docs.map(doc => doc.id);
+
+    // 2. Get ALL portfolio entries
+    const portfolioSnap = await getDocs(collection(db, 'portfolio'));
+
+    const portfolios = portfolioSnap.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .filter(item => {
+        return (
+          item.tutorId === tutorUid ||
+          (item.classroomId && classroomIds.includes(item.classroomId))
+        );
+      })
+      .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+    console.log(`📂 Tutor portfolios loaded: ${portfolios.length}`);
+    return portfolios;
+
+  } catch (err) {
+    console.error('❌ Error loading tutor portfolios:', err);
+    return [];
+  }
+}
+
 function generateClassCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
