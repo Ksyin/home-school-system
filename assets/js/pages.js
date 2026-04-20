@@ -5219,22 +5219,40 @@ function renderParentPortfolio(items, child) {
 
 async function bootTutorPortfolios() {
   console.log('🎯 Booting tutor portfolios...');
-  const bundle = await requireAuth();
-  if (!bundle || bundle.profile?.role !== 'tutor') return;
-  
-  const { user, profile } = bundle;
   
   try {
+    const bundle = await requireAuth();
+    if (!bundle || bundle.profile?.role !== 'tutor') return;
+    
+    const { user, profile } = bundle;
+    
+    const pageContent = document.getElementById('page-content');
+    
+    // Show loading state
+    pageContent.innerHTML = `
+      <div class="card panel" style="text-align:center;padding:40px;">
+        <div style="font-size:48px;margin-bottom:16px;">📁</div>
+        <h3>Loading Portfolios...</h3>
+        <p>Please wait while we load your portfolios.</p>
+      </div>
+    `;
+    
     const portfolios = await loadPortfoliosForUser(user.uid, 'tutor');
     console.log(`📁 Rendering ${portfolios.length} portfolios for tutor`);
-    document.getElementById('page-content').innerHTML = renderPortfolioGrid(portfolios, 'tutor', profile);
+    
+    pageContent.innerHTML = renderPortfolioGrid(portfolios, 'tutor', profile);
+    
   } catch (err) {
-    console.error('Portfolio error:', err);
+    console.error('Portfolio boot error:', err);
     document.getElementById('page-content').innerHTML = `
-      <div class="card panel error">
+      <div class="card panel" style="text-align:center;padding:40px;">
+        <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
         <h3>Error Loading Portfolios</h3>
-        <p>${err.message}</p>
-        <button class="btn" onclick="location.reload()">Retry</button>
+        <p style="color:#e74c3c;margin-bottom:20px;">${err.message}</p>
+        <button class="btn" onclick="location.reload()">🔄 Retry</button>
+        <button class="btn" onclick="window.showCreatePortfolioModal('tutor', '${auth.currentUser?.uid}', '${auth.currentUser?.displayName || 'Tutor'}')">
+          ➕ Create New Portfolio
+        </button>
       </div>
     `;
   }
@@ -7489,7 +7507,6 @@ async function getStudentPortfolioCompletion(portfolioId, studentId) {
   }
 }
 
-
 async function savePortfolioEntry(portfolioId, sectionId, studentId, data) {
   try {
     // Check if entry already exists
@@ -8851,48 +8868,110 @@ async function loadPortfoliosForUser(userId, role) {
       const studentData = studentDoc.data();
       const classroomId = studentData?.classroomId || '';
       
-      // Query portfolios assigned to this student (multiple ways)
-      const queries = [
-        // Direct assignment
-        query(collection(db, 'portfolios'), where('studentIds', 'array-contains', userId)),
-        // Classroom assignment
-        query(collection(db, 'portfolios'), where('classroomId', '==', classroomId)),
-        // All students
-        query(collection(db, 'portfolios'), where('targetType', '==', 'all'))
-      ];
+      console.log(`📁 Student classroom: ${classroomId}`);
       
-      const snaps = await Promise.all(queries.map(q => getDocs(q)));
-      
-      // Deduplicate
+      // Try multiple query approaches - some may fail due to missing indexes
       const portfolioMap = new Map();
-      snaps.forEach(snap => {
-        snap.docs.forEach(doc => {
+      
+      // Approach 1: Get all portfolios and filter client-side (most reliable)
+      try {
+        const allSnap = await getDocs(collection(db, 'portfolios'));
+        allSnap.docs.forEach(doc => {
+          const data = doc.data();
+          // Check if this portfolio is assigned to this student
+          const studentIds = data.studentIds || [];
+          const targetType = data.targetType;
+          const docClassroomId = data.classroomId;
+          
+          let isAssigned = false;
+          if (studentIds.includes(userId)) isAssigned = true;
+          else if (targetType === 'all') isAssigned = true;
+          else if (targetType === 'classroom' && docClassroomId === classroomId) isAssigned = true;
+          
+          if (isAssigned) {
+            portfolioMap.set(doc.id, { id: doc.id, ...data });
+          }
+        });
+        console.log(`✅ Found ${portfolioMap.size} portfolios via client-side filter`);
+      } catch (err) {
+        console.warn('Client-side filter failed:', err);
+      }
+      
+      // Approach 2: Try direct queries (may fail if index missing)
+      try {
+        const q1 = query(collection(db, 'portfolios'), where('studentIds', 'array-contains', userId));
+        const snap1 = await getDocs(q1);
+        snap1.docs.forEach(doc => {
           if (!portfolioMap.has(doc.id)) {
             portfolioMap.set(doc.id, { id: doc.id, ...doc.data() });
           }
         });
-      });
+      } catch (err) {
+        console.warn('Array-contains query failed (index may be missing):', err.message);
+      }
+      
+      try {
+        const q2 = query(collection(db, 'portfolios'), where('targetType', '==', 'all'));
+        const snap2 = await getDocs(q2);
+        snap2.docs.forEach(doc => {
+          if (!portfolioMap.has(doc.id)) {
+            portfolioMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        });
+      } catch (err) {
+        console.warn('TargetType query failed:', err.message);
+      }
+      
+      if (classroomId) {
+        try {
+          const q3 = query(collection(db, 'portfolios'), where('classroomId', '==', classroomId));
+          const snap3 = await getDocs(q3);
+          snap3.docs.forEach(doc => {
+            if (!portfolioMap.has(doc.id)) {
+              portfolioMap.set(doc.id, { id: doc.id, ...doc.data() });
+            }
+          });
+        } catch (err) {
+          console.warn('ClassroomId query failed:', err.message);
+        }
+      }
       
       portfolios = Array.from(portfolioMap.values());
       
-      // Load completion status
+      // Load completion status for each portfolio
       for (const p of portfolios) {
-        p.completionStatus = await getStudentPortfolioCompletion(p.id, userId);
+        try {
+          p.completionStatus = await getStudentPortfolioCompletion(p.id, userId);
+        } catch (err) {
+          p.completionStatus = { totalSections: 0, completedSections: 0, percentage: 0, entries: [] };
+        }
       }
       
     } else if (role === 'tutor') {
       // Tutor sees portfolios they created
-      const q = query(
-        collection(db, 'portfolios'),
-        where('createdBy', '==', userId)
-      );
-      const snap = await getDocs(q);
-      portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      try {
+        // Try query first
+        const q = query(collection(db, 'portfolios'), where('createdBy', '==', userId));
+        const snap = await getDocs(q);
+        portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (err) {
+        console.warn('Tutor query failed, using client-side filter:', err.message);
+        // Fallback: get all and filter
+        const allSnap = await getDocs(collection(db, 'portfolios'));
+        portfolios = allSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(p => p.createdBy === userId);
+      }
       
     } else if (role === 'parent') {
       // Parent sees all portfolios
-      const snap = await getDocs(collection(db, 'portfolios'));
-      portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      try {
+        const snap = await getDocs(collection(db, 'portfolios'));
+        portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (err) {
+        console.error('Parent portfolio load failed:', err);
+        portfolios = [];
+      }
     }
     
     // Sort by createdAt descending
@@ -8902,11 +8981,12 @@ async function loadPortfoliosForUser(userId, role) {
     
   } catch (err) {
     console.error('Error loading portfolios:', err);
+    // Return empty array instead of throwing
+    portfolios = [];
   }
   
   return portfolios;
 }
-
 
 
 async function createPortfolioTemplate(data) {
