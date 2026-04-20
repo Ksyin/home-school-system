@@ -4614,85 +4614,692 @@ function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInCla
   let html = '';
 
   switch (tab) {
-
     case 'stream':
-      html = `
-        <div class="card panel">
-          <h3>📢 Class Stream & Chat</h3>
-          <textarea id="streamInput" rows="2" placeholder="Post an announcement or message to the class..." style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;"></textarea>
-          <button class="btn" onclick="postToStream('${classroom.id}')">Post to Stream</button>
-          <div id="streamFeed" style="margin-top:24px;max-height:500px;overflow-y:auto;"></div>
-        </div>
-      `;
-      // Load existing messages (you can expand later)
+      html = renderStreamTab(classroom, messagesInClass, profile);
       setTimeout(() => loadStreamFeed(classroom.id), 100);
       break;
 
     case 'classwork':
-      html = `
-        <div class="card panel">
-          <h3>📚 Classwork</h3>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-            <button class="btn" onclick="createClassItem('${classroom.id}','assignment')">📝 Assignment</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','quiz')">📝 Quiz</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','question')">❓ Question</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','material')">📚 Material</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','topic')">📑 Topic</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','lessonplan')">📖 Lesson Plan</button>
-          </div>
-
-          <h4>📝 Assignments (${assignmentsInClass.length})</h4>
-          ${assignmentsInClass.length ? assignmentsInClass.map(a => `
-            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-              <strong>${escapeHtml(a.title)}</strong><br>
-              <small>Due: ${fmtDate(a.dueDate) || 'No due date'}</small>
-            </div>`).join('') : '<p class="empty">No assignments yet</p>'}
-
-          <h4 style="margin-top:28px;">📚 Materials (${resourcesInClass.length})</h4>
-          ${resourcesInClass.map(r => `
-            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;">
-              ${escapeHtml(r.title)} ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
-            </div>`).join('') || '<p class="empty">No materials yet</p>'}
-
-          <h4 style="margin-top:28px;">📖 Lesson Plans (${lessonPlansInClass.length})</h4>
-          ${lessonPlansInClass.map(lp => `
-            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;">
-              ${escapeHtml(lp.title)} — ${fmtDate(lp.plannedDate)}
-              ${lp.attachmentUrl ? `<br><small><a href="${lp.attachmentUrl}" target="_blank">📎 View Attachment</a></small>` : ''}
-            </div>`).join('') || '<p class="empty">No lesson plans yet</p>'}
-        </div>
-      `;
+      html = renderClassworkTab(classroom, assignmentsInClass, resourcesInClass, lessonPlansInClass, studentsInClass);
       break;
 
     case 'people':
-      html = `
-        <div class="card panel">
-          <h3>👥 People (${studentsInClass.length} students)</h3>
-          <div style="margin:16px 0;">
-            <button class="btn" onclick="showJoinCode('${classroom.classCode}')">Share Class Code with Students</button>
-          </div>
-          <h4>Students in this class</h4>
-          ${studentsInClass.map(s => `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:8px;">${escapeHtml(s.full_name || s.name || s.email)}</div>`).join('') || '<p class="empty">No students yet</p>'}
-        </div>
-      `;
+      html = renderPeopleTab(classroom, studentsInClass);
       break;
 
     case 'grades':
-      html = `
-        <div class="card panel">
-          <h3>📊 Grades & Reports</h3>
-          <h4>Assessments (${assessmentsInClass.length})</h4>
-          ${assessmentsInClass.map(a => `
-            <div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:10px;">
-              ${escapeHtml(a.title)} — Score: ${a.score || '—'} / ${a.maxScore || '—'}
-            </div>`).join('') || '<p class="empty">No assessments yet</p>'}
-        </div>
-      `;
+      html = renderGradesTab(classroom, assessmentsInClass, studentsInClass);
       break;
   }
 
   contentEl.innerHTML = html;
+  
+  // Attach event listeners after rendering
+  if (tab === 'classwork') {
+    attachClassworkEventListeners(classroom, studentsInClass);
+  }
 }
+
+
+function renderGradesTab(classroom, assessments, students) {
+  return `
+    <div class="card panel">
+      <h3>📊 Grades</h3>
+      
+      <div style="margin-bottom:24px;">
+        <button class="btn" onclick="showCreateItemModal('${classroom.id}', 'quiz', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          ➕ Create Assessment
+        </button>
+      </div>
+      
+      ${assessments.length ? `
+        <div style="overflow-x:auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Assessment</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${assessments.map(a => `
+                <tr>
+                  <td>${escapeHtml(a.studentName || '—')}</td>
+                  <td>${escapeHtml(a.title)}</td>
+                  <td>${a.score || '—'} / ${a.maxScore || '—'}</td>
+                  <td>${statusBadge(a.status || 'Pending')}</td>
+                  <td>${fmtDate(a.createdAt)}</td>
+                  <td>
+                    <button class="btn small" onclick="gradeAssessment('${a.id}')">Grade</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '<p class="empty">No assessments yet. Create one to start grading!</p>'}
+    </div>
+  `;
+}
+
+function getItemTypeLabel(type) {
+  const labels = {
+    'assignment': '📝 Create Assignment',
+    'quiz': '📊 Create Quiz / Test',
+    'material': '📚 Add Material',
+    'lessonplan': '📖 Create Lesson Plan',
+    'link': '🔗 Add Link',
+    'question': '❓ Post Question',
+    'topic': '📑 Create Topic'
+  };
+  return labels[type] || 'Create Item';
+}
+
+window.showLinkInput = function() {
+  document.getElementById('linkInputSection').style.display = 'block';
+  document.getElementById('formInputSection').style.display = 'none';
+};
+
+window.showFormInput = function() {
+  document.getElementById('formInputSection').style.display = 'block';
+  document.getElementById('linkInputSection').style.display = 'none';
+};
+
+async function handleCreateItem(selectedFiles) {
+  const msg = document.getElementById('createItemMsg');
+  msg.innerHTML = '<span style="color:#3498db;">Creating...</span>';
+  
+  try {
+    const classroomId = document.getElementById('itemClassroomId').value;
+    const type = document.getElementById('itemType').value;
+    const title = document.getElementById('itemTitle').value.trim();
+    const description = document.getElementById('itemDescription').value.trim();
+    
+    if (!title) {
+      msg.innerHTML = '<span style="color:#e74c3c;">Please enter a title</span>';
+      return;
+    }
+    
+    // Upload files
+    const uploadPromises = selectedFiles.map(file => 
+      uploadFile(file, `classroom/${classroomId}/${type}`)
+    );
+    const uploads = await Promise.all(uploadPromises);
+    
+    // Build item data
+    const itemData = {
+      classroomId,
+      tutorId: auth.currentUser.uid,
+      tutorName: auth.currentUser.displayName || 'Tutor',
+      title,
+      description,
+      type,
+      status: type === 'assignment' || type === 'quiz' ? 'Active' : 'Published',
+      published: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    // Add type-specific fields
+    if (type === 'assignment' || type === 'quiz') {
+      itemData.dueDate = document.getElementById('itemDueDate')?.value || null;
+      itemData.maxScore = parseFloat(document.getElementById('itemMaxScore')?.value) || null;
+      itemData.subject = document.getElementById('itemSubject')?.value || '';
+    }
+    
+    if (type === 'lessonplan') {
+      itemData.plannedDate = document.getElementById('itemLessonDate')?.value || null;
+      itemData.objectives = document.getElementById('itemObjectives')?.value || '';
+      itemData.materials = document.getElementById('itemMaterials')?.value || '';
+    }
+    
+    // Add target students
+    const targetType = document.getElementById('itemTargetType').value;
+    if (targetType === 'specific') {
+      const selectedOptions = Array.from(document.getElementById('itemStudentIds').selectedOptions);
+      itemData.assignedTo = selectedOptions.map(opt => opt.value);
+      itemData.targetType = 'specific';
+    } else {
+      itemData.targetType = 'classroom';
+    }
+    
+    // Add attachments
+    if (uploads.length > 0) {
+      const primaryUpload = uploads[0];
+      itemData.fileUrl = primaryUpload.url;
+      itemData.fileName = primaryUpload.name;
+      itemData.attachments = uploads.map(u => ({ url: u.url, name: u.name }));
+    }
+    
+    // Add link
+    const linkTitle = document.getElementById('linkTitle')?.value;
+    const linkUrl = document.getElementById('linkUrl')?.value;
+    if (linkUrl) {
+      itemData.linkUrl = linkUrl;
+      itemData.linkTitle = linkTitle || 'View Link';
+    }
+    
+    // Add form
+    const formTitle = document.getElementById('formTitle')?.value;
+    const formUrl = document.getElementById('formUrl')?.value;
+    if (formUrl) {
+      itemData.formUrl = formUrl;
+      itemData.formTitle = formTitle || 'Open Form';
+    }
+    
+    // Save to appropriate collection
+    let collectionName = 'assignments';
+    if (type === 'material') collectionName = 'resources';
+    else if (type === 'lessonplan') collectionName = 'lesson-plans';
+    else if (type === 'topic') collectionName = 'classroom-topics';
+    
+    await addDoc(collection(db, collectionName), itemData);
+    
+    // Notify students
+    await notifyClassStudents(classroomId, title, type);
+    
+    msg.innerHTML = '<span style="color:#27ae60;">✅ Created successfully!</span>';
+    setTimeout(() => {
+      document.getElementById('createItemModal').remove();
+      // Refresh the class modal
+      location.reload();
+    }, 1000);
+    
+  } catch (err) {
+    console.error('Create item error:', err);
+    msg.innerHTML = `<span style="color:#e74c3c;">Error: ${err.message}</span>`;
+  }
+}
+
+
+
+
+window.showCreateItemModal = function(classroomId, type, students) {
+  const old = document.getElementById('createItemModal');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'createItemModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target.classList.contains('modal-overlay'))this.remove()">
+      <div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3>${getItemTypeLabel(type)}</h3>
+          <button class="btn danger" onclick="document.getElementById('createItemModal').remove()">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <form id="createItemForm" class="stack-form">
+            <input type="hidden" id="itemClassroomId" value="${classroomId}">
+            <input type="hidden" id="itemType" value="${type}">
+            
+            <div class="form-row">
+              <label>Title *</label>
+              <input id="itemTitle" type="text" required placeholder="Enter title...">
+            </div>
+            
+            <div class="form-row">
+              <label>Description / Instructions</label>
+              <textarea id="itemDescription" rows="4" placeholder="Add details, instructions, or notes..."></textarea>
+            </div>
+            
+            ${type === 'assignment' || type === 'quiz' ? `
+              <div class="form-row">
+                <label>Due Date</label>
+                <input id="itemDueDate" type="date">
+              </div>
+              
+              <div class="form-row">
+                <label>Points / Max Score</label>
+                <input id="itemMaxScore" type="number" step="0.1" placeholder="e.g., 100">
+              </div>
+              
+              <div class="form-row">
+                <label>Subject</label>
+                <input id="itemSubject" type="text" placeholder="e.g., Mathematics">
+              </div>
+            ` : ''}
+            
+            ${type === 'lessonplan' ? `
+              <div class="form-row">
+                <label>Lesson Date</label>
+                <input id="itemLessonDate" type="date">
+              </div>
+              <div class="form-row">
+                <label>Objectives</label>
+                <textarea id="itemObjectives" rows="3" placeholder="Learning objectives..."></textarea>
+              </div>
+              <div class="form-row">
+                <label>Materials Needed</label>
+                <textarea id="itemMaterials" rows="2" placeholder="List materials..."></textarea>
+              </div>
+            ` : ''}
+            
+            <div class="form-row">
+              <label>Target Students</label>
+              <select id="itemTargetType">
+                <option value="all">All Students in Class</option>
+                <option value="specific">Specific Students</option>
+              </select>
+            </div>
+            
+            <div class="form-row" id="specificStudentsRow" style="display:none;">
+              <label>Select Students</label>
+              <select id="itemStudentIds" multiple size="5" style="width:100%;">
+                ${students.map(s => `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)}</option>`).join('')}
+              </select>
+              <small>Hold Ctrl/Cmd to select multiple</small>
+            </div>
+            
+            <!-- Attachments Section -->
+            <div class="form-row">
+              <label>Attachments</label>
+              <div style="border:2px dashed #ddd;border-radius:12px;padding:20px;text-align:center;">
+                <input type="file" id="itemFileInput" style="display:none;" multiple>
+                <button type="button" class="btn ghost" onclick="document.getElementById('itemFileInput').click()">
+                  📎 Upload File
+                </button>
+                <span style="margin:0 8px;color:#999;">or</span>
+                <button type="button" class="btn ghost" onclick="showLinkInput()">
+                  🔗 Add Link
+                </button>
+                <button type="button" class="btn ghost" onclick="showFormInput()">
+                  📋 Add Form
+                </button>
+                <div id="filePreviewList" style="margin-top:16px;"></div>
+              </div>
+            </div>
+            
+            <!-- Link Input (hidden by default) -->
+            <div id="linkInputSection" style="display:none;">
+              <div class="form-row">
+                <label>Link Title</label>
+                <input id="linkTitle" type="text" placeholder="e.g., YouTube Video, Google Doc">
+              </div>
+              <div class="form-row">
+                <label>Link URL</label>
+                <input id="linkUrl" type="url" placeholder="https://...">
+              </div>
+            </div>
+            
+            <!-- Form Input (hidden by default) -->
+            <div id="formInputSection" style="display:none;">
+              <div class="form-row">
+                <label>Form Title</label>
+                <input id="formTitle" type="text" placeholder="e.g., Feedback Form">
+              </div>
+              <div class="form-row">
+                <label>Form URL (Google Forms, etc.)</label>
+                <input id="formUrl" type="url" placeholder="https://forms.google.com/...">
+              </div>
+            </div>
+            
+            <div class="form-actions" style="margin-top:24px;">
+              <button type="button" class="btn ghost" onclick="document.getElementById('createItemModal').remove()">Cancel</button>
+              <button type="submit" class="btn">Create</button>
+              <span id="createItemMsg"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Target type toggle
+  const targetSelect = document.getElementById('itemTargetType');
+  const specificRow = document.getElementById('specificStudentsRow');
+  targetSelect.addEventListener('change', (e) => {
+    specificRow.style.display = e.target.value === 'specific' ? 'block' : 'none';
+  });
+  
+  // File preview
+  const fileInput = document.getElementById('itemFileInput');
+  const previewDiv = document.getElementById('filePreviewList');
+  const selectedFiles = [];
+  
+  fileInput.addEventListener('change', (e) => {
+    previewDiv.innerHTML = '';
+    for (const file of e.target.files) {
+      selectedFiles.push(file);
+      previewDiv.innerHTML += `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:#f0f7ff;border-radius:8px;margin-bottom:8px;">
+          <span>📄</span>
+          <span style="flex:1;">${escapeHtml(file.name)}</span>
+          <span style="font-size:12px;color:#666;">${(file.size / 1024).toFixed(1)} KB</span>
+        </div>
+      `;
+    }
+  });
+  
+  // Form submit
+  document.getElementById('createItemForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleCreateItem(selectedFiles);
+  });
+};
+
+
+
+
+function renderPeopleTab(classroom, students) {
+  return `
+    <div class="card panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;">👥 People</h3>
+        <div>
+          <span class="badge success">${students.length} Students</span>
+        </div>
+      </div>
+      
+      <div style="background:#f0f7ff;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <h4 style="margin:0 0 12px 0;">📋 Class Code</h4>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <code style="font-size:28px;font-family:monospace;background:#e8f0fe;padding:12px 24px;border-radius:8px;letter-spacing:4px;">
+            ${escapeHtml(classroom.classCode)}
+          </code>
+          <button class="btn" onclick="copyClassCode('${classroom.classCode}')">📋 Copy Code</button>
+          <button class="btn ghost" onclick="shareClassCode('${classroom.classCode}', '${escapeHtml(classroom.name)}')">📤 Share</button>
+        </div>
+        <p style="margin-top:12px;color:#666;">Share this code with students so they can join your class from their dashboard.</p>
+      </div>
+      
+      <h4>Students in this class</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">
+        ${students.length ? students.map(s => `
+          <div style="background:white;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:40px;height:40px;background:#3498db;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;">
+                ${escapeHtml((s.full_name || s.name || 'S').charAt(0).toUpperCase())}
+              </div>
+              <div>
+                <strong>${escapeHtml(s.full_name || s.name || 'Student')}</strong>
+                <br><small style="color:#666;">${escapeHtml(s.email || '—')}</small>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p class="empty">No students have joined yet. Share the class code to get started!</p>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderClassworkTab(classroom, assignments, resources, lessonPlans, students) {
+  return `
+    <style>
+      .classwork-create-section {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      .create-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .create-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 20px 16px;
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .create-btn:hover {
+        background: #e3f2fd;
+        border-color: #3498db;
+        transform: translateY(-2px);
+      }
+      .create-btn .icon {
+        font-size: 32px;
+      }
+      .create-btn .label {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .create-btn .desc {
+        font-size: 11px;
+        color: #666;
+        text-align: center;
+      }
+      .classwork-item {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-left: 4px solid #3498db;
+      }
+      .classwork-item.assignment { border-left-color: #4285f4; }
+      .classwork-item.material { border-left-color: #34a853; }
+      .classwork-item.lessonplan { border-left-color: #fbbc05; }
+      .classwork-item.quiz { border-left-color: #ea4335; }
+      .classwork-section {
+        margin-top: 32px;
+      }
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .section-header h4 {
+        margin: 0;
+        color: #2c3e50;
+      }
+      .item-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .attachment-preview {
+        margin-top: 12px;
+        padding: 8px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
+    </style>
+
+    <!-- Create Section -->
+    <div class="classwork-create-section">
+      <h3 style="margin:0 0 8px 0;">📝 Create Classwork</h3>
+      <p style="color:#666;margin-bottom:16px;">Add assignments, materials, quizzes, and more for your students</p>
+      
+      <div class="create-buttons">
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'assignment', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">📝</span>
+          <span class="label">Assignment</span>
+          <span class="desc">Create homework or classwork</span>
+        </div>
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'quiz', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">📊</span>
+          <span class="label">Quiz / Test</span>
+          <span class="desc">Create assessment</span>
+        </div>
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'material', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">📚</span>
+          <span class="label">Material</span>
+          <span class="desc">Share resources</span>
+        </div>
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'lessonplan', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">📖</span>
+          <span class="label">Lesson Plan</span>
+          <span class="desc">Plan your lessons</span>
+        </div>
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'link', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">🔗</span>
+          <span class="label">Link</span>
+          <span class="desc">YouTube, Drive, websites</span>
+        </div>
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'question', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">❓</span>
+          <span class="label">Question</span>
+          <span class="desc">Start discussion</span>
+        </div>
+        <div class="create-btn" onclick="showCreateItemModal('${classroom.id}', 'topic', ${JSON.stringify(students).replace(/"/g, '&quot;')})">
+          <span class="icon">📑</span>
+          <span class="label">Topic</span>
+          <span class="desc">Organize content</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Assignments Section -->
+    <div class="classwork-section">
+      <div class="section-header">
+        <h4>📝 Assignments (${assignments.filter(a => a.type !== 'quiz').length})</h4>
+      </div>
+      ${renderClassworkItems(assignments.filter(a => a.type !== 'quiz'), 'assignment')}
+    </div>
+
+    <!-- Quizzes Section -->
+    <div class="classwork-section">
+      <div class="section-header">
+        <h4>📊 Quizzes & Tests (${assignments.filter(a => a.type === 'quiz').length})</h4>
+      </div>
+      ${renderClassworkItems(assignments.filter(a => a.type === 'quiz'), 'quiz')}
+    </div>
+
+    <!-- Materials Section -->
+    <div class="classwork-section">
+      <div class="section-header">
+        <h4>📚 Materials (${resources.length})</h4>
+      </div>
+      ${renderClassworkItems(resources, 'material')}
+    </div>
+
+    <!-- Lesson Plans Section -->
+    <div class="classwork-section">
+      <div class="section-header">
+        <h4>📖 Lesson Plans (${lessonPlans.length})</h4>
+      </div>
+      ${renderClassworkItems(lessonPlans, 'lessonplan')}
+    </div>
+  `;
+}
+
+function renderClassworkItems(items, type) {
+  if (!items || items.length === 0) {
+    return '<p class="empty" style="padding:20px;text-align:center;color:#999;">No items yet. Create one above!</p>';
+  }
+
+  return items.map(item => {
+    const dueDate = item.dueDate ? `<small style="color:#666;">📅 Due: ${fmtDate(item.dueDate)}</small>` : '';
+    const points = item.maxScore ? `<small style="color:#666;">📊 Points: ${item.maxScore}</small>` : '';
+    
+    return `
+      <div class="classwork-item ${type}" data-id="${item.id}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+              <strong style="font-size:16px;">${escapeHtml(item.title || 'Untitled')}</strong>
+              ${item.status ? statusBadge(item.status) : ''}
+            </div>
+            
+            ${item.description ? `<p style="color:#555;margin:8px 0;">${escapeHtml(item.description)}</p>` : ''}
+            
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
+              ${dueDate}
+              ${points}
+              ${item.subject ? `<small>📚 ${escapeHtml(item.subject)}</small>` : ''}
+            </div>
+            
+            ${renderAttachments(item)}
+            
+            <div class="item-actions">
+              <button class="btn small ghost" onclick="editClassItem('${item.id}', '${type}')">✏️ Edit</button>
+              <button class="btn small ghost" onclick="viewSubmissions('${item.id}')">📋 View Submissions</button>
+              <button class="btn small ghost danger" onclick="deleteClassItem('${item.id}', '${type}')">🗑️ Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderAttachments(item) {
+  const attachments = [];
+  
+  if (item.fileUrl) {
+    attachments.push(`
+      <div class="attachment-preview">
+        ${renderFilePreview(item.fileUrl, item.fileName)}
+      </div>
+    `);
+  }
+  
+  if (item.linkUrl) {
+    const isYouTube = item.linkUrl.includes('youtube.com') || item.linkUrl.includes('youtu.be');
+    const icon = isYouTube ? '▶️' : '🔗';
+    attachments.push(`
+      <div class="attachment-preview">
+        <a href="${item.linkUrl}" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
+          <span style="font-size:20px;">${icon}</span>
+          <span>${escapeHtml(item.linkTitle || 'View Link')}</span>
+        </a>
+      </div>
+    `);
+  }
+  
+  if (item.formUrl) {
+    attachments.push(`
+      <div class="attachment-preview">
+        <a href="${item.formUrl}" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
+          <span style="font-size:20px;">📋</span>
+          <span>${escapeHtml(item.formTitle || 'Open Form')}</span>
+        </a>
+      </div>
+    `);
+  }
+  
+  return attachments.join('');
+}
+
+
+
+function renderStreamTab(classroom, messages, profile) {
+  return `
+    <div class="card panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;">📢 Class Stream</h3>
+        <span class="badge">${escapeHtml(classroom.name)}</span>
+      </div>
+      
+      <div style="background:#f0f7ff;border-radius:12px;padding:16px;margin-bottom:20px;">
+        <textarea id="streamInput" rows="3" placeholder="Share something with your class..." 
+          style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <input type="file" id="streamFileInput" accept="*/*" style="display:none;">
+          <button class="btn small ghost" onclick="document.getElementById('streamFileInput').click()">
+            📎 Attach
+          </button>
+          <button class="btn" onclick="postToStream('${classroom.id}')">
+            Post to Stream
+          </button>
+        </div>
+        <div id="streamFilePreview" style="margin-top:8px;"></div>
+      </div>
+      
+      <div id="streamFeed" style="max-height:500px;overflow-y:auto;">
+        <div class="loading">Loading stream...</div>
+      </div>
+    </div>
+  `;
+}
+
 
 // ============================================
 // PAGE ROUTER
@@ -4828,21 +5435,178 @@ window.postToStream = async function(classroomId) {
   loadStreamFeed(classroomId);
 };
 
-async function loadStreamFeed(classroomId) {
-  const snap = await getDocs(query(collection(db, 'classroom-messages'), where('classroomId', '==', classroomId)));
-  const feed = document.getElementById('streamFeed');
-  if (!feed) return;
 
-  feed.innerHTML = snap.docs.map(doc => {
-    const m = doc.data();
-    return `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:12px;">${escapeHtml(m.message)} <small style="color:#666;">${fmtDate(m.createdAt)}</small></div>`;
-  }).join('') || '<p class="empty">No messages yet</p>';
-}
 
 window.showJoinCode = function(code) {
   alert(`📋 Class Code: ${code}\n\nShare this code with your students so they can join from their dashboard.`);
 };
 
+
+
+
+async function notifyClassStudents(classroomId, title, type) {
+  try {
+    // Get all students in this classroom
+    const studentsSnap = await getDocs(
+      query(collection(db, 'students'), where('classroomId', '==', classroomId))
+    );
+    
+    const batch = writeBatch(db);
+    studentsSnap.docs.forEach(doc => {
+      const notifRef = doc(collection(db, 'notifications'));
+      batch.set(notifRef, {
+        studentId: doc.id,
+        title: `New ${type}: ${title}`,
+        message: `Your tutor posted a new ${type} in your classroom`,
+        type: type,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+    });
+    
+    await batch.commit();
+  } catch (err) {
+    console.warn('Notification error:', err);
+  }
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+window.copyClassCode = function(code) {
+  navigator.clipboard?.writeText(code).then(() => {
+    alert('✅ Class code copied to clipboard!');
+  }).catch(() => {
+    prompt('Copy this code:', code);
+  });
+};
+
+window.shareClassCode = function(code, className) {
+  const text = `Join my class "${className}" on HomeSchool!\nClass Code: ${code}`;
+  if (navigator.share) {
+    navigator.share({ title: 'Join my class', text });
+  } else {
+    prompt('Share this with your students:', text);
+  }
+};
+
+window.editClassItem = function(itemId, type) {
+  alert(`Edit ${type} - Coming soon!`);
+  // You can implement edit functionality similar to create
+};
+
+window.viewSubmissions = async function(itemId) {
+  try {
+    const subs = await getDocs(
+      query(collection(db, 'submissions'), where('assignmentId', '==', itemId))
+    );
+    
+    const submissions = subs.docs.map(d => d.data());
+    const studentNames = submissions.map(s => s.studentName).join('\n• ');
+    
+    alert(`Submissions (${submissions.length}):\n• ${studentNames || 'None yet'}`);
+  } catch (err) {
+    alert('Error loading submissions: ' + err.message);
+  }
+};
+
+window.deleteClassItem = async function(itemId, type) {
+  if (!confirm('Delete this item? This cannot be undone.')) return;
+  
+  try {
+    let collectionName = 'assignments';
+    if (type === 'material') collectionName = 'resources';
+    else if (type === 'lessonplan') collectionName = 'lesson-plans';
+    
+    await deleteDoc(doc(db, collectionName, itemId));
+    alert('✅ Deleted successfully!');
+    location.reload();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+};
+
+window.gradeAssessment = function(assessmentId) {
+  // Open grading modal - you can expand this
+  const score = prompt('Enter score:');
+  if (score !== null) {
+    updateAssessmentGrade(assessmentId, parseFloat(score), '');
+    alert('Grade saved!');
+  }
+};
+
+
+
+async function loadStreamFeed(classroomId) {
+  const feed = document.getElementById('streamFeed');
+  if (!feed) return;
+  
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, 'classroom-messages'),
+        where('classroomId', '==', classroomId),
+        orderBy('createdAt', 'desc')
+      )
+    );
+    
+    if (snap.empty) {
+      feed.innerHTML = '<p class="empty" style="padding:40px;text-align:center;">No messages yet. Start the conversation!</p>';
+      return;
+    }
+    
+    feed.innerHTML = snap.docs.map(doc => {
+      const m = doc.data();
+      return `
+        <div style="background:white;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;background:#3498db;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;">
+              ${escapeHtml((m.fromName || 'T').charAt(0).toUpperCase())}
+            </div>
+            <div>
+              <strong>${escapeHtml(m.fromName || 'Tutor')}</strong>
+              <small style="color:#666;margin-left:8px;">${fmtDate(m.createdAt)}</small>
+            </div>
+          </div>
+          ${m.message ? `<p style="margin:8px 0;">${escapeHtml(m.message)}</p>` : ''}
+          ${m.fileUrl ? renderFilePreview(m.fileUrl, m.fileName) : ''}
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Load stream error:', err);
+    feed.innerHTML = '<p class="error">Error loading stream</p>';
+  }
+}
+
+function attachClassworkEventListeners(classroom, students) {
+  // Stream file preview
+  const streamFileInput = document.getElementById('streamFileInput');
+  const previewDiv = document.getElementById('streamFilePreview');
+  
+  if (streamFileInput) {
+    streamFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        previewDiv.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px;background:#e8f5e9;border-radius:8px;">
+            <span>📎</span>
+            <span>${escapeHtml(file.name)}</span>
+            <button class="btn small danger" onclick="document.getElementById('streamFileInput').value='';document.getElementById('streamFilePreview').innerHTML='';">✕</button>
+          </div>
+        `;
+      }
+    });
+  }
+}
+
+// ============================================
+// EXPOSE TO WINDOW
+// ============================================
+
+window.renderClassTabContent = renderClassTabContent;
+window.loadStreamFeed = loadStreamFeed;
 // ============================================
 // GLOBALS
 // ============================================
