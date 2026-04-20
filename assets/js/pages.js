@@ -67,7 +67,6 @@ const navMap = {
     ['Settings', '/parent/settings.html', '⚙️']
   ],
   tutor: [
-['Dashboard', '/tutor/dashboard.html', '🏠'],
    ['Dashboard', '/tutor/dashboard.html', '🏠'],
     ['Classrooms', '/tutor/classrooms.html', '🏫'],   // ← now the main Google Classroom hub
     ['Portfolio', '/tutor/portfolios.html', '🗂️'],     // ← NEW: Portfolio for tutors
