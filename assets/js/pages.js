@@ -3892,77 +3892,7 @@ function setupDashboardInteractivity(classrooms, allStudents, profile) {
 }
 
 
-// Helper functions for dashboard actions
-window.enterClassroom = function(classroomId) {
-  // Find classroom and open modal
-  const classroomData = window.dashboardClassrooms?.find(ct => ct.classroom.id === classroomId);
-  if (classroomData) {
-    openClassroomModal(
-      classroomData.classroom,
-      classroomData.students,
-      classroomData.assignments,
-      classroomData.resources,
-      classroomData.lessonPlans,
-      classroomData.assessments,
-      [], [], 
-      window.dashboardProfile
-    );
-  }
-};
 
-window.switchToClassworkTab = function() {
-  const activeTab = document.querySelector('.classroom-tab.active');
-  if (activeTab) {
-    const classroomId = activeTab.dataset.classroomId;
-    enterClassroom(classroomId);
-    setTimeout(() => {
-      const classworkTab = document.querySelector('[data-tab="classwork"]');
-      if (classworkTab) classworkTab.click();
-    }, 500);
-  }
-};
-
-window.switchToLearnersTab = function() {
-  const activeTab = document.querySelector('.classroom-tab.active');
-  if (activeTab) {
-    const classroomId = activeTab.dataset.classroomId;
-    enterClassroom(classroomId);
-    setTimeout(() => {
-      const learnersTab = document.querySelector('[data-tab="learners"]');
-      if (learnersTab) learnersTab.click();
-    }, 500);
-  }
-};
-
-window.switchToGradesTab = function() {
-  const activeTab = document.querySelector('.classroom-tab.active');
-  if (activeTab) {
-    const classroomId = activeTab.dataset.classroomId;
-    enterClassroom(classroomId);
-    setTimeout(() => {
-      const gradesTab = document.querySelector('[data-tab="grades"]');
-      if (gradesTab) gradesTab.click();
-    }, 500);
-  }
-};
-
-window.viewAssignment = function(assignmentId) {
-  const activeTab = document.querySelector('.classroom-tab.active');
-  if (activeTab) {
-    enterClassroom(activeTab.dataset.classroomId);
-    // You can add logic to scroll to specific assignment
-  }
-};
-
-function showCreateClassroomModal(profile) {
-  // This should open the same modal as in the classrooms page
-  const modal = document.getElementById('createClassModal');
-  if (modal) {
-    modal.style.display = 'flex';
-  } else {
-    window.location.href = '/tutor/classrooms.html';
-  }
-}
 
 function renderTutorDashboardNew(profile, classrooms, allStudents, allAssignments, allAssessments, allResources, allLessonPlans) {
   const tutorName = profile?.name || profile?.full_name || 'Tutor';
