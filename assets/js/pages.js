@@ -3840,16 +3840,785 @@ async function bootTutorDashboard() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'tutor') return;
   
-  const { user } = bundle;
-  const [students, assignments, assessments, classrooms] = await Promise.all([
+  const { user, profile } = bundle;
+  
+  // Load all data
+  const [classrooms, allStudents, allAssignments, allAssessments, allResources, allLessonPlans] = await Promise.all([
+    loadClassrooms(user.uid),
     loadAllStudents(),
     loadTutorAssignments(user.uid),
     loadTutorAssessments(user.uid),
-    loadClassrooms(user.uid)
+    loadResources(user.uid),
+    loadTutorLessonPlans(user.uid)
   ]);
   
-  document.getElementById('page-content').innerHTML = renderTutorDashboard(students, assignments, assessments, classrooms);
+  document.getElementById('page-content').innerHTML = renderTutorDashboardNew(profile, classrooms, allStudents, allAssignments, allAssessments, allResources, allLessonPlans);
+  
+  // Setup dashboard interactivity
+  setupDashboardInteractivity(classrooms, allStudents, profile);
 }
+
+
+
+function setupDashboardInteractivity(classrooms, allStudents, profile) {
+  // Classroom tab switching
+  const tabs = document.querySelectorAll('.classroom-tab');
+  const contentPanel = document.getElementById('classroomContentPanel');
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      // Update active state
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      // Find the classroom data
+      const classroomId = tab.dataset.classroomId;
+      const classroomData = window.dashboardClassrooms?.find(ct => ct.classroom.id === classroomId);
+      
+      if (classroomData && contentPanel) {
+        contentPanel.innerHTML = renderClassroomDashboardContent(classroomData);
+      }
+    });
+  });
+  
+  // Create classroom button (if modal exists)
+  const createBtn = document.getElementById('createClassBtn');
+  if (createBtn) {
+    createBtn.onclick = () => {
+      // Open create classroom modal - you can implement this
+      showCreateClassroomModal(profile);
+    };
+  }
+}
+
+
+// Helper functions for dashboard actions
+window.enterClassroom = function(classroomId) {
+  // Find classroom and open modal
+  const classroomData = window.dashboardClassrooms?.find(ct => ct.classroom.id === classroomId);
+  if (classroomData) {
+    openClassroomModal(
+      classroomData.classroom,
+      classroomData.students,
+      classroomData.assignments,
+      classroomData.resources,
+      classroomData.lessonPlans,
+      classroomData.assessments,
+      [], [], 
+      window.dashboardProfile
+    );
+  }
+};
+
+window.switchToClassworkTab = function() {
+  const activeTab = document.querySelector('.classroom-tab.active');
+  if (activeTab) {
+    const classroomId = activeTab.dataset.classroomId;
+    enterClassroom(classroomId);
+    setTimeout(() => {
+      const classworkTab = document.querySelector('[data-tab="classwork"]');
+      if (classworkTab) classworkTab.click();
+    }, 500);
+  }
+};
+
+window.switchToLearnersTab = function() {
+  const activeTab = document.querySelector('.classroom-tab.active');
+  if (activeTab) {
+    const classroomId = activeTab.dataset.classroomId;
+    enterClassroom(classroomId);
+    setTimeout(() => {
+      const learnersTab = document.querySelector('[data-tab="learners"]');
+      if (learnersTab) learnersTab.click();
+    }, 500);
+  }
+};
+
+window.switchToGradesTab = function() {
+  const activeTab = document.querySelector('.classroom-tab.active');
+  if (activeTab) {
+    const classroomId = activeTab.dataset.classroomId;
+    enterClassroom(classroomId);
+    setTimeout(() => {
+      const gradesTab = document.querySelector('[data-tab="grades"]');
+      if (gradesTab) gradesTab.click();
+    }, 500);
+  }
+};
+
+window.viewAssignment = function(assignmentId) {
+  const activeTab = document.querySelector('.classroom-tab.active');
+  if (activeTab) {
+    enterClassroom(activeTab.dataset.classroomId);
+    // You can add logic to scroll to specific assignment
+  }
+};
+
+function showCreateClassroomModal(profile) {
+  // This should open the same modal as in the classrooms page
+  const modal = document.getElementById('createClassModal');
+  if (modal) {
+    modal.style.display = 'flex';
+  } else {
+    window.location.href = '/tutor/classrooms.html';
+  }
+}
+
+function renderTutorDashboardNew(profile, classrooms, allStudents, allAssignments, allAssessments, allResources, allLessonPlans) {
+  const tutorName = profile?.name || profile?.full_name || 'Tutor';
+  
+  // Calculate stats across all classrooms
+  const totalStudents = allStudents.length;
+  const totalClassrooms = classrooms.length;
+  const totalAssignments = allAssignments.length;
+  const totalAssessments = allAssessments.length;
+  const pendingGrading = allAssessments.filter(a => a.status !== 'Graded').length;
+  const activeAssignments = allAssignments.filter(a => a.status === 'Active').length;
+  const totalResources = allResources.length;
+  const totalLessonPlans = allLessonPlans.length;
+  
+  // Get recent submissions across all classrooms
+  const recentActivity = getRecentActivity(allAssignments, allAssessments);
+  
+  // Group data by classroom for the tabs
+  const classroomTabs = classrooms.map((c, index) => {
+    const classStudents = allStudents.filter(s => c.studentIds?.includes(s.id));
+    const classAssignments = allAssignments.filter(a => a.classroomId === c.id);
+    const classAssessments = allAssessments.filter(a => classStudents.some(s => s.id === a.studentId));
+    const classResources = allResources.filter(r => r.classroomId === c.id);
+    const classLessonPlans = allLessonPlans.filter(l => l.classroomId === c.id);
+    
+    return {
+      classroom: c,
+      students: classStudents,
+      assignments: classAssignments,
+      assessments: classAssessments,
+      resources: classResources,
+      lessonPlans: classLessonPlans,
+      isActive: index === 0
+    };
+  });
+
+  return `
+    <style>
+      .dashboard-container {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      
+      /* Welcome Banner */
+      .welcome-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 28px 32px;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+      .welcome-banner h2 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+      }
+      .welcome-banner p {
+        margin: 0;
+        opacity: 0.9;
+      }
+      .quick-actions {
+        display: flex;
+        gap: 12px;
+      }
+      .quick-actions .btn {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: none;
+        padding: 12px 20px;
+      }
+      .quick-actions .btn:hover {
+        background: rgba(255,255,255,0.3);
+      }
+      
+      /* Stats Grid */
+      .stats-grid-dash {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+      }
+      .stat-card-dash {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+      }
+      .stat-card-dash:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      }
+      .stat-card-dash .stat-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+      }
+      .stat-card-dash .stat-value {
+        font-size: 28px;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      .stat-card-dash .stat-label {
+        font-size: 13px;
+        color: #7f8c8d;
+        margin-top: 4px;
+      }
+      
+      /* Classroom Tabs */
+      .classroom-tabs-container {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        overflow: hidden;
+      }
+      .classroom-tabs-header {
+        display: flex;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 0 16px;
+        overflow-x: auto;
+      }
+      .classroom-tab {
+        padding: 16px 24px;
+        cursor: pointer;
+        font-weight: 500;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s;
+        white-space: nowrap;
+        color: #555;
+      }
+      .classroom-tab:hover {
+        background: #e8f0fe;
+        color: #667eea;
+      }
+      .classroom-tab.active {
+        border-bottom-color: #667eea;
+        color: #667eea;
+        background: white;
+      }
+      .classroom-tab .tab-badge {
+        margin-left: 8px;
+        background: #e0e0e0;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 11px;
+        color: #555;
+      }
+      .classroom-tab.active .tab-badge {
+        background: #667eea;
+        color: white;
+      }
+      
+      /* Classroom Content */
+      .classroom-content-panel {
+        padding: 24px;
+        min-height: 400px;
+      }
+      .classroom-header-dash {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .classroom-title h3 {
+        margin: 0 0 4px 0;
+        font-size: 22px;
+      }
+      .classroom-title p {
+        margin: 0;
+        color: #666;
+      }
+      .classroom-code {
+        background: #f0f7ff;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-family: monospace;
+        font-size: 16px;
+        border: 1px dashed #667eea;
+      }
+      
+      /* Dashboard Sections within Classroom */
+      .dash-sections-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      @media (max-width: 768px) {
+        .dash-sections-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .dash-section {
+        background: #f8f9fa;
+        border-radius: 16px;
+        padding: 20px;
+      }
+      .dash-section h4 {
+        margin: 0 0 16px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .activity-item-dash {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: white;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        transition: all 0.2s;
+      }
+      .activity-item-dash:hover {
+        background: #e8f0fe;
+      }
+      .activity-icon-dash {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+      }
+      .activity-content-dash {
+        flex: 1;
+      }
+      .activity-title-dash {
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+      .activity-meta-dash {
+        font-size: 12px;
+        color: #888;
+      }
+      
+      /* Student List */
+      .student-list-dash {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .student-chip {
+        background: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .student-chip .avatar-small {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #667eea;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+      }
+      
+      /* Empty State */
+      .empty-state-dash {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+      }
+      .empty-state-dash .icon {
+        font-size: 64px;
+        margin-bottom: 16px;
+      }
+      
+      /* Recent Activity Feed */
+      .recent-activity-feed {
+        background: white;
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      }
+      .feed-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .feed-item {
+        display: flex;
+        gap: 16px;
+        padding: 16px 0;
+        border-bottom: 1px solid #eee;
+      }
+      .feed-item:last-child {
+        border-bottom: none;
+      }
+      .feed-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        background: #f0f7ff;
+      }
+      .feed-content {
+        flex: 1;
+      }
+      .feed-title {
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .feed-meta {
+        font-size: 13px;
+        color: #666;
+      }
+    </style>
+
+    <div class="dashboard-container">
+      
+      <!-- Welcome Banner -->
+      <div class="welcome-banner">
+        <div>
+          <h2>Welcome back, ${escapeHtml(tutorName)}! 👋</h2>
+          <p>Here's what's happening in your classrooms today.</p>
+        </div>
+        <div class="quick-actions">
+          <button class="btn" onclick="document.getElementById('createClassBtn')?.click()">
+            ➕ Create Class
+          </button>
+          <button class="btn" onclick="window.location.href='/tutor/classrooms.html'">
+            🏫 All Classrooms
+          </button>
+        </div>
+      </div>
+      
+      <!-- Stats Overview -->
+      <div class="stats-grid-dash">
+        <div class="stat-card-dash" onclick="window.location.href='/tutor/classrooms.html'">
+          <div class="stat-icon">🏫</div>
+          <div class="stat-value">${totalClassrooms}</div>
+          <div class="stat-label">Classrooms</div>
+        </div>
+        <div class="stat-card-dash" onclick="switchToLearnersTab()">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value">${totalStudents}</div>
+          <div class="stat-label">Students</div>
+        </div>
+        <div class="stat-card-dash" onclick="switchToClassworkTab()">
+          <div class="stat-icon">📝</div>
+          <div class="stat-value">${activeAssignments}</div>
+          <div class="stat-label">Active Assignments</div>
+        </div>
+        <div class="stat-card-dash" onclick="switchToGradesTab()">
+          <div class="stat-icon">📊</div>
+          <div class="stat-value">${pendingGrading}</div>
+          <div class="stat-label">Pending Grading</div>
+        </div>
+        <div class="stat-card-dash">
+          <div class="stat-icon">📚</div>
+          <div class="stat-value">${totalResources}</div>
+          <div class="stat-label">Resources</div>
+        </div>
+        <div class="stat-card-dash">
+          <div class="stat-icon">📖</div>
+          <div class="stat-value">${totalLessonPlans}</div>
+          <div class="stat-label">Lesson Plans</div>
+        </div>
+      </div>
+      
+      <!-- Classroom Tabs Section -->
+      ${classrooms.length > 0 ? `
+        <div class="classroom-tabs-container">
+          <div class="classroom-tabs-header" id="classroomTabsHeader">
+            ${classroomTabs.map((ct, i) => `
+              <div class="classroom-tab ${i === 0 ? 'active' : ''}" data-classroom-id="${ct.classroom.id}">
+                ${escapeHtml(ct.classroom.name)}
+                <span class="tab-badge">${ct.students.length} students</span>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div class="classroom-content-panel" id="classroomContentPanel">
+            ${renderClassroomDashboardContent(classroomTabs[0])}
+          </div>
+        </div>
+      ` : `
+        <div class="classroom-tabs-container">
+          <div class="classroom-content-panel">
+            <div class="empty-state-dash">
+              <div class="icon">🏫</div>
+              <h3>No Classrooms Yet</h3>
+              <p>Create your first classroom to get started!</p>
+              <button class="btn" onclick="document.getElementById('createClassBtn')?.click()" style="margin-top: 16px;">
+                ➕ Create Classroom
+              </button>
+            </div>
+          </div>
+        </div>
+      `}
+      
+      <!-- Recent Activity Feed -->
+      <div class="recent-activity-feed">
+        <div class="feed-header">
+          <h3 style="margin:0;">🔄 Recent Activity</h3>
+          <a href="/tutor/activities.html" class="btn ghost small">View All →</a>
+        </div>
+        <div id="recentActivityFeed">
+          ${renderRecentActivityFeed(recentActivity)}
+        </div>
+      </div>
+      
+    </div>
+    
+    <!-- Hidden Classroom Data for JS -->
+    <script>
+      window.dashboardClassrooms = ${JSON.stringify(classroomTabs).replace(/</g, '\\u003c')};
+      window.dashboardProfile = ${JSON.stringify(profile).replace(/</g, '\\u003c')};
+    </script>
+  `;
+}
+
+function getRecentActivity(assignments, assessments) {
+  const activities = [];
+  
+  assignments.forEach(a => {
+    activities.push({
+      type: 'assignment',
+      title: a.title,
+      classroomName: a.classroomName,
+      tutorName: a.tutorName,
+      date: a.createdAt
+    });
+  });
+  
+  assessments.forEach(a => {
+    activities.push({
+      type: 'assessment',
+      title: a.title,
+      classroomName: a.classroomName,
+      studentName: a.studentName,
+      date: a.createdAt
+    });
+  });
+  
+  // Sort by date descending
+  activities.sort((a, b) => {
+    const aTime = a.date?.seconds || 0;
+    const bTime = b.date?.seconds || 0;
+    return bTime - aTime;
+  });
+  
+  return activities;
+}
+
+
+function renderRecentActivityFeed(activities) {
+  if (!activities || activities.length === 0) {
+    return '<p class="empty" style="padding:40px;text-align:center;">No recent activity</p>';
+  }
+  
+  return activities.slice(0, 8).map(activity => {
+    const icon = activity.type === 'assignment' ? '📝' : 
+                 activity.type === 'assessment' ? '📊' : 
+                 activity.type === 'submission' ? '📤' : '📋';
+    
+    return `
+      <div class="feed-item">
+        <div class="feed-icon" style="background: ${activity.type === 'assignment' ? '#e3f2fd' : (activity.type === 'assessment' ? '#fff3e0' : '#e8f5e9')};">
+          ${icon}
+        </div>
+        <div class="feed-content">
+          <div class="feed-title">
+            ${escapeHtml(activity.title)}
+          </div>
+          <div class="feed-meta">
+            ${escapeHtml(activity.classroomName || '')} • 
+            ${escapeHtml(activity.studentName || activity.tutorName || '')} • 
+            ${fmtDate(activity.date)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+
+
+
+function renderClassroomDashboardContent(classroomTab) {
+  const { classroom, students, assignments, assessments, resources, lessonPlans } = classroomTab;
+  
+  const pendingAssignments = assignments.filter(a => a.status === 'Active').length;
+  const pendingGrading = assessments.filter(a => a.status !== 'Graded').length;
+  const recentSubmissions = []; // You can populate this from actual data
+  
+  // Get upcoming assignments (with due dates)
+  const upcomingAssignments = assignments
+    .filter(a => a.dueDate && new Date(a.dueDate) > new Date())
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+    .slice(0, 3);
+  
+  // Get recent assessments
+  const recentAssessments = assessments
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .slice(0, 3);
+  
+  return `
+    <div class="classroom-header-dash">
+      <div class="classroom-title">
+        <h3>${escapeHtml(classroom.name)}</h3>
+        <p>${escapeHtml(classroom.section || '')} • ${escapeHtml(classroom.subject || 'No subject')}</p>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <span class="classroom-code">📋 Code: ${escapeHtml(classroom.classCode)}</span>
+        <button class="btn" onclick="enterClassroom('${classroom.id}')">
+          🚪 Enter Full Classroom
+        </button>
+      </div>
+    </div>
+    
+    <div class="dash-sections-grid">
+      <!-- Left Column -->
+      <div>
+        <div class="dash-section">
+          <h4>
+            <span>📝 Upcoming Assignments</span>
+            <span class="badge">${pendingAssignments} active</span>
+          </h4>
+          ${upcomingAssignments.length > 0 ? upcomingAssignments.map(a => `
+            <div class="activity-item-dash" onclick="viewAssignment('${a.id}')">
+              <div class="activity-icon-dash" style="background:#e3f2fd;">📝</div>
+              <div class="activity-content-dash">
+                <div class="activity-title-dash">${escapeHtml(a.title)}</div>
+                <div class="activity-meta-dash">
+                  Due: ${fmtDate(a.dueDate)} • ${a.maxScore ? a.maxScore + ' pts' : 'No points'}
+                </div>
+              </div>
+            </div>
+          `).join('') : `
+            <p class="empty" style="padding:20px;text-align:center;">No upcoming assignments</p>
+          `}
+          <div style="margin-top:12px;">
+            <button class="btn small ghost" onclick="switchToClassworkTab()">
+              ➕ Create Assignment
+            </button>
+          </div>
+        </div>
+        
+        <div class="dash-section" style="margin-top:20px;">
+          <h4>
+            <span>📊 Recent Assessments</span>
+            <span class="badge warn">${pendingGrading} to grade</span>
+          </h4>
+          ${recentAssessments.length > 0 ? recentAssessments.map(a => `
+            <div class="activity-item-dash" onclick="gradeAssessment('${a.id}')">
+              <div class="activity-icon-dash" style="background:#fff3e0;">📊</div>
+              <div class="activity-content-dash">
+                <div class="activity-title-dash">${escapeHtml(a.title)}</div>
+                <div class="activity-meta-dash">
+                  ${escapeHtml(a.studentName || 'Student')} • 
+                  ${a.status === 'Graded' ? `✓ ${a.score}/${a.maxScore}` : '⏳ Pending'}
+                </div>
+              </div>
+            </div>
+          `).join('') : `
+            <p class="empty" style="padding:20px;text-align:center;">No assessments yet</p>
+          `}
+          <div style="margin-top:12px;">
+            <button class="btn small ghost" onclick="switchToGradesTab()">
+              ➕ Create Assessment
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Right Column -->
+      <div>
+        <div class="dash-section">
+          <h4>
+            <span>👥 Students (${students.length})</span>
+          </h4>
+          <div class="student-list-dash">
+            ${students.length > 0 ? students.slice(0, 8).map(s => `
+              <div class="student-chip" onclick="selectLearner('${s.id}')">
+                <span class="avatar-small">${escapeHtml((s.full_name || s.name || 'S').charAt(0).toUpperCase())}</span>
+                <span>${escapeHtml((s.full_name || s.name || '').split(' ')[0])}</span>
+              </div>
+            `).join('') : '<p class="empty">No students yet</p>'}
+            ${students.length > 8 ? `<div class="student-chip">+${students.length - 8} more</div>` : ''}
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn small ghost" onclick="switchToLearnersTab()">
+              👥 View All Students
+            </button>
+            <button class="btn small ghost" onclick="copyClassCode('${classroom.classCode}')">
+              📋 Copy Invite Code
+            </button>
+          </div>
+        </div>
+        
+        <div class="dash-section" style="margin-top:20px;">
+          <h4>
+            <span>📚 Resources & Materials</span>
+            <span class="badge">${resources.length}</span>
+          </h4>
+          ${resources.length > 0 ? resources.slice(0, 3).map(r => `
+            <div class="activity-item-dash">
+              <div class="activity-icon-dash" style="background:#e8f5e9;">📚</div>
+              <div class="activity-content-dash">
+                <div class="activity-title-dash">${escapeHtml(r.title)}</div>
+                <div class="activity-meta-dash">
+                  ${r.fileUrl ? '📎 Has attachment' : '📄 No file'}
+                </div>
+              </div>
+            </div>
+          `).join('') : `
+            <p class="empty" style="padding:20px;text-align:center;">No resources yet</p>
+          `}
+        </div>
+        
+        <div class="dash-section" style="margin-top:20px;">
+          <h4>
+            <span>📖 Lesson Plans</span>
+            <span class="badge">${lessonPlans.length}</span>
+          </h4>
+          ${lessonPlans.length > 0 ? lessonPlans.slice(0, 2).map(l => `
+            <div class="activity-item-dash">
+              <div class="activity-icon-dash" style="background:#f3e5f5;">📖</div>
+              <div class="activity-content-dash">
+                <div class="activity-title-dash">${escapeHtml(l.title)}</div>
+                <div class="activity-meta-dash">
+                  ${l.plannedDate ? fmtDate(l.plannedDate) : 'No date'} • 
+                  ${statusBadge(l.status || 'Draft')}
+                </div>
+              </div>
+            </div>
+          `).join('') : `
+            <p class="empty" style="padding:20px;text-align:center;">No lesson plans yet</p>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 
 // ============================================
 // UPDATED: TUTOR ASSIGNMENTS PAGE (FIXED)
