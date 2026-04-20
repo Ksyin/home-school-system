@@ -5217,8 +5217,8 @@ function renderParentPortfolio(items, child) {
   return `<section class="card panel"><h3>${escapeHtml(child?.full_name || child?.name || 'Student')}'s Portfolio</h3>${rows || '<p class="empty">No portfolio entries yet.</p>'}</section>`;
 }
 
-// Tutor Portfolio Page - Sutori Style Multi-Portfolio System
 async function bootTutorPortfolios() {
+  console.log('🎯 Booting tutor portfolios...');
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'tutor') return;
   
@@ -5226,10 +5226,17 @@ async function bootTutorPortfolios() {
   
   try {
     const portfolios = await loadPortfoliosForUser(user.uid, 'tutor');
+    console.log(`📁 Rendering ${portfolios.length} portfolios for tutor`);
     document.getElementById('page-content').innerHTML = renderPortfolioGrid(portfolios, 'tutor', profile);
   } catch (err) {
     console.error('Portfolio error:', err);
-    document.getElementById('page-content').innerHTML = '<div class="error">Error loading portfolios</div>';
+    document.getElementById('page-content').innerHTML = `
+      <div class="card panel error">
+        <h3>Error Loading Portfolios</h3>
+        <p>${err.message}</p>
+        <button class="btn" onclick="location.reload()">Retry</button>
+      </div>
+    `;
   }
 }
 
@@ -6988,7 +6995,8 @@ const routeMap = {
     'assignments': bootTutorAssignmentsPage,
     'assessments': bootTutorAssessmentsPage,
     'resources': bootResourcesPage,
-    'portfolio': bootTutorPortfolios,
+   'portfolio': bootTutorPortfolios,        // ← Make sure this matches data-page="portfolio"
+    'portfolios': bootTutorPortfolios,
     'lesson-plans': bootLessonPlansPage,
     'learners': bootLearnersPage,
     'classrooms': bootClassroomsPage,
@@ -7449,78 +7457,92 @@ function attachClassworkEventListeners(classroom, students) {
   }
 }
 async function getStudentPortfolioCompletion(portfolioId, studentId) {
-  const sectionsSnap = await getDocs(
-    query(collection(db, 'portfolio_sections'), where('portfolioId', '==', portfolioId))
-  );
-  const totalSections = sectionsSnap.size;
-  
-  const entriesSnap = await getDocs(
-    query(
-      collection(db, 'portfolio_entries'),
-      where('portfolioId', '==', portfolioId),
-      where('studentId', '==', studentId)
-    )
-  );
-  
-  const completedSections = entriesSnap.size;
-  const entries = entriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  
-  return {
-    totalSections,
-    completedSections,
-    percentage: totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0,
-    entries,
-    lastUpdated: entries.length > 0 
-      ? Math.max(...entries.map(e => e.updatedAt?.seconds || 0))
-      : null
-  };
-}
-async function savePortfolioEntry(portfolioId, sectionId, studentId, data) {
-  // Check if entry already exists
-  const existingSnap = await getDocs(
-    query(
-      collection(db, 'portfolio_entries'),
-      where('portfolioId', '==', portfolioId),
-      where('sectionId', '==', sectionId),
-      where('studentId', '==', studentId)
-    )
-  );
-  
-  const entryData = {
-    portfolioId,
-    sectionId,
-    studentId,
-    studentName: data.studentName || '',
-    content: data.content || '',
-    fileUrl: data.fileUrl || '',
-    fileName: data.fileName || '',
-    fileType: data.fileType || '',
-    mediaUrls: data.mediaUrls || [],
-    status: 'completed',
-    updatedAt: serverTimestamp()
-  };
-  
-  if (!existingSnap.empty) {
-    // Update existing
-    const entryId = existingSnap.docs[0].id;
-    await updateDoc(doc(db, 'portfolio_entries', entryId), entryData);
-    return entryId;
-  } else {
-    // Create new
-    entryData.createdAt = serverTimestamp();
-    const entryRef = await addDoc(collection(db, 'portfolio_entries'), entryData);
+  try {
+    const sectionsSnap = await getDocs(
+      query(collection(db, 'portfolio_sections'), where('portfolioId', '==', portfolioId))
+    );
+    const totalSections = sectionsSnap.size;
     
-    // Update portfolio completion count
-    await updateDoc(doc(db, 'portfolios', portfolioId), {
-      [`studentProgress.${studentId}`]: {
-        completedAt: serverTimestamp(),
-        sectionsCompleted: 1
-      }
-    });
+    const entriesSnap = await getDocs(
+      query(
+        collection(db, 'portfolio_entries'),
+        where('portfolioId', '==', portfolioId),
+        where('studentId', '==', studentId)
+      )
+    );
     
-    return entryRef.id;
+    const completedSections = entriesSnap.size;
+    const entries = entriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    return {
+      totalSections,
+      completedSections,
+      percentage: totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0,
+      entries,
+      lastUpdated: entries.length > 0 
+        ? Math.max(...entries.map(e => e.updatedAt?.seconds || 0))
+        : null
+    };
+  } catch (err) {
+    console.warn('Error getting completion status:', err);
+    return { totalSections: 0, completedSections: 0, percentage: 0, entries: [], lastUpdated: null };
   }
 }
+
+
+async function savePortfolioEntry(portfolioId, sectionId, studentId, data) {
+  try {
+    // Check if entry already exists
+    const existingSnap = await getDocs(
+      query(
+        collection(db, 'portfolio_entries'),
+        where('portfolioId', '==', portfolioId),
+        where('sectionId', '==', sectionId),
+        where('studentId', '==', studentId)
+      )
+    );
+    
+    const entryData = {
+      portfolioId,
+      sectionId,
+      studentId,
+      studentName: data.studentName || auth.currentUser?.displayName || 'Student',
+      content: data.content || '',
+      fileUrl: data.fileUrl || '',
+      fileName: data.fileName || '',
+      fileType: data.fileType || '',
+      mediaUrls: data.mediaUrls || [],
+      externalLinkUrl: data.externalLinkUrl || '',
+      status: 'completed',
+      updatedAt: serverTimestamp()
+    };
+    
+    if (!existingSnap.empty) {
+      // Update existing
+      const entryId = existingSnap.docs[0].id;
+      await updateDoc(doc(db, 'portfolio_entries', entryId), entryData);
+      return entryId;
+    } else {
+      // Create new
+      entryData.createdAt = serverTimestamp();
+      const entryRef = await addDoc(collection(db, 'portfolio_entries'), entryData);
+      
+      // Update portfolio progress
+      await updateDoc(doc(db, 'portfolios', portfolioId), {
+        [`studentProgress.${studentId}`]: {
+          completedAt: serverTimestamp(),
+          sectionsCompleted: 1
+        }
+      });
+      
+      return entryRef.id;
+    }
+  } catch (err) {
+    console.error('Error saving entry:', err);
+    throw err;
+  }
+}
+
 function getPortfolioGradient(type) {
   const gradients = {
     project: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -7727,6 +7749,14 @@ function renderPortfolioGrid(portfolios, role, profile) {
           <p class="portfolio-card-desc">${escapeHtml(p.description || '')}</p>
           
           ${p.subject ? `<div class="portfolio-subject">📚 ${escapeHtml(p.subject)}</div>` : ''}
+          // After the description, add external link if present
+${p.externalLinkUrl ? `
+  <div class="portfolio-external-link">
+    <a href="${p.externalLinkUrl}" target="_blank" onclick="event.stopPropagation()">
+      🔗 ${escapeHtml(p.externalLinkTitle || 'Open Template')}
+    </a>
+  </div>
+` : ''}
           
           ${isStudent ? `
             <div class="portfolio-progress">
@@ -8420,7 +8450,7 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
   modal.className = 'create-portfolio-modal';
   modal.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target.classList.contains('modal-overlay'))this.parentElement.remove()">
-      <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-box" style="max-width:750px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h3>📁 Create New Portfolio</h3>
           <button class="btn danger" onclick="document.getElementById('createPortfolioModal').remove()">✕</button>
@@ -8467,12 +8497,20 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
               <input id="pfEmoji" type="text" placeholder="📁" maxlength="2" value="📁">
             </div>
             
+            <!-- EXTERNAL LINK (Sutori, Google Docs, etc.) -->
             <div class="form-row">
-              <label>Assign To</label>
+              <label>🔗 External Template Link (Optional)</label>
+              <input id="pfExternalLinkTitle" type="text" placeholder="Link Title (e.g., Sutori Template, Google Doc)">
+              <input id="pfExternalLinkUrl" type="url" placeholder="https://..." style="margin-top:8px;">
+              <small style="color:#666;">Paste a Sutori, Google Docs, or any external template link</small>
+            </div>
+            
+            <div class="form-row">
+              <label>Assign To Students *</label>
               <select id="pfTargetType">
                 <option value="all">All Students</option>
                 <option value="classroom">Specific Classroom</option>
-                <option value="students">Specific Students</option>
+                <option value="students">Select Individual Students</option>
               </select>
             </div>
             
@@ -8482,9 +8520,9 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
             </div>
             
             <div class="form-row" id="pfStudentsRow" style="display:none;">
-              <label>Select Students</label>
-              <select id="pfStudentIds" multiple size="5"></select>
-              <small>Hold Ctrl/Cmd to select multiple</small>
+              <label>Select Students (Hold Ctrl/Cmd to select multiple)</label>
+              <select id="pfStudentIds" multiple size="6" style="width:100%;padding:8px;"></select>
+              <small>Selected students will see this portfolio in their dashboard</small>
             </div>
             
             <div class="form-row">
@@ -8504,9 +8542,16 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
               </label>
             </div>
             
+            <div class="form-row">
+              <label>
+                <input type="checkbox" id="pfAllowExternalLinks" checked> Allow students to add external links
+              </label>
+            </div>
+            
             <!-- Section Builder -->
             <div class="section-builder">
               <h4 style="margin:0 0 16px 0;">📋 Portfolio Sections</h4>
+              <p style="color:#666;margin-bottom:12px;">Add sections for students to complete. Each section can be text, file upload, or reflection.</p>
               <div id="sectionsList"></div>
               <button type="button" class="add-section-btn" onclick="addSectionToBuilder()">
                 ➕ Add Section
@@ -8526,8 +8571,8 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
   
   document.body.appendChild(modal);
   
-  // Load classrooms and students for assignment
-  loadClassroomOptions(userId);
+  // Load classrooms and students
+  loadClassroomAndStudentOptions(userId);
   
   // Target type toggle
   document.getElementById('pfTargetType').addEventListener('change', (e) => {
@@ -8535,13 +8580,14 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
     document.getElementById('pfStudentsRow').style.display = e.target.value === 'students' ? 'block' : 'none';
   });
   
-  // Initialize with one default section
+  // Initialize with default sections
   window.portfolioSections = [{
     title: 'Introduction',
     description: 'Introduce your project and what you hope to learn',
     type: 'text',
     required: true,
-    order: 0
+    order: 0,
+    placeholder: 'Write your introduction here...'
   }];
   renderSectionBuilder();
   
@@ -8551,6 +8597,31 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
     await handleCreatePortfolio();
   });
 };
+
+async function loadClassroomAndStudentOptions(tutorId) {
+  try {
+    // Load classrooms
+    const classrooms = await loadClassrooms(tutorId);
+    const classroomSelect = document.getElementById('pfClassroomId');
+    if (classroomSelect) {
+      classroomSelect.innerHTML = '<option value="">-- Select Classroom --</option>' +
+        classrooms.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.studentIds?.length || 0} students)</option>`).join('');
+    }
+    
+    // Load all students
+    const students = await loadAllStudents();
+    const studentSelect = document.getElementById('pfStudentIds');
+    if (studentSelect) {
+      studentSelect.innerHTML = students.map(s => 
+        `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)} ${s.classroomName ? `(${escapeHtml(s.classroomName)})` : ''}</option>`
+      ).join('');
+    }
+  } catch (err) {
+    console.warn('Could not load options:', err);
+  }
+}
+
+
 
 async function loadClassroomOptions(tutorId) {
   try {
@@ -8613,6 +8684,35 @@ async function handleCreatePortfolio() {
   msg.innerHTML = '<span style="color:#3498db;">Creating portfolio...</span>';
   
   try {
+    const targetType = document.getElementById('pfTargetType').value;
+    let studentIds = [];
+    let classroomId = null;
+    let classroomName = '';
+    
+    if (targetType === 'classroom') {
+      classroomId = document.getElementById('pfClassroomId').value;
+      if (!classroomId) {
+        msg.innerHTML = '<span style="color:#e74c3c;">Please select a classroom</span>';
+        return;
+      }
+      // Get classroom students
+      const classroomDoc = await getDoc(doc(db, 'classrooms', classroomId));
+      const classroom = classroomDoc.data();
+      classroomName = classroom?.name || '';
+      studentIds = classroom?.studentIds || [];
+    } else if (targetType === 'students') {
+      const selected = Array.from(document.getElementById('pfStudentIds').selectedOptions);
+      studentIds = selected.map(opt => opt.value);
+      if (studentIds.length === 0) {
+        msg.innerHTML = '<span style="color:#e74c3c;">Please select at least one student</span>';
+        return;
+      }
+    } else {
+      // All students
+      const allStudents = await loadAllStudents();
+      studentIds = allStudents.map(s => s.id);
+    }
+    
     const data = {
       title: document.getElementById('pfTitle').value.trim(),
       description: document.getElementById('pfDescription').value.trim(),
@@ -8620,42 +8720,33 @@ async function handleCreatePortfolio() {
       subject: document.getElementById('pfSubject').value.trim(),
       gradeLevel: document.getElementById('pfGradeLevel').value.trim(),
       emoji: document.getElementById('pfEmoji').value || '📁',
-      targetType: document.getElementById('pfTargetType').value,
+      targetType: targetType,
+      classroomId: classroomId,
+      classroomName: classroomName,
+      studentIds: studentIds,
+      externalLinkTitle: document.getElementById('pfExternalLinkTitle')?.value || '',
+      externalLinkUrl: document.getElementById('pfExternalLinkUrl')?.value || '',
       dueDate: document.getElementById('pfDueDate').value || null,
       allowStudentUploads: document.getElementById('pfAllowUploads').checked,
       allowComments: document.getElementById('pfAllowComments').checked,
+      allowExternalLinks: document.getElementById('pfAllowExternalLinks')?.checked !== false,
       role: document.getElementById('pfCreatedByRole').value,
       createdByName: document.getElementById('pfCreatedByName').value,
       sections: window.portfolioSections || []
     };
     
-    // Get student IDs based on target type
-    if (data.targetType === 'classroom') {
-      const classroomId = document.getElementById('pfClassroomId').value;
-      data.classroomId = classroomId;
-      // Fetch students in classroom
-      const studentsSnap = await getDocs(
-        query(collection(db, 'students'), where('classroomId', '==', classroomId))
-      );
-      data.studentIds = studentsSnap.docs.map(d => d.id);
-    } else if (data.targetType === 'students') {
-      const selected = Array.from(document.getElementById('pfStudentIds').selectedOptions);
-      data.studentIds = selected.map(opt => opt.value);
-    } else {
-      // All students
-      const allStudentsSnap = await getDocs(
-        query(collection(db, 'users'), where('role', '==', 'student'))
-      );
-      data.studentIds = allStudentsSnap.docs.map(d => d.id);
+    if (!data.title) {
+      msg.innerHTML = '<span style="color:#e74c3c;">Please enter a title</span>';
+      return;
     }
     
     const portfolioId = await createPortfolioTemplate(data);
     
-    msg.innerHTML = '<span style="color:#27ae60;">✅ Portfolio created!</span>';
+    msg.innerHTML = `<span style="color:#27ae60;">✅ Portfolio created and assigned to ${studentIds.length} student(s)!</span>`;
     setTimeout(() => {
       document.getElementById('createPortfolioModal').remove();
       location.reload();
-    }, 1000);
+    }, 1500);
     
   } catch (err) {
     console.error('Create portfolio error:', err);
@@ -8716,96 +8807,106 @@ function renderStudentSectionInput(section, entry, portfolioId, studentId) {
   `;
 }
 
-
 async function loadStudentPortfolioEntries(portfolioId, studentId) {
-  const snap = await getDocs(
-    query(
-      collection(db, 'portfolio_entries'),
-      where('portfolioId', '==', portfolioId),
-      where('studentId', '==', studentId)
-    )
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, 'portfolio_entries'),
+        where('portfolioId', '==', portfolioId),
+        where('studentId', '==', studentId)
+      )
+    );
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('Error loading entries:', err);
+    return [];
+  }
 }
 
 async function loadPortfolioSections(portfolioId) {
-  const snap = await getDocs(
-    query(
-      collection(db, 'portfolio_sections'),
-      where('portfolioId', '==', portfolioId),
-      orderBy('order', 'asc')
-    )
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, 'portfolio_sections'),
+        where('portfolioId', '==', portfolioId),
+        orderBy('order', 'asc')
+      )
+    );
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('Error loading sections:', err);
+    return [];
+  }
 }
-
 
 async function loadPortfoliosForUser(userId, role) {
   let portfolios = [];
   
-  if (role === 'student') {
-    // Get student's classroom
-    const studentDoc = await getDoc(doc(db, 'students', userId));
-    const studentData = studentDoc.data();
-    const classroomId = studentData?.classroomId || '';
-    
-    // Query portfolios assigned to this student
-    const q1 = query(
-      collection(db, 'portfolios'),
-      where('studentIds', 'array-contains', userId)
-    );
-    
-    // Query portfolios for student's classroom
-    const q2 = query(
-      collection(db, 'portfolios'),
-      where('classroomId', '==', classroomId)
-    );
-    
-    // Query public/all portfolios
-    const q3 = query(
-      collection(db, 'portfolios'),
-      where('targetType', '==', 'all')
-    );
-    
-    const [snap1, snap2, snap3] = await Promise.all([
-      getDocs(q1), getDocs(q2), getDocs(q3)
-    ]);
-    
-    // Deduplicate
-    const portfolioMap = new Map();
-    [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(doc => {
-      if (!portfolioMap.has(doc.id)) {
-        portfolioMap.set(doc.id, { id: doc.id, ...doc.data() });
+  console.log(`📁 Loading portfolios for ${role}: ${userId}`);
+  
+  try {
+    if (role === 'student') {
+      // Get student's classroom
+      const studentDoc = await getDoc(doc(db, 'students', userId));
+      const studentData = studentDoc.data();
+      const classroomId = studentData?.classroomId || '';
+      
+      // Query portfolios assigned to this student (multiple ways)
+      const queries = [
+        // Direct assignment
+        query(collection(db, 'portfolios'), where('studentIds', 'array-contains', userId)),
+        // Classroom assignment
+        query(collection(db, 'portfolios'), where('classroomId', '==', classroomId)),
+        // All students
+        query(collection(db, 'portfolios'), where('targetType', '==', 'all'))
+      ];
+      
+      const snaps = await Promise.all(queries.map(q => getDocs(q)));
+      
+      // Deduplicate
+      const portfolioMap = new Map();
+      snaps.forEach(snap => {
+        snap.docs.forEach(doc => {
+          if (!portfolioMap.has(doc.id)) {
+            portfolioMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        });
+      });
+      
+      portfolios = Array.from(portfolioMap.values());
+      
+      // Load completion status
+      for (const p of portfolios) {
+        p.completionStatus = await getStudentPortfolioCompletion(p.id, userId);
       }
-    });
-    
-    portfolios = Array.from(portfolioMap.values());
-    
-    // Load completion status for each portfolio
-    for (const p of portfolios) {
-      p.completionStatus = await getStudentPortfolioCompletion(p.id, userId);
+      
+    } else if (role === 'tutor') {
+      // Tutor sees portfolios they created
+      const q = query(
+        collection(db, 'portfolios'),
+        where('createdBy', '==', userId)
+      );
+      const snap = await getDocs(q);
+      portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+    } else if (role === 'parent') {
+      // Parent sees all portfolios
+      const snap = await getDocs(collection(db, 'portfolios'));
+      portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
     
-  } else if (role === 'tutor') {
-    // Tutor sees portfolios they created
-    const q = query(
-      collection(db, 'portfolios'),
-      where('createdBy', '==', userId)
-    );
-    const snap = await getDocs(q);
-    portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Sort by createdAt descending
+    portfolios.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     
-  } else if (role === 'parent') {
-    // Parent sees all portfolios (or filter by their children)
-    const snap = await getDocs(collection(db, 'portfolios'));
-    portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log(`✅ Loaded ${portfolios.length} portfolios for ${role}`);
+    
+  } catch (err) {
+    console.error('Error loading portfolios:', err);
   }
-  
-  // Sort by createdAt descending
-  portfolios.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   
   return portfolios;
 }
+
 
 
 async function createPortfolioTemplate(data) {
@@ -8814,56 +8915,82 @@ async function createPortfolioTemplate(data) {
   const portfolioData = {
     title: data.title,
     description: data.description || '',
-    type: data.type, // 'project', 'subject', 'stem', 'custom'
+    type: data.type || 'custom', // 'project', 'subject', 'stem', 'custom'
     subject: data.subject || '',
     gradeLevel: data.gradeLevel || '',
     emoji: data.emoji || '📁',
     coverImageUrl: data.coverImageUrl || '',
-    createdBy: auth.currentUser.uid,
-    createdByRole: data.role, // 'tutor' or 'parent'
-    createdByName: data.createdByName || '',
+    createdBy: auth.currentUser?.uid || data.createdBy,
+    createdByRole: data.role || 'tutor',
+    createdByName: data.createdByName || 'Tutor',
     
-    // Target settings
-    targetType: data.targetType || 'all', // 'all', 'classroom', 'student', 'multiple'
+    // Target settings - ASSIGN TO SPECIFIC STUDENTS
+    targetType: data.targetType || 'all',
     classroomId: data.classroomId || null,
     classroomName: data.classroomName || '',
     studentIds: data.studentIds || [],
     studentNames: data.studentNames || [],
     
+    // External links (Sutori, Google Docs, etc.)
+    externalLinkUrl: data.externalLinkUrl || '',
+    externalLinkTitle: data.externalLinkTitle || '',
+    
     // Template settings
     isTemplate: data.isTemplate || false,
     allowStudentUploads: data.allowStudentUploads !== false,
     allowComments: data.allowComments || false,
+    allowExternalLinks: data.allowExternalLinks !== false,
     
     // Status
-    status: 'published', // 'draft', 'published', 'archived'
+    status: 'published',
     dueDate: data.dueDate || null,
     
     // Metadata
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     
-    // Stats (updated as students complete)
-    totalStudents: data.studentIds?.length || 0,
+    // Stats
+    totalStudents: (data.studentIds || []).length,
     completedCount: 0
   };
   
   await setDoc(portfolioRef, portfolioData);
   
-  // Create default sections if provided
+  // Create sections if provided
   if (data.sections && Array.isArray(data.sections)) {
     const batch = writeBatch(db);
     for (const section of data.sections) {
       const sectionRef = doc(collection(db, 'portfolio_sections'));
       batch.set(sectionRef, {
         portfolioId: portfolioRef.id,
-        title: section.title,
+        title: section.title || 'Untitled Section',
         description: section.description || '',
-        type: section.type || 'text', // 'text', 'upload', 'reflection', 'milestone', 'media'
+        type: section.type || 'text',
         order: section.order || 0,
         required: section.required !== false,
         placeholder: section.placeholder || '',
         hints: section.hints || '',
+        // External link support for sections
+        externalLinkUrl: section.externalLinkUrl || '',
+        externalLinkTitle: section.externalLinkTitle || '',
+        createdAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
+  }
+  
+  // Notify assigned students
+  if (data.studentIds && data.studentIds.length > 0) {
+    const batch = writeBatch(db);
+    for (const studentId of data.studentIds) {
+      const notifRef = doc(collection(db, 'notifications'));
+      batch.set(notifRef, {
+        studentId: studentId,
+        title: 'New Portfolio Assigned',
+        message: `You have been assigned a new portfolio: "${data.title}"`,
+        type: 'portfolio',
+        portfolioId: portfolioRef.id,
+        read: false,
         createdAt: serverTimestamp()
       });
     }
