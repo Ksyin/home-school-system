@@ -607,6 +607,25 @@ async function loadStudentResources(studentUid) {
   resources.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   return resources;
 }
+async function ensureDefaultPortfolio(studentUid, studentName) {
+  const q = query(collection(db, 'portfolios'), 
+    where('studentId', '==', studentUid), 
+    where('isDefault', '==', true));
+  const snap = await getDocs(q);
+  if (!snap.empty) return;
+
+  await addDoc(collection(db, 'portfolios'), {
+    studentId: studentUid,
+    studentName: studentName,
+    title: 'My Learning Journey',
+    description: 'Your complete story — reflections, achievements, media & growth',
+    emoji: '🌟',
+    isDefault: true,
+    createdByRole: 'system',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
 
 async function loadStudentReports(studentUid) {
   const snap = await getDocs(
