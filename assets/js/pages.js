@@ -4566,7 +4566,6 @@ async function bootDefaultPage() {
   if (!bundle) return;
   document.getElementById('page-content').innerHTML = `<section class="card panel"><h3>${escapeHtml(pageTitle)}</h3><p>This page is connected successfully.</p><p>Role: ${escapeHtml(bundle.profile?.role)}</p><p>Email: ${escapeHtml(bundle.user?.email)}</p></section>`;
 }
-
 function openClassroomModal(classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile) {
   const old = document.getElementById('classModal');
   if (old) old.remove();
@@ -4574,126 +4573,439 @@ function openClassroomModal(classroom, studentsInClass, assignmentsInClass, reso
   const modal = document.createElement('div');
   modal.id = 'classModal';
   modal.innerHTML = `
-    <div class="modal-overlay" onclick="if(event.target.id==='classModal')this.parentElement.remove()">
-      <div class="modal-box" style="width:96%;max-width:1300px;height:92vh;display:flex;flex-direction:column;background:#fff;border-radius:8px;overflow:hidden;" onclick="event.stopImmediatePropagation()">
-        <div class="modal-header" style="padding:20px 24px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;background:#f8f9fa;">
+    <div class="modal-overlay" onclick="if(event.target.classList.contains('modal-overlay'))this.remove()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;">
+      <div class="modal-box" style="width:96%;max-width:1400px;height:92vh;display:flex;flex-direction:column;background:#fff;border-radius:16px;overflow:hidden;" onclick="event.stopPropagation()">
+        <div class="modal-header" style="padding:20px 28px;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;">
           <div>
-            <h2 style="margin:0;font-size:24px;">${escapeHtml(classroom.name)}</h2>
-            <p style="margin:4px 0 0;color:#555;font-size:14px;">
+            <h2 style="margin:0;font-size:26px;color:white;">${escapeHtml(classroom.name)}</h2>
+            <p style="margin:4px 0 0;opacity:0.9;font-size:14px;">
               ${escapeHtml(classroom.section || '')} • ${escapeHtml(classroom.subject || 'No subject')} • 
-              Code: <span style="font-family:monospace;background:#e8f0fe;padding:2px 8px;border-radius:4px;">${escapeHtml(classroom.classCode || '')}</span>
+              <span style="font-family:monospace;background:rgba(255,255,255,0.2);padding:2px 10px;border-radius:20px;">${escapeHtml(classroom.classCode || '')}</span>
             </p>
           </div>
-          <button class="btn danger" onclick="document.getElementById('classModal').remove()">✕ Close</button>
+          <div style="display:flex;gap:12px;">
+            <button class="btn" onclick="window.showJoinCode('${escapeHtml(classroom.classCode)}')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);">📋 Share Code</button>
+            <button class="btn" onclick="document.getElementById('classModal').remove()" style="background:rgba(255,255,255,0.15);color:white;">✕ Close</button>
+          </div>
         </div>
 
-        <div class="modal-tabs" id="classTabs" style="display:flex;background:#f1f3f4;border-bottom:1px solid #ddd;">
-          <div class="modal-tab active" data-tab="stream" style="padding:14px 28px;cursor:pointer;font-weight:500;">📢 Stream</div>
-          <div class="modal-tab" data-tab="classwork" style="padding:14px 28px;cursor:pointer;font-weight:500;">📝 Classwork</div>
-          <div class="modal-tab" data-tab="people" style="padding:14px 28px;cursor:pointer;font-weight:500;">👥 People</div>
-          <div class="modal-tab" data-tab="grades" style="padding:14px 28px;cursor:pointer;font-weight:500;">📊 Grades</div>
+        <div class="modal-tabs" id="classTabs" style="display:flex;background:#f8f9fa;border-bottom:1px solid #e0e0e0;padding:0 20px;">
+          <div class="modal-tab active" data-tab="stream" style="padding:16px 28px;cursor:pointer;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;">📢 Stream</div>
+          <div class="modal-tab" data-tab="classwork" style="padding:16px 28px;cursor:pointer;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;">📝 Classwork</div>
+          <div class="modal-tab" data-tab="lessonplans" style="padding:16px 28px;cursor:pointer;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;">📖 Lesson Plans</div>
+          <div class="modal-tab" data-tab="people" style="padding:16px 28px;cursor:pointer;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;">👥 People</div>
+          <div class="modal-tab" data-tab="grades" style="padding:16px 28px;cursor:pointer;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;">📊 Grades</div>
         </div>
 
-        <div id="classContent" class="class-modal-content" style="flex:1;padding:24px;overflow-y:auto;background:#fafafa;"></div>
+        <div id="classContent" class="class-modal-content" style="flex:1;padding:28px;overflow-y:auto;background:#f5f7fa;"></div>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
 
+  // Style active tab
   modal.querySelectorAll('.modal-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      modal.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+      modal.querySelectorAll('.modal-tab').forEach(t => {
+        t.classList.remove('active');
+        t.style.borderBottomColor = 'transparent';
+        t.style.color = '#555';
+      });
       tab.classList.add('active');
+      tab.style.borderBottomColor = '#1a73e8';
+      tab.style.color = '#1a73e8';
       renderClassTabContent(tab.dataset.tab, classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
     });
   });
 
+  // Set initial active tab style
+  const activeTab = modal.querySelector('.modal-tab.active');
+  if (activeTab) {
+    activeTab.style.borderBottomColor = '#1a73e8';
+    activeTab.style.color = '#1a73e8';
+  }
+
   renderClassTabContent('stream', classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, modal.querySelector('#classContent'));
 }
+
+function renderStreamTab(classroom, profile) {
+  return `
+    <style>
+      .stream-post-box { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .stream-post-box textarea { width: 100%; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; resize: vertical; font-size: 14px; }
+      .stream-post-box textarea:focus { outline: none; border-color: #1a73e8; }
+      .stream-feed { max-height: 500px; overflow-y: auto; }
+      .stream-message { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    </style>
+    
+    <div class="stream-post-box">
+      <h3 style="margin:0 0 16px 0;display:flex;align-items:center;gap:8px;">
+        <span>📢</span> Post to Class Stream
+      </h3>
+      <textarea id="streamInput" rows="3" placeholder="Share an announcement, question, or update with your class..."></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;gap:12px;">
+        <input type="file" id="streamFileInput" accept="*/*" style="display:none;">
+        <button class="btn ghost" onclick="document.getElementById('streamFileInput').click()">📎 Attach</button>
+        <button class="btn" onclick="window.postToStream('${classroom.id}')">📨 Post</button>
+      </div>
+    </div>
+    
+    <div class="stream-feed" id="streamFeed">
+      <div style="text-align:center;padding:20px;color:#666;">Loading stream...</div>
+    </div>
+  `;
+}
+function renderClassworkTab(classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass) {
+  // Filter items specifically for this classroom
+  const classAssignments = assignmentsInClass.filter(a => a.classroomId === classroom.id);
+  const classMaterials = resourcesInClass.filter(r => r.classroomId === classroom.id);
+  const classTopics = []; // You can add topics collection later
+  
+  return `
+    <style>
+      .create-buttons-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
+      .create-btn { padding: 12px 20px; border-radius: 30px; border: none; cursor: pointer; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+      .create-btn.assignment { background: #1a73e8; color: white; }
+      .create-btn.material { background: #0f9d58; color: white; }
+      .create-btn.quiz { background: #e37400; color: white; }
+      .create-btn.question { background: #c5221f; color: white; }
+      .create-btn.topic { background: #5f6368; color: white; }
+      .classwork-section { background: white; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .classwork-section h4 { margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px; color: #202124; }
+      .classwork-item { padding: 16px; border-bottom: 1px solid #e8eaed; display: flex; align-items: center; gap: 16px; }
+      .classwork-item:last-child { border-bottom: none; }
+      .classwork-item-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+      .classwork-item-content { flex: 1; }
+      .classwork-item-title { font-weight: 500; margin-bottom: 4px; }
+      .classwork-item-meta { font-size: 12px; color: #5f6368; }
+      .classwork-item-actions { display: flex; gap: 8px; }
+    </style>
+    
+    <div class="create-buttons-bar">
+      <button class="create-btn assignment" onclick="window.showCreateAssignmentModal('${classroom.id}', ${JSON.stringify(studentsInClass).replace(/"/g, '&quot;')})">
+        <span>📝</span> Create Assignment
+      </button>
+      <button class="create-btn material" onclick="window.showCreateMaterialModal('${classroom.id}')">
+        <span>📚</span> Add Material
+      </button>
+      <button class="create-btn quiz" onclick="window.showCreateQuizModal('${classroom.id}', ${JSON.stringify(studentsInClass).replace(/"/g, '&quot;')})">
+        <span>📊</span> Create Quiz
+      </button>
+      <button class="create-btn question" onclick="window.showCreateQuestionModal('${classroom.id}')">
+        <span>❓</span> Ask Question
+      </button>
+      <button class="create-btn topic" onclick="window.createTopic('${classroom.id}')">
+        <span>📑</span> Add Topic
+      </button>
+    </div>
+    
+    ${classTopics.length > 0 ? `
+      <div class="classwork-section">
+        <h4><span>📑</span> Topics</h4>
+        ${classTopics.map(t => `
+          <div class="classwork-item">
+            <div class="classwork-item-icon" style="background:#e8f0fe;color:#1a73e8;">📑</div>
+            <div class="classwork-item-content">
+              <div class="classwork-item-title">${escapeHtml(t.title)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
+    
+    <div class="classwork-section">
+      <h4><span>📝</span> Assignments (${classAssignments.length})</h4>
+      ${classAssignments.length ? classAssignments.map(a => `
+        <div class="classwork-item">
+          <div class="classwork-item-icon" style="background:#e8f0fe;color:#1a73e8;">📝</div>
+          <div class="classwork-item-content">
+            <div class="classwork-item-title">${escapeHtml(a.title)}</div>
+            <div class="classwork-item-meta">
+              ${a.dueDate ? `Due: ${fmtDate(a.dueDate)} • ` : ''}
+              ${a.points ? `${a.points} points` : 'Ungraded'}
+            </div>
+          </div>
+          <div class="classwork-item-actions">
+            <button class="btn small ghost" onclick="window.editAssignment('${a.id}')">✏️</button>
+            <button class="btn small ghost" onclick="window.deleteClassworkItem('assignment','${a.id}')">🗑️</button>
+          </div>
+        </div>
+      `).join('') : '<div style="padding:20px;text-align:center;color:#5f6368;">No assignments yet. Click "Create Assignment" to get started.</div>'}
+    </div>
+    
+    <div class="classwork-section">
+      <h4><span>📚</span> Materials (${classMaterials.length})</h4>
+      ${classMaterials.length ? classMaterials.map(m => `
+        <div class="classwork-item">
+          <div class="classwork-item-icon" style="background:#e6f4ea;color:#0f9d58;">📚</div>
+          <div class="classwork-item-content">
+            <div class="classwork-item-title">${escapeHtml(m.title)}</div>
+            <div class="classwork-item-meta">
+              ${m.fileName ? `File: ${escapeHtml(m.fileName)}` : ''}
+              ${m.linkUrl ? `Link: ${escapeHtml(m.linkUrl)}` : ''}
+            </div>
+            ${m.description ? `<div style="margin-top:8px;font-size:13px;color:#5f6368;">${escapeHtml(m.description)}</div>` : ''}
+          </div>
+          <div class="classwork-item-actions">
+            ${m.fileUrl ? `<a href="${m.fileUrl}" target="_blank" class="btn small ghost">📎 View</a>` : ''}
+            ${m.linkUrl ? `<a href="${m.linkUrl}" target="_blank" class="btn small ghost">🔗 Open</a>` : ''}
+            <button class="btn small ghost" onclick="window.deleteClassworkItem('material','${m.id}')">🗑️</button>
+          </div>
+        </div>
+      `).join('') : '<div style="padding:20px;text-align:center;color:#5f6368;">No materials yet. Click "Add Material" to upload files or add links.</div>'}
+    </div>
+  `;
+}
+function renderLessonPlansTab(classroom, lessonPlansInClass, profile) {
+  const classLessonPlans = lessonPlansInClass.filter(lp => lp.classroomId === classroom.id);
+  
+  return `
+    <style>
+      .lesson-plan-form { background: white; border-radius: 16px; padding: 24px; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+      @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
+      .form-field { margin-bottom: 16px; }
+      .form-field label { display: block; margin-bottom: 6px; font-weight: 500; color: #202124; }
+      .form-field input, .form-field textarea, .form-field select { 
+        width: 100%; padding: 12px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; 
+      }
+      .form-field input:focus, .form-field textarea:focus { outline: none; border-color: #1a73e8; }
+      .lesson-plan-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .lesson-plan-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+      .lesson-plan-title { font-size: 18px; font-weight: 500; color: #202124; }
+      .lesson-plan-meta { font-size: 13px; color: #5f6368; margin: 8px 0; }
+      .lesson-plan-content { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8eaed; }
+    </style>
+    
+    <div class="lesson-plan-form">
+      <h3 style="margin:0 0 20px 0;display:flex;align-items:center;gap:8px;">
+        <span>📖</span> Create Lesson Plan for ${escapeHtml(classroom.name)}
+      </h3>
+      <form id="classroomLessonPlanForm">
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Lesson Title *</label>
+            <input type="text" id="lpTitle" placeholder="e.g., Introduction to Fractions" required>
+          </div>
+          <div class="form-field">
+            <label>Subject / Topic</label>
+            <input type="text" id="lpSubject" placeholder="e.g., Mathematics">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Planned Date *</label>
+            <input type="date" id="lpDate" required>
+          </div>
+          <div class="form-field">
+            <label>Duration (minutes)</label>
+            <input type="number" id="lpDuration" placeholder="e.g., 45">
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Learning Objectives / Goals</label>
+          <textarea id="lpObjectives" rows="3" placeholder="Students will be able to..."></textarea>
+        </div>
+        <div class="form-field">
+          <label>Materials & Resources Needed</label>
+          <textarea id="lpMaterials" rows="2" placeholder="Textbook pages, worksheets, online resources, lab equipment..."></textarea>
+        </div>
+        <div class="form-field">
+          <label>Lesson Procedure / Activities</label>
+          <textarea id="lpProcedure" rows="4" placeholder="1. Warm-up (5 min)&#10;2. Main activity (25 min)&#10;3. Practice (10 min)&#10;4. Wrap-up (5 min)"></textarea>
+        </div>
+        <div class="form-field">
+          <label>Assessment / Check for Understanding</label>
+          <textarea id="lpAssessment" rows="2" placeholder="How will you know students learned?"></textarea>
+        </div>
+        <div class="form-field">
+          <label>Attachments (optional)</label>
+          <input type="file" id="lpAttachment" accept="*/*">
+          <small style="color:#5f6368;display:block;margin-top:4px;">Upload worksheets, slides, or any supporting materials</small>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:20px;">
+          <button type="submit" class="btn" style="background:#1a73e8;color:white;padding:12px 24px;">💾 Save Lesson Plan</button>
+          <span id="lpMsg" style="align-self:center;"></span>
+        </div>
+      </form>
+    </div>
+    
+    <div class="classwork-section">
+      <h4 style="margin:0 0 20px 0;">📚 Lesson Plans for this Class (${classLessonPlans.length})</h4>
+      ${classLessonPlans.length ? classLessonPlans.sort((a,b) => new Date(b.plannedDate) - new Date(a.plannedDate)).map(lp => `
+        <div class="lesson-plan-card">
+          <div class="lesson-plan-header">
+            <div>
+              <span class="badge ${lp.status === 'Published' ? 'success' : 'warn'}" style="margin-right:10px;">${lp.status || 'Draft'}</span>
+              <span class="lesson-plan-title">${escapeHtml(lp.title)}</span>
+            </div>
+            <div>
+              <button class="btn small ghost" onclick="window.editLessonPlan('${lp.id}')">✏️ Edit</button>
+              <button class="btn small ghost" onclick="window.deleteClassworkItem('lessonplan','${lp.id}')">🗑️</button>
+            </div>
+          </div>
+          <div class="lesson-plan-meta">
+            <span>📅 ${fmtDate(lp.plannedDate)}</span> • 
+            <span>📚 ${escapeHtml(lp.subject || 'General')}</span> • 
+            <span>⏱️ ${lp.duration || 'N/A'} min</span>
+          </div>
+          ${lp.objectives ? `<div class="lesson-plan-content"><strong>🎯 Objectives:</strong> ${escapeHtml(lp.objectives)}</div>` : ''}
+          ${lp.materials ? `<div class="lesson-plan-content"><strong>📦 Materials:</strong> ${escapeHtml(lp.materials)}</div>` : ''}
+          ${lp.procedure ? `<div class="lesson-plan-content"><strong>📝 Procedure:</strong> ${escapeHtml(lp.procedure)}</div>` : ''}
+          ${lp.attachmentUrl ? `
+            <div class="lesson-plan-content">
+              <strong>📎 Attachment:</strong> 
+              <a href="${lp.attachmentUrl}" target="_blank" class="btn small ghost">${escapeHtml(lp.attachmentName || 'View File')}</a>
+            </div>
+          ` : ''}
+          <div class="lesson-plan-meta" style="margin-top:12px;">
+            Created by: ${escapeHtml(lp.tutorName || lp.createdByName || 'Tutor')} • ${fmtDate(lp.createdAt)}
+          </div>
+        </div>
+      `).join('') : '<div style="padding:40px;text-align:center;color:#5f6368;">No lesson plans yet. Create your first lesson plan above!</div>'}
+    </div>
+  `;
+}
+
+// ============================================
+// PEOPLE TAB
+// ============================================
+
+function renderPeopleTab(classroom, studentsInClass) {
+  return `
+    <style>
+      .people-header { background: white; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .code-display { background: #1a73e8; color: white; padding: 16px 24px; border-radius: 12px; display: inline-block; margin: 16px 0; }
+      .code-display code { font-size: 32px; font-weight: bold; letter-spacing: 4px; }
+      .student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+      .student-card-people { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 16px; }
+      .student-avatar { width: 48px; height: 48px; border-radius: 50%; background: #1a73e8; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
+    </style>
+    
+    <div class="people-header">
+      <h3 style="margin:0 0 8px 0;">👥 Class Members</h3>
+      <p style="color:#5f6368;margin:0;">${studentsInClass.length} students enrolled</p>
+      
+      <div class="code-display">
+        <div style="font-size:14px;opacity:0.9;margin-bottom:8px;">Class Code</div>
+        <code>${escapeHtml(classroom.classCode || '—')}</code>
+      </div>
+      <button class="btn" onclick="window.showJoinCode('${escapeHtml(classroom.classCode)}')" style="margin-left:16px;">📋 Copy Invite Link</button>
+    </div>
+    
+    <div style="background:white;border-radius:16px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+      <h4 style="margin:0 0 20px 0;">Students</h4>
+      <div class="student-grid">
+        ${studentsInClass.length ? studentsInClass.map(s => `
+          <div class="student-card-people">
+            <div class="student-avatar">${(s.full_name || s.name || 'S').charAt(0).toUpperCase()}</div>
+            <div>
+              <div style="font-weight:500;">${escapeHtml(s.full_name || s.name || 'Student')}</div>
+              <div style="font-size:12px;color:#5f6368;">${escapeHtml(s.email || '—')}</div>
+            </div>
+          </div>
+        `).join('') : '<div style="padding:20px;text-align:center;color:#5f6368;grid-column:1/-1;">No students enrolled yet. Share the class code to get started!</div>'}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================
+// GRADES TAB
+// ============================================
+
+function renderGradesTab(classroom, studentsInClass, assessmentsInClass) {
+  const classAssessments = assessmentsInClass.filter(a => 
+    studentsInClass.some(s => s.id === a.studentId)
+  );
+  
+  return `
+    <style>
+      .grades-table { width: 100%; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .grades-table th { background: #f8f9fa; padding: 16px; text-align: left; font-weight: 500; border-bottom: 1px solid #e0e0e0; }
+      .grades-table td { padding: 14px 16px; border-bottom: 1px solid #e8eaed; }
+      .grades-table tr:last-child td { border-bottom: none; }
+    </style>
+    
+    <div style="margin-bottom:24px;">
+      <button class="btn" onclick="window.showCreateAssessmentModal('${classroom.id}', ${JSON.stringify(studentsInClass).replace(/"/g, '&quot;')})">
+        ➕ Add Assessment
+      </button>
+    </div>
+    
+    <table class="grades-table">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Assessment</th>
+          <th>Score</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${classAssessments.length ? classAssessments.map(a => `
+          <tr>
+            <td>${escapeHtml(a.studentName || '—')}</td>
+            <td>${escapeHtml(a.title)}</td>
+            <td>${a.score ? `${a.score}/${a.maxScore || '—'}` : '—'}</td>
+            <td>${statusBadge(a.status || 'Pending')}</td>
+            <td>${fmtDate(a.createdAt)}</td>
+          </tr>
+        `).join('') : '<tr><td colspan="5" style="padding:40px;text-align:center;color:#5f6368;">No assessments yet</td></tr>'}
+      </tbody>
+    </table>
+  `;
+}
+
+
+
+
 
 function renderClassTabContent(tab, classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass, assessmentsInClass, reportsInClass, messagesInClass, profile, contentEl) {
   let html = '';
 
   switch (tab) {
-
     case 'stream':
-      html = `
-        <div class="card panel">
-          <h3>📢 Class Stream & Chat</h3>
-          <textarea id="streamInput" rows="2" placeholder="Post an announcement or message to the class..." style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;"></textarea>
-          <button class="btn" onclick="postToStream('${classroom.id}')">Post to Stream</button>
-          <div id="streamFeed" style="margin-top:24px;max-height:500px;overflow-y:auto;"></div>
-        </div>
-      `;
-      // Load existing messages (you can expand later)
+      html = renderStreamTab(classroom, profile);
       setTimeout(() => loadStreamFeed(classroom.id), 100);
       break;
 
     case 'classwork':
-      html = `
-        <div class="card panel">
-          <h3>📚 Classwork</h3>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-            <button class="btn" onclick="createClassItem('${classroom.id}','assignment')">📝 Assignment</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','quiz')">📝 Quiz</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','question')">❓ Question</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','material')">📚 Material</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','topic')">📑 Topic</button>
-            <button class="btn" onclick="createClassItem('${classroom.id}','lessonplan')">📖 Lesson Plan</button>
-          </div>
+      html = renderClassworkTab(classroom, studentsInClass, assignmentsInClass, resourcesInClass, lessonPlansInClass);
+      break;
 
-          <h4>📝 Assignments (${assignmentsInClass.length})</h4>
-          ${assignmentsInClass.length ? assignmentsInClass.map(a => `
-            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-              <strong>${escapeHtml(a.title)}</strong><br>
-              <small>Due: ${fmtDate(a.dueDate) || 'No due date'}</small>
-            </div>`).join('') : '<p class="empty">No assignments yet</p>'}
-
-          <h4 style="margin-top:28px;">📚 Materials (${resourcesInClass.length})</h4>
-          ${resourcesInClass.map(r => `
-            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;">
-              ${escapeHtml(r.title)} ${r.fileUrl ? renderFilePreview(r.fileUrl, r.fileName) : ''}
-            </div>`).join('') || '<p class="empty">No materials yet</p>'}
-
-          <h4 style="margin-top:28px;">📖 Lesson Plans (${lessonPlansInClass.length})</h4>
-          ${lessonPlansInClass.map(lp => `
-            <div style="padding:14px;background:#fff;border-radius:8px;margin-bottom:12px;">
-              ${escapeHtml(lp.title)} — ${fmtDate(lp.plannedDate)}
-              ${lp.attachmentUrl ? `<br><small><a href="${lp.attachmentUrl}" target="_blank">📎 View Attachment</a></small>` : ''}
-            </div>`).join('') || '<p class="empty">No lesson plans yet</p>'}
-        </div>
-      `;
+    case 'lessonplans':
+      html = renderLessonPlansTab(classroom, lessonPlansInClass, profile);
       break;
 
     case 'people':
-      html = `
-        <div class="card panel">
-          <h3>👥 People (${studentsInClass.length} students)</h3>
-          <div style="margin:16px 0;">
-            <button class="btn" onclick="showJoinCode('${classroom.classCode}')">Share Class Code with Students</button>
-          </div>
-          <h4>Students in this class</h4>
-          ${studentsInClass.map(s => `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:8px;">${escapeHtml(s.full_name || s.name || s.email)}</div>`).join('') || '<p class="empty">No students yet</p>'}
-        </div>
-      `;
+      html = renderPeopleTab(classroom, studentsInClass);
       break;
 
     case 'grades':
-      html = `
-        <div class="card panel">
-          <h3>📊 Grades & Reports</h3>
-          <h4>Assessments (${assessmentsInClass.length})</h4>
-          ${assessmentsInClass.map(a => `
-            <div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:10px;">
-              ${escapeHtml(a.title)} — Score: ${a.score || '—'} / ${a.maxScore || '—'}
-            </div>`).join('') || '<p class="empty">No assessments yet</p>'}
-        </div>
-      `;
+      html = renderGradesTab(classroom, studentsInClass, assessmentsInClass);
       break;
   }
 
   contentEl.innerHTML = html;
+  
+  // Attach event listeners after rendering
+  if (tab === 'classwork') {
+    attachClassworkEventListeners(classroom, studentsInClass);
+  }
+  if (tab === 'lessonplans') {
+    attachLessonPlanEventListeners(classroom, profile);
+  }
 }
+
+
+
+
+
+
+
+
 
 // ============================================
 // PAGE ROUTER
@@ -4893,3 +5205,666 @@ window.joinClassByCode = async function() {
     msg.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
   }
 };
+window.showCreateAssignmentModal = function(classroomId, studentsInClass) {
+  const modal = document.createElement('div');
+  modal.id = 'createAssignmentModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10001;">
+      <div class="modal-box" style="width:90%;max-width:700px;max-height:90vh;overflow-y:auto;background:#fff;border-radius:16px;padding:0;" onclick="event.stopPropagation()">
+        <div style="padding:24px 28px;border-bottom:1px solid #e0e0e0;">
+          <h2 style="margin:0;">📝 Create Assignment</h2>
+        </div>
+        
+        <form id="assignmentCreateForm" style="padding:28px;">
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Title *</label>
+            <input type="text" id="assignTitle" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="e.g., Math Homework - Week 5" required>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Instructions (optional)</label>
+            <textarea id="assignInstructions" rows="4" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="Detailed instructions for students..."></textarea>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Topic (optional)</label>
+            <input type="text" id="assignTopic" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="e.g., Chapter 5: Fractions">
+          </div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+            <div>
+              <label style="display:block;margin-bottom:8px;font-weight:500;">Due Date (optional)</label>
+              <input type="date" id="assignDueDate" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;">
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:8px;font-weight:500;">Points (optional)</label>
+              <input type="number" id="assignPoints" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="e.g., 100">
+            </div>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Attach File (optional)</label>
+            <input type="file" id="assignAttachment" accept="*/*" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;">
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Or Add Link (optional)</label>
+            <input type="url" id="assignLink" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="https://...">
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:12px;font-weight:500;">Assign to:</label>
+            <div style="background:#f8f9fa;padding:16px;border-radius:8px;">
+              <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <input type="radio" name="assignTarget" value="all" checked> 
+                <span>All students in this class</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="radio" name="assignTarget" value="specific"> 
+                <span>Specific students</span>
+              </label>
+            </div>
+          </div>
+          
+          <div id="studentChecklist" style="display:none;margin-bottom:20px;max-height:200px;overflow-y:auto;border:1px solid #dadce0;border-radius:8px;padding:16px;background:#f8f9fa;">
+            ${studentsInClass.map(s => `
+              <label style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+                <input type="checkbox" name="selectedStudents" value="${s.id}">
+                <span>${escapeHtml(s.full_name || s.name || s.email)}</span>
+              </label>
+            `).join('')}
+          </div>
+          
+          <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:28px;">
+            <button type="button" class="btn ghost" onclick="document.getElementById('createAssignmentModal').remove()">Cancel</button>
+            <button type="submit" class="btn" style="background:#1a73e8;color:white;padding:12px 28px;">📤 Assign</button>
+          </div>
+          <span id="assignCreateMsg" style="display:block;margin-top:12px;text-align:center;"></span>
+        </form>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Show/hide student checklist
+  const radioButtons = modal.querySelectorAll('input[name="assignTarget"]');
+  const checklist = modal.querySelector('#studentChecklist');
+  radioButtons.forEach(rb => {
+    rb.addEventListener('change', () => {
+      checklist.style.display = rb.value === 'specific' ? 'block' : 'none';
+    });
+  });
+  
+  // Handle form submission
+  modal.querySelector('#assignmentCreateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = modal.querySelector('#assignCreateMsg');
+    msg.innerHTML = '<span style="color:#1a73e8;">Creating assignment...</span>';
+    
+    try {
+      const title = modal.querySelector('#assignTitle').value.trim();
+      const instructions = modal.querySelector('#assignInstructions').value.trim();
+      const topic = modal.querySelector('#assignTopic').value.trim();
+      const dueDate = modal.querySelector('#assignDueDate').value;
+      const points = modal.querySelector('#assignPoints').value;
+      const target = modal.querySelector('input[name="assignTarget"]:checked').value;
+      const link = modal.querySelector('#assignLink').value.trim();
+      const file = modal.querySelector('#assignAttachment').files[0];
+      
+      // Get selected students if specific
+      let selectedStudentIds = [];
+      let selectedStudentNames = [];
+      if (target === 'specific') {
+        const checkboxes = modal.querySelectorAll('input[name="selectedStudents"]:checked');
+        selectedStudentIds = Array.from(checkboxes).map(cb => cb.value);
+        selectedStudentNames = studentsInClass.filter(s => selectedStudentIds.includes(s.id)).map(s => s.full_name || s.name);
+      }
+      
+      // Upload file if provided
+      let attachmentUrl = '', attachmentName = '';
+      if (file) {
+        const upload = await uploadFile(file, `assignments/${classroomId}`);
+        attachmentUrl = upload.url;
+        attachmentName = upload.name;
+      }
+      
+      // Create assignment in Firestore
+      const assignmentData = {
+        classroomId: classroomId,
+        tutorId: auth.currentUser.uid,
+        tutorName: auth.currentUser.displayName || 'Tutor',
+        title: title,
+        description: instructions,
+        instructions: instructions,
+        topic: topic,
+        subject: topic || 'General',
+        dueDate: dueDate || null,
+        points: points ? parseFloat(points) : null,
+        maxPoints: points ? parseFloat(points) : null,
+        linkUrl: link || null,
+        attachmentUrl: attachmentUrl,
+        attachmentName: attachmentName,
+        targetType: target === 'all' ? 'all_students' : 'specific_students',
+        assignedTo: target === 'specific' ? selectedStudentIds : [],
+        assignedToNames: target === 'specific' ? selectedStudentNames : [],
+        status: 'Active',
+        published: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      await addDoc(collection(db, 'assignments'), assignmentData);
+      
+      // Create notifications for students
+      const studentsToNotify = target === 'all' ? studentsInClass : studentsInClass.filter(s => selectedStudentIds.includes(s.id));
+      for (const student of studentsToNotify) {
+        await addDoc(collection(db, 'notifications'), {
+          studentId: student.id,
+          title: 'New Assignment',
+          message: `New assignment in ${classroomId}: ${title}`,
+          type: 'assignment',
+          classroomId: classroomId,
+          read: false,
+          createdAt: serverTimestamp()
+        });
+      }
+      
+      msg.innerHTML = '<span style="color:#0f9d58;">✅ Assignment created successfully!</span>';
+      setTimeout(() => {
+        modal.remove();
+        // Refresh the classroom modal
+        location.reload();
+      }, 1000);
+      
+    } catch (err) {
+      msg.innerHTML = `<span style="color:#c5221f;">❌ Error: ${err.message}</span>`;
+    }
+  });
+};
+window.showCreateMaterialModal = function(classroomId) {
+  const modal = document.createElement('div');
+  modal.id = 'createMaterialModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10001;">
+      <div class="modal-box" style="width:90%;max-width:600px;background:#fff;border-radius:16px;" onclick="event.stopPropagation()">
+        <div style="padding:24px 28px;border-bottom:1px solid #e0e0e0;">
+          <h2 style="margin:0;">📚 Add Material</h2>
+        </div>
+        
+        <form id="materialCreateForm" style="padding:28px;">
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Title *</label>
+            <input type="text" id="materialTitle" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="e.g., Chapter 5 Slides" required>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Description (optional)</label>
+            <textarea id="materialDescription" rows="3" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;"></textarea>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Upload File (any format)</label>
+            <input type="file" id="materialFile" accept="*/*" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;">
+            <small style="color:#5f6368;">Supports PDF, images, videos, documents, etc.</small>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">OR Add Link</label>
+            <input type="url" id="materialLink" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="https://youtube.com/..., https://docs.google.com/...">
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Topic (optional)</label>
+            <input type="text" id="materialTopic" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;">
+          </div>
+          
+          <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:28px;">
+            <button type="button" class="btn ghost" onclick="document.getElementById('createMaterialModal').remove()">Cancel</button>
+            <button type="submit" class="btn" style="background:#0f9d58;color:white;padding:12px 28px;">📤 Add Material</button>
+          </div>
+          <span id="materialCreateMsg"></span>
+        </form>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  modal.querySelector('#materialCreateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = modal.querySelector('#materialCreateMsg');
+    msg.innerHTML = '<span style="color:#0f9d58;">Uploading...</span>';
+    
+    try {
+      const title = modal.querySelector('#materialTitle').value.trim();
+      const description = modal.querySelector('#materialDescription').value.trim();
+      const topic = modal.querySelector('#materialTopic').value.trim();
+      const link = modal.querySelector('#materialLink').value.trim();
+      const file = modal.querySelector('#materialFile').files[0];
+      
+      if (!title) {
+        msg.innerHTML = '<span style="color:#c5221f;">❌ Title is required</span>';
+        return;
+      }
+      
+      if (!file && !link) {
+        msg.innerHTML = '<span style="color:#c5221f;">❌ Please upload a file or add a link</span>';
+        return;
+      }
+      
+      let fileUrl = '', fileName = '';
+      if (file) {
+        const upload = await uploadFile(file, `materials/${classroomId}`);
+        fileUrl = upload.url;
+        fileName = upload.name;
+      }
+      
+      await addDoc(collection(db, 'resources'), {
+        classroomId: classroomId,
+        tutorId: auth.currentUser.uid,
+        tutorName: auth.currentUser.displayName || 'Tutor',
+        title: title,
+        description: description,
+        note: description,
+        topic: topic,
+        type: 'Material',
+        fileUrl: fileUrl,
+        fileName: fileName,
+        linkUrl: link || null,
+        createdAt: serverTimestamp()
+      });
+      
+      msg.innerHTML = '<span style="color:#0f9d58;">✅ Material added successfully!</span>';
+      setTimeout(() => {
+        modal.remove();
+        location.reload();
+      }, 1000);
+      
+    } catch (err) {
+      msg.innerHTML = `<span style="color:#c5221f;">❌ Error: ${err.message}</span>`;
+    }
+  });
+};
+
+// ============================================
+// CREATE QUIZ MODAL
+// ============================================
+
+window.showCreateQuizModal = function(classroomId, studentsInClass) {
+  const modal = document.createElement('div');
+  modal.id = 'createQuizModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10001;">
+      <div class="modal-box" style="width:90%;max-width:600px;background:#fff;border-radius:16px;" onclick="event.stopPropagation()">
+        <div style="padding:24px 28px;border-bottom:1px solid #e0e0e0;">
+          <h2 style="margin:0;">📊 Create Quiz</h2>
+        </div>
+        
+        <form id="quizCreateForm" style="padding:28px;">
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Quiz Title *</label>
+            <input type="text" id="quizTitle" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="e.g., Fractions Quiz" required>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Instructions (optional)</label>
+            <textarea id="quizInstructions" rows="3" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;"></textarea>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+            <div>
+              <label style="display:block;margin-bottom:8px;font-weight:500;">Due Date (optional)</label>
+              <input type="date" id="quizDueDate" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;">
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:8px;font-weight:500;">Total Points</label>
+              <input type="number" id="quizPoints" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="e.g., 100" value="100">
+            </div>
+          </div>
+          
+          <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:28px;">
+            <button type="button" class="btn ghost" onclick="document.getElementById('createQuizModal').remove()">Cancel</button>
+            <button type="submit" class="btn" style="background:#e37400;color:white;padding:12px 28px;">Create Quiz</button>
+          </div>
+          <span id="quizCreateMsg"></span>
+        </form>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  modal.querySelector('#quizCreateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = modal.querySelector('#quizCreateMsg');
+    
+    try {
+      const title = modal.querySelector('#quizTitle').value.trim();
+      const instructions = modal.querySelector('#quizInstructions').value.trim();
+      const dueDate = modal.querySelector('#quizDueDate').value;
+      const points = modal.querySelector('#quizPoints').value;
+      
+      // Create as an assessment
+      await addDoc(collection(db, 'assessments'), {
+        classroomId: classroomId,
+        tutorId: auth.currentUser.uid,
+        tutorName: auth.currentUser.displayName || 'Tutor',
+        title: title,
+        description: instructions,
+        type: 'Quiz',
+        dueDate: dueDate || null,
+        maxScore: points ? parseFloat(points) : 100,
+        status: 'Pending',
+        createdAt: serverTimestamp()
+      });
+      
+      msg.innerHTML = '<span style="color:#0f9d58;">✅ Quiz created successfully!</span>';
+      setTimeout(() => {
+        modal.remove();
+        location.reload();
+      }, 1000);
+      
+    } catch (err) {
+      msg.innerHTML = `<span style="color:#c5221f;">❌ Error: ${err.message}</span>`;
+    }
+  });
+};
+
+// ============================================
+// CREATE QUESTION MODAL
+// ============================================
+
+window.showCreateQuestionModal = function(classroomId) {
+  const modal = document.createElement('div');
+  modal.id = 'createQuestionModal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10001;">
+      <div class="modal-box" style="width:90%;max-width:600px;background:#fff;border-radius:16px;" onclick="event.stopPropagation()">
+        <div style="padding:24px 28px;border-bottom:1px solid #e0e0e0;">
+          <h2 style="margin:0;">❓ Ask Question</h2>
+        </div>
+        
+        <form id="questionCreateForm" style="padding:28px;">
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Question *</label>
+            <textarea id="questionText" rows="3" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="Ask your class a question..." required></textarea>
+          </div>
+          
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Question Type</label>
+            <select id="questionType" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;">
+              <option value="short">Short answer</option>
+              <option value="multiple">Multiple choice</option>
+            </select>
+          </div>
+          
+          <div id="mcOptions" style="display:none;margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:500;">Options (one per line)</label>
+            <textarea id="mcOptionsText" rows="4" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:8px;" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D"></textarea>
+          </div>
+          
+          <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:28px;">
+            <button type="button" class="btn ghost" onclick="document.getElementById('createQuestionModal').remove()">Cancel</button>
+            <button type="submit" class="btn" style="background:#c5221f;color:white;padding:12px 28px;">Post Question</button>
+          </div>
+          <span id="questionCreateMsg"></span>
+        </form>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Show/hide multiple choice options
+  modal.querySelector('#questionType').addEventListener('change', (e) => {
+    modal.querySelector('#mcOptions').style.display = e.target.value === 'multiple' ? 'block' : 'none';
+  });
+  
+  modal.querySelector('#questionCreateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = modal.querySelector('#questionCreateMsg');
+    
+    try {
+      const question = modal.querySelector('#questionText').value.trim();
+      const type = modal.querySelector('#questionType').value;
+      const options = modal.querySelector('#mcOptionsText').value.trim();
+      
+      // Post as a stream message with question type
+      await addDoc(collection(db, 'classroom-messages'), {
+        classroomId: classroomId,
+        fromId: auth.currentUser.uid,
+        fromName: auth.currentUser.displayName || 'Tutor',
+        message: question,
+        type: 'question',
+        questionType: type,
+        options: options ? options.split('\n').filter(o => o.trim()) : [],
+        createdAt: serverTimestamp()
+      });
+      
+      msg.innerHTML = '<span style="color:#0f9d58;">✅ Question posted successfully!</span>';
+      setTimeout(() => {
+        modal.remove();
+        location.reload();
+      }, 1000);
+      
+    } catch (err) {
+      msg.innerHTML = `<span style="color:#c5221f;">❌ Error: ${err.message}</span>`;
+    }
+  });
+};
+
+// ============================================
+// CREATE TOPIC
+// ============================================
+
+window.createTopic = async function(classroomId) {
+  const topicName = prompt('Enter topic name:');
+  if (!topicName) return;
+  
+  try {
+    await addDoc(collection(db, 'classroom-topics'), {
+      classroomId: classroomId,
+      title: topicName,
+      createdAt: serverTimestamp()
+    });
+    alert('✅ Topic created!');
+    location.reload();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+};
+
+// ============================================
+// LESSON PLAN EVENT LISTENERS
+// ============================================
+
+function attachLessonPlanEventListeners(classroom, profile) {
+  const form = document.getElementById('classroomLessonPlanForm');
+  if (!form) return;
+  
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('lpMsg');
+    msg.innerHTML = '<span style="color:#1a73e8;">Saving lesson plan...</span>';
+    
+    try {
+      const title = document.getElementById('lpTitle').value.trim();
+      const subject = document.getElementById('lpSubject').value.trim();
+      const plannedDate = document.getElementById('lpDate').value;
+      const duration = document.getElementById('lpDuration').value;
+      const objectives = document.getElementById('lpObjectives').value.trim();
+      const materials = document.getElementById('lpMaterials').value.trim();
+      const procedure = document.getElementById('lpProcedure').value.trim();
+      const assessment = document.getElementById('lpAssessment').value.trim();
+      const file = document.getElementById('lpAttachment').files[0];
+      
+      if (!title || !plannedDate) {
+        msg.innerHTML = '<span style="color:#c5221f;">❌ Title and planned date are required</span>';
+        return;
+      }
+      
+      let attachmentUrl = '', attachmentName = '';
+      if (file) {
+        const upload = await uploadFile(file, `lesson-plans/${classroom.id}`);
+        attachmentUrl = upload.url;
+        attachmentName = upload.name;
+      }
+      
+      await addDoc(collection(db, 'lesson-plans'), {
+        classroomId: classroom.id,
+        classroomName: classroom.name,
+        tutorId: auth.currentUser.uid,
+        tutorName: profile?.name || auth.currentUser.displayName || 'Tutor',
+        title: title,
+        subject: subject,
+        plannedDate: plannedDate,
+        duration: duration ? parseInt(duration) : null,
+        objectives: objectives,
+        materials: materials,
+        procedure: procedure,
+        assessment: assessment,
+        notes: procedure, // For compatibility
+        attachmentUrl: attachmentUrl,
+        attachmentName: attachmentName,
+        status: 'Draft',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      msg.innerHTML = '<span style="color:#0f9d58;">✅ Lesson plan saved successfully!</span>';
+      form.reset();
+      setTimeout(() => location.reload(), 1000);
+      
+    } catch (err) {
+      msg.innerHTML = `<span style="color:#c5221f;">❌ Error: ${err.message}</span>`;
+    }
+  });
+}
+
+// ============================================
+// DELETE CLASSWORK ITEM
+// ============================================
+
+window.deleteClassworkItem = async function(type, id) {
+  if (!confirm(`Delete this ${type}? This cannot be undone.`)) return;
+  
+  try {
+    const collectionName = type === 'assignment' ? 'assignments' : 
+                          type === 'material' ? 'resources' : 
+                          type === 'lessonplan' ? 'lesson-plans' : type;
+    await deleteDoc(doc(db, collectionName, id));
+    alert('✅ Deleted successfully!');
+    location.reload();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+};
+
+// ============================================
+// POST TO STREAM
+// ============================================
+
+window.postToStream = async function(classroomId) {
+  const input = document.getElementById('streamInput');
+  const text = input.value.trim();
+  if (!text) return;
+  
+  try {
+    await addDoc(collection(db, 'classroom-messages'), {
+      classroomId: classroomId,
+      fromId: auth.currentUser.uid,
+      fromName: auth.currentUser.displayName || 'Tutor',
+      message: text,
+      type: 'announcement',
+      createdAt: serverTimestamp()
+    });
+    
+    input.value = '';
+    loadStreamFeed(classroomId);
+  } catch (err) {
+    alert('Error posting: ' + err.message);
+  }
+};
+
+// ============================================
+// LOAD STREAM FEED
+// ============================================
+
+async function loadStreamFeed(classroomId) {
+  const feed = document.getElementById('streamFeed');
+  if (!feed) return;
+  
+  try {
+    const q = query(
+      collection(db, 'classroom-messages'), 
+      where('classroomId', '==', classroomId),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+    const snap = await getDocs(q);
+    
+    if (snap.empty) {
+      feed.innerHTML = '<div style="text-align:center;padding:40px;color:#5f6368;">No messages yet. Start the conversation!</div>';
+      return;
+    }
+    
+    feed.innerHTML = snap.docs.map(doc => {
+      const m = doc.data();
+      return `
+        <div class="stream-message">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <div style="width:36px;height:36px;border-radius:50%;background:#1a73e8;color:white;display:flex;align-items:center;justify-content:center;font-weight:bold;">
+              ${(m.fromName || 'T').charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:500;">${escapeHtml(m.fromName || 'Tutor')}</div>
+              <div style="font-size:12px;color:#5f6368;">${fmtDate(m.createdAt)}</div>
+            </div>
+          </div>
+          <div style="margin-left:48px;padding:12px;background:#f8f9fa;border-radius:12px;">
+            ${escapeHtml(m.message)}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    feed.innerHTML = `<div style="color:#c5221f;">Error loading stream: ${err.message}</div>`;
+  }
+}
+
+// ============================================
+// SHOW JOIN CODE
+// ============================================
+
+window.showJoinCode = function(code) {
+  const modal = document.createElement('div');
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10002;">
+      <div class="modal-box" style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:400px;" onclick="event.stopPropagation()">
+        <div style="font-size:48px;margin-bottom:16px;">🔑</div>
+        <h3 style="margin:0 0 8px 0;">Class Code</h3>
+        <p style="color:#5f6368;margin-bottom:24px;">Share this code with your students</p>
+        <div style="background:#1a73e8;color:white;padding:20px;border-radius:12px;font-size:36px;font-weight:bold;letter-spacing:8px;margin-bottom:24px;">
+          ${escapeHtml(code)}
+        </div>
+        <button class="btn" onclick="navigator.clipboard?.writeText('${code}');alert('Copied!');">📋 Copy Code</button>
+        <button class="btn ghost" onclick="this.closest('.modal-overlay').parentElement.remove()" style="margin-left:12px;">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
+
+// ============================================
+// ATTACH EVENT LISTENERS FOR CLASSWORK
+// ============================================
+
+function attachClassworkEventListeners(classroom, studentsInClass) {
+  // Event listeners are attached via onclick attributes in the HTML
+  // This function is a placeholder for any additional setup needed
+}
+
+// Make sure these functions are globally available
+window.renderClassTabContent = renderClassTabContent;
+window.loadStreamFeed = loadStreamFeed;
