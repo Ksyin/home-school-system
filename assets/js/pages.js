@@ -68,8 +68,11 @@ const navMap = {
   ],
   tutor: [
 ['Dashboard', '/tutor/dashboard.html', '🏠'],
+   ['Dashboard', '/tutor/dashboard.html', '🏠'],
     ['Classrooms', '/tutor/classrooms.html', '🏫'],   // ← now the main Google Classroom hub
+    ['Portfolio', '/tutor/portfolio.html', '🗂️'],     // ← NEW: Portfolio for tutors
     ['Settings', '/tutor/settings.html', '⚙️']
+
   ],
   student: [
     ['Dashboard', '/student/dashboard.html', '🏠'],
@@ -3346,42 +3349,15 @@ async function bootParentAllPortfolioPage() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
-  const [allPortfolios, allStudents] = await Promise.all([
-    loadAllPortfolios(),
-    loadAllUsersByRole('student')
-  ]);
+  const { profile } = bundle;
   
-  const studentMap = {};
-  allStudents.forEach(s => { studentMap[s.id] = s.full_name || s.name || s.email; });
-  
-  // Group by student
-  const grouped = {};
-  allPortfolios.forEach(item => {
-    if (!grouped[item.studentId]) grouped[item.studentId] = [];
-    grouped[item.studentId].push(item);
-  });
-  
-  const portfolioHtml = Object.entries(grouped).map(([studentId, items]) => `
-    <section class="card panel" style="margin-bottom:20px;">
-      <h3>🌟 ${escapeHtml(studentMap[studentId] || studentId)}'s Portfolio</h3>
-      ${items.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(item => `
-        <div style="margin-top:12px;padding:12px;background:#f8f9fa;border-radius:12px;">
-          <div style="display:flex;justify-content:space-between;">
-            <span class="badge">${escapeHtml(item.type || 'Entry')}</span>
-            <small>${fmtDate(item.createdAt)}</small>
-          </div>
-          <h4 style="margin:8px 0;">${escapeHtml(item.title || 'Untitled')}</h4>
-          <p>${escapeHtml(item.note || '')}</p>
-          ${item.fileUrl ? renderFilePreview(item.fileUrl, item.fileName) : ''}
-        </div>
-      `).join('')}
-    </section>
-  `).join('');
-  
-  document.getElementById('page-content').innerHTML = `
-    <div class="stats-grid"><div class="stat-card"><div class="stat-number">${allPortfolios.length}</div><p>Total Portfolio Entries</p></div></div>
-    ${portfolioHtml || '<div class="card panel"><p class="empty">No portfolio entries yet</p></div>'}
-  `;
+  try {
+    const portfolios = await loadPortfoliosForUser(null, 'parent');
+    document.getElementById('page-content').innerHTML = renderPortfolioGrid(portfolios, 'parent', profile);
+  } catch (err) {
+    console.error('Portfolio error:', err);
+    document.getElementById('page-content').innerHTML = '<div class="error">Error loading portfolios</div>';
+  }
 }
 
 async function bootParentSettingsPage() {
@@ -3583,53 +3559,13 @@ async function bootStudentPortfolioPage() {
   
   await ensureStudentMirror(bundle.user, bundle.profile);
   const { user, profile } = bundle;
-  const items = await loadStudentPortfolio(user.uid);
-  document.getElementById('page-content').innerHTML = renderStudentPortfolioPage(items);
   
-  const form = document.getElementById('portfolioForm');
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const type = document.getElementById('portfolioType').value;
-      const title = document.getElementById('portfolioTitle').value;
-      const note = document.getElementById('portfolioNote').value;
-      const file = document.getElementById('portfolioFile').files[0];
-      const feeling = document.getElementById('portfolioFeeling')?.value || '';
-      const milestone = document.getElementById('portfolioMilestone')?.value || '';
-      
-      if (!title || !note) {
-        document.getElementById('portfolioMsg').innerHTML = '<span style="color:#e74c3c;">❌ Please add a title and reflection</span>';
-        return;
-      }
-      
-      document.getElementById('portfolioMsg').innerHTML = '<span style="color:#3498db;">⏳ Saving your journey entry...</span>';
-      
-      try {
-        let upload = { url: '', name: '' };
-        if (file) {
-          upload = await uploadFile(file, `portfolio/${user.uid}`);
-        }
-        
-        await addDoc(collection(db, 'portfolio'), {
-          studentId: user.uid,
-          studentName: getStudentDisplayName(profile, user),
-          type: type,
-          title: title,
-          note: note,
-          feeling: feeling,
-          milestone: milestone,
-          fileUrl: upload.url,
-          fileName: upload.name,
-          createdAt: serverTimestamp()
-        });
-        
-        document.getElementById('portfolioMsg').innerHTML = '<span style="color:#27ae60;">✅ Entry saved! Refreshing...</span>';
-        form.reset();
-        setTimeout(() => bootStudentPortfolioPage(), 1500);
-      } catch (err) {
-        document.getElementById('portfolioMsg').innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
-      }
-    });
+  try {
+    const portfolios = await loadPortfoliosForUser(user.uid, 'student');
+    document.getElementById('page-content').innerHTML = renderPortfolioGrid(portfolios, 'student', profile);
+  } catch (err) {
+    console.error('Portfolio error:', err);
+    document.getElementById('page-content').innerHTML = '<div class="error">Error loading portfolios</div>';
   }
 }
 
@@ -5200,7 +5136,70 @@ function renderParentChildrenPage(children) {
   return `<section class="card panel"><h3>Your Children</h3>${children.length ? cards : '<div class="empty">No children linked</div>'}</section>`;
 }
 
+// Add section builder functions
+window.addSectionToBuilder = function() {
+  if (!window.portfolioSections) window.portfolioSections = [];
+  
+  window.portfolioSections.push({
+    title: '',
+    description: '',
+    type: 'text',
+    required: true,
+    order: window.portfolioSections.length,
+    placeholder: ''
+  });
+  
+  renderSectionBuilder();
+};
+
+window.removeSectionFromBuilder = function(index) {
+  window.portfolioSections.splice(index, 1);
+  // Reorder
+  window.portfolioSections.forEach((s, i) => s.order = i);
+  renderSectionBuilder();
+};
+
+function renderSectionBuilder() {
+  const container = document.getElementById('sectionsList');
+  if (!container) return;
+  
+  if (!window.portfolioSections || window.portfolioSections.length === 0) {
+    container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">No sections yet. Click "Add Section" to start building your portfolio.</p>';
+    return;
+  }
+  
+  container.innerHTML = window.portfolioSections.map((section, index) => `
+    <div class="section-item">
+      <div class="section-item-header">
+        <span><strong>Section ${index + 1}</strong></span>
+        <button type="button" class="btn small danger" onclick="removeSectionFromBuilder(${index})">✕</button>
+      </div>
+      <div style="display:grid;gap:8px;">
+        <input type="text" placeholder="Section Title" value="${escapeHtml(section.title || '')}" 
+               onchange="window.portfolioSections[${index}].title = this.value">
+        <input type="text" placeholder="Description (optional)" value="${escapeHtml(section.description || '')}"
+               onchange="window.portfolioSections[${index}].description = this.value">
+        <select onchange="window.portfolioSections[${index}].type = this.value">
+          <option value="text" ${section.type === 'text' ? 'selected' : ''}>📝 Text Response</option>
+          <option value="upload" ${section.type === 'upload' ? 'selected' : ''}>📎 File Upload</option>
+          <option value="reflection" ${section.type === 'reflection' ? 'selected' : ''}>🤔 Reflection</option>
+          <option value="media" ${section.type === 'media' ? 'selected' : ''}>🎥 Media</option>
+        </select>
+        <input type="text" placeholder="Placeholder text / Hint" value="${escapeHtml(section.placeholder || '')}"
+               onchange="window.portfolioSections[${index}].placeholder = this.value">
+        <label>
+          <input type="checkbox" ${section.required !== false ? 'checked' : ''} 
+                 onchange="window.portfolioSections[${index}].required = this.checked"> Required
+        </label>
+      </div>
+    </div>
+  `).join('');
+}
+
+
 async function bootParentPortfolioPage() {
+    await bootParentAllPortfolioPage();
+
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'parent') return;
   
@@ -5218,15 +5217,20 @@ function renderParentPortfolio(items, child) {
   return `<section class="card panel"><h3>${escapeHtml(child?.full_name || child?.name || 'Student')}'s Portfolio</h3>${rows || '<p class="empty">No portfolio entries yet.</p>'}</section>`;
 }
 
+// Tutor Portfolio Page - Sutori Style Multi-Portfolio System
 async function bootTutorPortfolios() {
   const bundle = await requireAuth();
   if (!bundle || bundle.profile?.role !== 'tutor') return;
   
-  const items = await loadAllPortfolios();
-  const grouped = {};
-  items.forEach(item => { if (!grouped[item.studentId]) grouped[item.studentId] = { name: item.studentName || 'Student', entries: [] }; grouped[item.studentId].entries.push(item); });
-  const html = Object.values(grouped).map(s => `<section class="card panel" style="margin-bottom:20px"><h3>${escapeHtml(s.name)}</h3>${s.entries.map(e => `<div style="margin-top:12px;padding:12px;background:var(--surface-2);border-radius:12px"><strong>${escapeHtml(e.type || '')}</strong> <small style="float:right">${fmtDate(e.createdAt)}</small><p>${escapeHtml(e.note || '')}</p>${e.fileUrl ? renderFilePreview(e.fileUrl, e.fileName) : ''}</div>`).join('')}</section>`).join('');
-  document.getElementById('page-content').innerHTML = html || '<div class="empty">No portfolios yet</div>';
+  const { user, profile } = bundle;
+  
+  try {
+    const portfolios = await loadPortfoliosForUser(user.uid, 'tutor');
+    document.getElementById('page-content').innerHTML = renderPortfolioGrid(portfolios, 'tutor', profile);
+  } catch (err) {
+    console.error('Portfolio error:', err);
+    document.getElementById('page-content').innerHTML = '<div class="error">Error loading portfolios</div>';
+  }
 }
 
 async function bootReportsPage() {
@@ -6988,6 +6992,8 @@ const routeMap = {
     'lesson-plans': bootLessonPlansPage,
     'learners': bootLearnersPage,
     'classrooms': bootClassroomsPage,
+    'settings': bootDefaultPage,                   // Add if needed
+
     'messages': bootMessagesPage,
     'reports': bootReportsPage
   },
@@ -7442,6 +7448,1432 @@ function attachClassworkEventListeners(classroom, students) {
     });
   }
 }
+async function getStudentPortfolioCompletion(portfolioId, studentId) {
+  const sectionsSnap = await getDocs(
+    query(collection(db, 'portfolio_sections'), where('portfolioId', '==', portfolioId))
+  );
+  const totalSections = sectionsSnap.size;
+  
+  const entriesSnap = await getDocs(
+    query(
+      collection(db, 'portfolio_entries'),
+      where('portfolioId', '==', portfolioId),
+      where('studentId', '==', studentId)
+    )
+  );
+  
+  const completedSections = entriesSnap.size;
+  const entries = entriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  return {
+    totalSections,
+    completedSections,
+    percentage: totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0,
+    entries,
+    lastUpdated: entries.length > 0 
+      ? Math.max(...entries.map(e => e.updatedAt?.seconds || 0))
+      : null
+  };
+}
+async function savePortfolioEntry(portfolioId, sectionId, studentId, data) {
+  // Check if entry already exists
+  const existingSnap = await getDocs(
+    query(
+      collection(db, 'portfolio_entries'),
+      where('portfolioId', '==', portfolioId),
+      where('sectionId', '==', sectionId),
+      where('studentId', '==', studentId)
+    )
+  );
+  
+  const entryData = {
+    portfolioId,
+    sectionId,
+    studentId,
+    studentName: data.studentName || '',
+    content: data.content || '',
+    fileUrl: data.fileUrl || '',
+    fileName: data.fileName || '',
+    fileType: data.fileType || '',
+    mediaUrls: data.mediaUrls || [],
+    status: 'completed',
+    updatedAt: serverTimestamp()
+  };
+  
+  if (!existingSnap.empty) {
+    // Update existing
+    const entryId = existingSnap.docs[0].id;
+    await updateDoc(doc(db, 'portfolio_entries', entryId), entryData);
+    return entryId;
+  } else {
+    // Create new
+    entryData.createdAt = serverTimestamp();
+    const entryRef = await addDoc(collection(db, 'portfolio_entries'), entryData);
+    
+    // Update portfolio completion count
+    await updateDoc(doc(db, 'portfolios', portfolioId), {
+      [`studentProgress.${studentId}`]: {
+        completedAt: serverTimestamp(),
+        sectionsCompleted: 1
+      }
+    });
+    
+    return entryRef.id;
+  }
+}
+function getPortfolioGradient(type) {
+  const gradients = {
+    project: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    subject: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    stem: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    custom: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
+  };
+  return gradients[type] || gradients.custom;
+}
+
+
+
+function getDefaultEmoji(type) {
+  const emojis = {
+    project: '📋',
+    subject: '📚',
+    stem: '🔬',
+    custom: '📁'
+  };
+  return emojis[type] || '📁';
+}
+
+function getTypeLabel(type) {
+  const labels = {
+    project: 'Project',
+    subject: 'Subject',
+    stem: 'STEM',
+    custom: 'Custom'
+  };
+  return labels[type] || 'Portfolio';
+}
+
+
+function getSectionTypeIcon(type) {
+  const icons = {
+    text: '📝',
+    upload: '📎',
+    reflection: '🤔',
+    media: '🎥',
+    milestone: '🎯'
+  };
+  return icons[type] || '📄';
+}
+
+function getSectionTypeLabel(type) {
+  const labels = {
+    text: 'Text Response',
+    upload: 'File Upload',
+    reflection: 'Reflection',
+    media: 'Media',
+    milestone: 'Milestone'
+  };
+  return labels[type] || 'Section';
+}
+
+function calculateProgress(total, completed) {
+  if (total === 0) return 0;
+  return Math.round((completed / total) * 100);
+}
+
+// ============================================
+// EXPOSE TO WINDOW
+// ============================================
+
+window.openPortfolio = async function(portfolioId) {
+  const bundle = await requireAuth();
+  if (!bundle) return;
+  
+  const { user, profile } = bundle;
+  
+  try {
+    // Load portfolio data
+    const portfolioDoc = await getDoc(doc(db, 'portfolios', portfolioId));
+    if (!portfolioDoc.exists()) {
+      alert('Portfolio not found');
+      return;
+    }
+    
+    const portfolio = { id: portfolioDoc.id, ...portfolioDoc.data() };
+    const sections = await loadPortfolioSections(portfolioId);
+    
+    let entries = [];
+    if (profile.role === 'student') {
+      entries = await loadStudentPortfolioEntries(portfolioId, user.uid);
+    }
+    
+    // Store current view state
+    window.currentPortfolioView = { portfolio, sections, entries };
+    
+    // Render the view
+    const content = document.getElementById('page-content');
+    content.innerHTML = renderPortfolioView(portfolio, sections, entries, profile.role, user.uid);
+    
+  } catch (err) {
+    console.error('Open portfolio error:', err);
+    alert('Error opening portfolio: ' + err.message);
+  }
+};
+
+window.closePortfolioView = function() {
+  location.reload(); // Simple refresh to go back to grid
+};
+
+window.autoSaveSection = function(portfolioId, sectionId, studentId, content) {
+  // Debounced save
+  if (window.saveTimeout) clearTimeout(window.saveTimeout);
+  window.saveTimeout = setTimeout(async () => {
+    await savePortfolioEntry(portfolioId, sectionId, studentId, {
+      content,
+      studentName: auth.currentUser?.displayName || 'Student'
+    });
+    document.getElementById(`save-status-${sectionId}`).textContent = '✓ Saved';
+    setTimeout(() => {
+      const el = document.getElementById(`save-status-${sectionId}`);
+      if (el) el.textContent = '';
+    }, 2000);
+  }, 1000);
+};
+
+window.saveSectionContent = async function(portfolioId, sectionId, studentId) {
+  const textarea = document.getElementById(`section-input-${sectionId}`);
+  if (!textarea) return;
+  
+  await savePortfolioEntry(portfolioId, sectionId, studentId, {
+    content: textarea.value,
+    studentName: auth.currentUser?.displayName || 'Student'
+  });
+  
+  const status = document.getElementById(`save-status-${sectionId}`);
+  if (status) {
+    status.textContent = '✓ Saved!';
+    setTimeout(() => status.textContent = '', 2000);
+  }
+};
+
+window.handleSectionFileUpload = async function(input, portfolioId, sectionId, studentId) {
+  const file = input.files[0];
+  if (!file) return;
+  
+  const progressDiv = document.getElementById(`upload-progress-${sectionId}`);
+  progressDiv.innerHTML = '<span style="color:#3498db;">Uploading...</span>';
+  
+  try {
+    const upload = await uploadFile(file, `portfolio/${portfolioId}/${sectionId}/${studentId}`);
+    
+    await savePortfolioEntry(portfolioId, sectionId, studentId, {
+      fileUrl: upload.url,
+      fileName: upload.name,
+      fileType: file.type,
+      studentName: auth.currentUser?.displayName || 'Student'
+    });
+    
+    progressDiv.innerHTML = '<span style="color:#27ae60;">✓ Uploaded!</span>';
+    
+    // Refresh the section display
+    setTimeout(() => {
+      openPortfolio(portfolioId);
+    }, 500);
+    
+  } catch (err) {
+    progressDiv.innerHTML = `<span style="color:#e74c3c;">Error: ${err.message}</span>`;
+  }
+};
+
+window.submitPortfolio = async function(portfolioId) {
+  try {
+    await updateDoc(doc(db, 'portfolios', portfolioId), {
+      [`submissions.${auth.currentUser.uid}`]: {
+        submittedAt: serverTimestamp(),
+        status: 'submitted'
+      }
+    });
+    
+    alert('✅ Portfolio submitted successfully!');
+  } catch (err) {
+    alert('Error submitting: ' + err.message);
+  }
+};
+
+function renderPortfolioGrid(portfolios, role, profile) {
+  const canCreate = role === 'tutor' || role === 'parent';
+  
+  // Group portfolios by type
+  const grouped = {
+    project: portfolios.filter(p => p.type === 'project'),
+    subject: portfolios.filter(p => p.type === 'subject'),
+    stem: portfolios.filter(p => p.type === 'stem'),
+    custom: portfolios.filter(p => p.type === 'custom' || !p.type)
+  };
+  
+  const renderPortfolioCard = (p) => {
+    const progress = p.completionStatus?.percentage || 0;
+    const isStudent = role === 'student';
+    
+    return `
+      <div class="portfolio-grid-card" data-portfolio-id="${p.id}" onclick="openPortfolio('${p.id}')">
+        <div class="portfolio-cover" style="background: ${getPortfolioGradient(p.type)};">
+          <span class="portfolio-emoji">${p.emoji || getDefaultEmoji(p.type)}</span>
+          ${p.coverImageUrl ? `<img src="${p.coverImageUrl}" class="portfolio-cover-img">` : ''}
+        </div>
+        <div class="portfolio-card-content">
+          <div class="portfolio-type-badge ${p.type}">${getTypeLabel(p.type)}</div>
+          <h4 class="portfolio-card-title">${escapeHtml(p.title)}</h4>
+          <p class="portfolio-card-desc">${escapeHtml(p.description || '')}</p>
+          
+          ${p.subject ? `<div class="portfolio-subject">📚 ${escapeHtml(p.subject)}</div>` : ''}
+          
+          ${isStudent ? `
+            <div class="portfolio-progress">
+              <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${progress}%;"></div>
+              </div>
+              <span class="progress-text">${progress}% Complete</span>
+            </div>
+          ` : `
+            <div class="portfolio-meta">
+              <span>👥 ${p.totalStudents || 0} students</span>
+              <span>✅ ${p.completedCount || 0} completed</span>
+            </div>
+          `}
+          
+          <div class="portfolio-card-footer">
+            <span class="portfolio-creator">By ${escapeHtml(p.createdByName || 'Teacher')}</span>
+            ${p.dueDate ? `<span class="portfolio-due">📅 Due ${fmtDate(p.dueDate)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  };
+  
+  return `
+    <style>
+      /* Portfolio Grid Styles */
+      .portfolio-page-container {
+        padding: 0;
+      }
+      
+      .portfolio-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      
+      .portfolio-header h2 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .portfolio-filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      
+      .filter-chip {
+        padding: 8px 16px;
+        border-radius: 20px;
+        border: 1px solid #e0e0e0;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 13px;
+      }
+      
+      .filter-chip:hover {
+        background: #f0f7ff;
+        border-color: #3498db;
+      }
+      
+      .filter-chip.active {
+        background: #3498db;
+        color: white;
+        border-color: #3498db;
+      }
+      
+      .portfolio-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 24px;
+      }
+      
+      .portfolio-grid-card {
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        cursor: pointer;
+        transition: all 0.3s;
+        border: 1px solid #f0f0f0;
+      }
+      
+      .portfolio-grid-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+      }
+      
+      .portfolio-cover {
+        height: 140px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .portfolio-emoji {
+        font-size: 48px;
+        z-index: 1;
+      }
+      
+      .portfolio-cover-img {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.3;
+      }
+      
+      .portfolio-card-content {
+        padding: 20px;
+      }
+      
+      .portfolio-type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+      
+      .portfolio-type-badge.project { background: #e3f2fd; color: #1565c0; }
+      .portfolio-type-badge.subject { background: #e8f5e9; color: #2e7d32; }
+      .portfolio-type-badge.stem { background: #fff3e0; color: #e65100; }
+      .portfolio-type-badge.custom { background: #f3e5f5; color: #6a1b9a; }
+      
+      .portfolio-card-title {
+        margin: 0 0 8px 0;
+        font-size: 18px;
+        color: #2c3e50;
+      }
+      
+      .portfolio-card-desc {
+        font-size: 13px;
+        color: #666;
+        margin: 0 0 12px 0;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      
+      .portfolio-subject {
+        font-size: 12px;
+        color: #3498db;
+        margin-bottom: 12px;
+      }
+      
+      .portfolio-progress {
+        margin: 12px 0;
+      }
+      
+      .progress-bar-container {
+        height: 6px;
+        background: #e0e0e0;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 4px;
+      }
+      
+      .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #3498db, #2ecc71);
+        border-radius: 3px;
+        transition: width 0.3s;
+      }
+      
+      .progress-text {
+        font-size: 11px;
+        color: #666;
+      }
+      
+      .portfolio-meta {
+        display: flex;
+        gap: 16px;
+        margin: 12px 0;
+        font-size: 12px;
+        color: #666;
+      }
+      
+      .portfolio-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #f0f0f0;
+        font-size: 12px;
+      }
+      
+      .portfolio-creator {
+        color: #888;
+      }
+      
+      .portfolio-due {
+        color: #e74c3c;
+      }
+      
+      /* Section Styles for Portfolio View */
+      .portfolio-sections-container {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      
+      .portfolio-view-header {
+        margin-bottom: 32px;
+      }
+      
+      .portfolio-view-header h2 {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      
+      .portfolio-section-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        border: 1px solid #f0f0f0;
+        transition: all 0.2s;
+      }
+      
+      .portfolio-section-card.completed {
+        border-left: 4px solid #2ecc71;
+      }
+      
+      .section-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      
+      .section-number {
+        width: 32px;
+        height: 32px;
+        background: #3498db;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      
+      .section-number.completed {
+        background: #2ecc71;
+      }
+      
+      .section-title-area {
+        flex: 1;
+      }
+      
+      .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      
+      .section-type-badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        background: #f0f0f0;
+      }
+      
+      .section-description {
+        color: #666;
+        font-size: 14px;
+        margin: 0;
+      }
+      
+      .section-required {
+        color: #e74c3c;
+        font-size: 12px;
+        margin-left: 8px;
+      }
+      
+      .section-content {
+        margin-left: 44px;
+      }
+      
+      .student-response {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 16px;
+      }
+      
+      .section-input-area textarea {
+        width: 100%;
+        padding: 14px;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        font-size: 14px;
+        resize: vertical;
+        min-height: 100px;
+      }
+      
+      .section-input-area textarea:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+      }
+      
+      .upload-area {
+        border: 2px dashed #ddd;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .upload-area:hover {
+        border-color: #3498db;
+        background: #f0f7ff;
+      }
+      
+      .upload-preview {
+        margin-top: 12px;
+      }
+      
+      .section-actions {
+        margin-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+      
+      /* Create Portfolio Modal */
+      .create-portfolio-modal .modal-box {
+        max-width: 700px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      
+      .section-builder {
+        margin-top: 20px;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 12px;
+      }
+      
+      .section-item {
+        background: white;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border: 1px solid #e0e0e0;
+      }
+      
+      .section-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      
+      .add-section-btn {
+        width: 100%;
+        padding: 12px;
+        border: 1px dashed #3498db;
+        background: white;
+        border-radius: 8px;
+        color: #3498db;
+        cursor: pointer;
+      }
+    </style>
+    
+    <div class="portfolio-page-container">
+      <div class="portfolio-header">
+        <h2>
+          <span>📁 Portfolios</span>
+          <span class="badge">${portfolios.length}</span>
+        </h2>
+        ${canCreate ? `
+          <button class="btn" onclick="showCreatePortfolioModal('${role}', '${profile?.id || ''}', '${escapeHtml(profile?.name || '')}')">
+            ➕ Create Portfolio
+          </button>
+        ` : ''}
+      </div>
+      
+      <div class="portfolio-filters" id="portfolioFilters">
+        <button class="filter-chip active" data-filter="all">All</button>
+        <button class="filter-chip" data-filter="project">📋 Projects</button>
+        <button class="filter-chip" data-filter="subject">📚 Subjects</button>
+        <button class="filter-chip" data-filter="stem">🔬 STEM</button>
+        <button class="filter-chip" data-filter="custom">✨ Custom</button>
+        ${role === 'student' ? '<button class="filter-chip" data-filter="in-progress">🔄 In Progress</button>' : ''}
+        ${role === 'student' ? '<button class="filter-chip" data-filter="completed">✅ Completed</button>' : ''}
+      </div>
+      
+      ${portfolios.length > 0 ? `
+        <div class="portfolio-grid" id="portfolioGrid">
+          ${portfolios.map(p => renderPortfolioCard(p)).join('')}
+        </div>
+      ` : `
+        <div class="empty-state" style="text-align:center;padding:60px 20px;">
+          <div style="font-size:64px;margin-bottom:16px;">📁</div>
+          <h3>No portfolios yet</h3>
+          <p style="color:#666;">${canCreate ? 'Create your first portfolio to get started!' : 'Your teacher will assign portfolios soon.'}</p>
+          ${canCreate ? `
+            <button class="btn" style="margin-top:20px;" onclick="showCreatePortfolioModal('${role}', '${profile?.id || ''}', '${escapeHtml(profile?.name || '')}')">
+              ➕ Create Portfolio
+            </button>
+          ` : ''}
+        </div>
+      `}
+    </div>
+    
+    <script>
+      // Filter functionality
+      const filterChips = document.querySelectorAll('.filter-chip');
+      const cards = document.querySelectorAll('.portfolio-grid-card');
+      
+      filterChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          filterChips.forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          
+          const filter = chip.dataset.filter;
+          
+          cards.forEach(card => {
+            const typeBadge = card.querySelector('.portfolio-type-badge');
+            const type = typeBadge ? typeBadge.className.split(' ')[1] : 'custom';
+            const progress = card.querySelector('.progress-text')?.textContent || '';
+            const isCompleted = progress.includes('100%');
+            
+            if (filter === 'all') {
+              card.style.display = 'block';
+            } else if (filter === 'in-progress') {
+              card.style.display = !isCompleted ? 'block' : 'none';
+            } else if (filter === 'completed') {
+              card.style.display = isCompleted ? 'block' : 'none';
+            } else {
+              card.style.display = type === filter ? 'block' : 'none';
+            }
+          });
+        });
+      });
+    </script>
+  `;
+}
+function renderPortfolioView(portfolio, sections, entries, role, studentId) {
+  const isStudent = role === 'student';
+  const canEdit = role === 'tutor' || role === 'parent';
+  
+  // Map entries by sectionId for quick lookup
+  const entryMap = new Map();
+  entries.forEach(e => entryMap.set(e.sectionId, e));
+  
+  const sectionsHtml = sections.map((section, index) => {
+    const entry = entryMap.get(section.id);
+    const isCompleted = !!entry;
+    const sectionType = section.type || 'text';
+    
+    return `
+      <div class="portfolio-section-card ${isCompleted ? 'completed' : ''}" data-section-id="${section.id}">
+        <div class="section-header">
+          <div class="section-number ${isCompleted ? 'completed' : ''}">${index + 1}</div>
+          <div class="section-title-area">
+            <div class="section-title">
+              ${escapeHtml(section.title)}
+              <span class="section-type-badge">${getSectionTypeIcon(sectionType)} ${getSectionTypeLabel(sectionType)}</span>
+              ${section.required ? '<span class="section-required">*Required</span>' : ''}
+            </div>
+            ${section.description ? `<p class="section-description">${escapeHtml(section.description)}</p>` : ''}
+            ${section.hints ? `<p class="section-hint" style="font-size:12px;color:#888;margin-top:4px;">💡 ${escapeHtml(section.hints)}</p>` : ''}
+          </div>
+        </div>
+        
+        <div class="section-content">
+          ${isStudent ? renderStudentSectionInput(section, entry, portfolio.id, studentId) : 
+                      renderViewOnlySection(section, entry, portfolio.id)}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  const progress = calculateProgress(sections.length, entries.length);
+  
+  return `
+    <style>
+      .portfolio-view-container {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      
+      .back-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #666;
+        cursor: pointer;
+        margin-bottom: 20px;
+        padding: 8px 0;
+      }
+      
+      .back-button:hover {
+        color: #3498db;
+      }
+      
+      .portfolio-view-header {
+        background: white;
+        border-radius: 20px;
+        padding: 28px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      }
+      
+      .portfolio-title-section {
+        display: flex;
+        align-items: flex-start;
+        gap: 20px;
+      }
+      
+      .portfolio-icon-large {
+        font-size: 56px;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: ${getPortfolioGradient(portfolio.type)};
+        border-radius: 20px;
+      }
+      
+      .portfolio-info {
+        flex: 1;
+      }
+      
+      .portfolio-info h2 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+      }
+      
+      .portfolio-meta-info {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      
+      .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #666;
+        font-size: 14px;
+      }
+      
+      .progress-overview {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #f0f0f0;
+      }
+      
+      .progress-bar-large {
+        height: 10px;
+        background: #e0e0e0;
+        border-radius: 5px;
+        overflow: hidden;
+        margin: 12px 0 8px;
+      }
+      
+      .progress-fill-large {
+        height: 100%;
+        background: linear-gradient(90deg, #3498db, #2ecc71);
+        border-radius: 5px;
+      }
+      
+      .student-response-view {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 16px;
+      }
+      
+      .student-response-view p {
+        margin: 0 0 12px 0;
+        line-height: 1.6;
+      }
+      
+      .portfolio-actions-bar {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+      }
+    </style>
+    
+    <div class="portfolio-view-container">
+      <div class="back-button" onclick="closePortfolioView()">
+        ← Back to Portfolios
+      </div>
+      
+      <div class="portfolio-view-header">
+        <div class="portfolio-title-section">
+          <div class="portfolio-icon-large">
+            ${portfolio.emoji || getDefaultEmoji(portfolio.type)}
+          </div>
+          <div class="portfolio-info">
+            <span class="portfolio-type-badge ${portfolio.type}">${getTypeLabel(portfolio.type)}</span>
+            <h2>${escapeHtml(portfolio.title)}</h2>
+            <p style="color:#666;margin:8px 0;">${escapeHtml(portfolio.description || '')}</p>
+            
+            <div class="portfolio-meta-info">
+              ${portfolio.subject ? `<span class="meta-item">📚 ${escapeHtml(portfolio.subject)}</span>` : ''}
+              ${portfolio.gradeLevel ? `<span class="meta-item">🎓 Grade ${escapeHtml(portfolio.gradeLevel)}</span>` : ''}
+              <span class="meta-item">👤 Created by ${escapeHtml(portfolio.createdByName || 'Teacher')}</span>
+              ${portfolio.dueDate ? `<span class="meta-item">📅 Due ${fmtDate(portfolio.dueDate)}</span>` : ''}
+            </div>
+            
+            ${isStudent ? `
+              <div class="progress-overview">
+                <div style="display:flex;justify-content:space-between;">
+                  <span><strong>Your Progress</strong></span>
+                  <span>${entries.length}/${sections.length} sections • ${progress}%</span>
+                </div>
+                <div class="progress-bar-large">
+                  <div class="progress-fill-large" style="width:${progress}%;"></div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        
+        ${canEdit ? `
+          <div class="portfolio-actions-bar">
+            <button class="btn ghost" onclick="editPortfolio('${portfolio.id}')">✏️ Edit</button>
+            <button class="btn ghost" onclick="manageSections('${portfolio.id}')">📋 Manage Sections</button>
+            <button class="btn" onclick="viewAllSubmissions('${portfolio.id}')">📊 View Submissions</button>
+          </div>
+        ` : ''}
+      </div>
+      
+      <div class="portfolio-sections-container">
+        ${sectionsHtml || '<p class="empty">No sections yet. Click "Manage Sections" to add some.</p>'}
+      </div>
+      
+      ${isStudent && sections.length > 0 ? `
+        <div style="margin-top:32px;text-align:center;">
+          <button class="btn large" onclick="submitPortfolio('${portfolio.id}')">
+            ✅ Submit Portfolio
+          </button>
+          <p style="color:#666;margin-top:12px;">You can continue editing after submitting</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+function renderViewOnlySection(section, entry, portfolioId) {
+  if (!entry) {
+    return `<p style="color:#999;margin-left:44px;">No response yet</p>`;
+  }
+  
+  return `
+    <div class="student-response-view">
+      ${entry.content ? `<p>${escapeHtml(entry.content)}</p>` : ''}
+      ${entry.fileUrl ? renderFilePreview(entry.fileUrl, entry.fileName) : ''}
+      <div style="margin-top:12px;font-size:12px;color:#888;">
+        Last updated: ${fmtDate(entry.updatedAt)}
+      </div>
+    </div>
+  `;
+}
+window.showCreatePortfolioModal = function(role, userId, userName) {
+  const old = document.getElementById('createPortfolioModal');
+  if (old) old.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'createPortfolioModal';
+  modal.className = 'create-portfolio-modal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target.classList.contains('modal-overlay'))this.parentElement.remove()">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3>📁 Create New Portfolio</h3>
+          <button class="btn danger" onclick="document.getElementById('createPortfolioModal').remove()">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <form id="createPortfolioForm" class="stack-form">
+            <input type="hidden" id="pfCreatedBy" value="${userId}">
+            <input type="hidden" id="pfCreatedByRole" value="${role}">
+            <input type="hidden" id="pfCreatedByName" value="${escapeHtml(userName)}">
+            
+            <div class="form-row">
+              <label>Portfolio Title *</label>
+              <input id="pfTitle" type="text" required placeholder="e.g., My Science Fair Project">
+            </div>
+            
+            <div class="form-row">
+              <label>Description</label>
+              <textarea id="pfDescription" rows="3" placeholder="Describe what this portfolio is about..."></textarea>
+            </div>
+            
+            <div class="form-row">
+              <label>Portfolio Type *</label>
+              <select id="pfType" required>
+                <option value="project">📋 Project Portfolio</option>
+                <option value="subject">📚 Subject Portfolio</option>
+                <option value="stem">🔬 STEM Portfolio</option>
+                <option value="custom">✨ Custom Portfolio</option>
+              </select>
+            </div>
+            
+            <div class="form-row">
+              <label>Subject (optional)</label>
+              <input id="pfSubject" type="text" placeholder="e.g., Science, Math, History">
+            </div>
+            
+            <div class="form-row">
+              <label>Grade Level (optional)</label>
+              <input id="pfGradeLevel" type="text" placeholder="e.g., 5, 8, 10">
+            </div>
+            
+            <div class="form-row">
+              <label>Cover Emoji</label>
+              <input id="pfEmoji" type="text" placeholder="📁" maxlength="2" value="📁">
+            </div>
+            
+            <div class="form-row">
+              <label>Assign To</label>
+              <select id="pfTargetType">
+                <option value="all">All Students</option>
+                <option value="classroom">Specific Classroom</option>
+                <option value="students">Specific Students</option>
+              </select>
+            </div>
+            
+            <div class="form-row" id="pfClassroomRow" style="display:none;">
+              <label>Select Classroom</label>
+              <select id="pfClassroomId"></select>
+            </div>
+            
+            <div class="form-row" id="pfStudentsRow" style="display:none;">
+              <label>Select Students</label>
+              <select id="pfStudentIds" multiple size="5"></select>
+              <small>Hold Ctrl/Cmd to select multiple</small>
+            </div>
+            
+            <div class="form-row">
+              <label>Due Date (optional)</label>
+              <input id="pfDueDate" type="date">
+            </div>
+            
+            <div class="form-row">
+              <label>
+                <input type="checkbox" id="pfAllowUploads" checked> Allow students to upload files
+              </label>
+            </div>
+            
+            <div class="form-row">
+              <label>
+                <input type="checkbox" id="pfAllowComments"> Allow comments on entries
+              </label>
+            </div>
+            
+            <!-- Section Builder -->
+            <div class="section-builder">
+              <h4 style="margin:0 0 16px 0;">📋 Portfolio Sections</h4>
+              <div id="sectionsList"></div>
+              <button type="button" class="add-section-btn" onclick="addSectionToBuilder()">
+                ➕ Add Section
+              </button>
+            </div>
+            
+            <div class="form-actions" style="margin-top:24px;">
+              <button type="button" class="btn ghost" onclick="document.getElementById('createPortfolioModal').remove()">Cancel</button>
+              <button type="submit" class="btn">Create Portfolio</button>
+              <span id="pfMsg"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Load classrooms and students for assignment
+  loadClassroomOptions(userId);
+  
+  // Target type toggle
+  document.getElementById('pfTargetType').addEventListener('change', (e) => {
+    document.getElementById('pfClassroomRow').style.display = e.target.value === 'classroom' ? 'block' : 'none';
+    document.getElementById('pfStudentsRow').style.display = e.target.value === 'students' ? 'block' : 'none';
+  });
+  
+  // Initialize with one default section
+  window.portfolioSections = [{
+    title: 'Introduction',
+    description: 'Introduce your project and what you hope to learn',
+    type: 'text',
+    required: true,
+    order: 0
+  }];
+  renderSectionBuilder();
+  
+  // Form submit
+  document.getElementById('createPortfolioForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleCreatePortfolio();
+  });
+};
+
+async function loadClassroomOptions(tutorId) {
+  try {
+    const classrooms = await loadClassrooms(tutorId);
+    const select = document.getElementById('pfClassroomId');
+    if (select) {
+      select.innerHTML = '<option value="">-- Select Classroom --</option>' +
+        classrooms.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    }
+    
+    // Also load all students for student selection
+    const students = await loadAllStudents();
+    const studentSelect = document.getElementById('pfStudentIds');
+    if (studentSelect) {
+      studentSelect.innerHTML = students.map(s => 
+        `<option value="${s.id}">${escapeHtml(s.full_name || s.name || s.email)}</option>`
+      ).join('');
+    }
+  } catch (err) {
+    console.warn('Could not load classrooms:', err);
+  }
+}
+
+window.editPortfolio = function(portfolioId) {
+  alert('Edit portfolio - coming soon!');
+};
+
+window.manageSections = function(portfolioId) {
+  alert('Manage sections - coming soon!');
+};
+
+window.viewAllSubmissions = async function(portfolioId) {
+  // Load all student submissions for this portfolio
+  try {
+    const entriesSnap = await getDocs(
+      query(collection(db, 'portfolio_entries'), where('portfolioId', '==', portfolioId))
+    );
+    
+    const entries = entriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    // Group by student
+    const byStudent = {};
+    entries.forEach(e => {
+      if (!byStudent[e.studentId]) byStudent[e.studentId] = { name: e.studentName, count: 0 };
+      byStudent[e.studentId].count++;
+    });
+    
+    const summary = Object.entries(byStudent).map(([id, data]) => 
+      `• ${data.name}: ${data.count} sections completed`
+    ).join('\n');
+    
+    alert(`Submissions Summary:\n${summary || 'No submissions yet'}`);
+  } catch (err) {
+    alert('Error loading submissions: ' + err.message);
+  }
+};
+
+async function handleCreatePortfolio() {
+  const msg = document.getElementById('pfMsg');
+  msg.innerHTML = '<span style="color:#3498db;">Creating portfolio...</span>';
+  
+  try {
+    const data = {
+      title: document.getElementById('pfTitle').value.trim(),
+      description: document.getElementById('pfDescription').value.trim(),
+      type: document.getElementById('pfType').value,
+      subject: document.getElementById('pfSubject').value.trim(),
+      gradeLevel: document.getElementById('pfGradeLevel').value.trim(),
+      emoji: document.getElementById('pfEmoji').value || '📁',
+      targetType: document.getElementById('pfTargetType').value,
+      dueDate: document.getElementById('pfDueDate').value || null,
+      allowStudentUploads: document.getElementById('pfAllowUploads').checked,
+      allowComments: document.getElementById('pfAllowComments').checked,
+      role: document.getElementById('pfCreatedByRole').value,
+      createdByName: document.getElementById('pfCreatedByName').value,
+      sections: window.portfolioSections || []
+    };
+    
+    // Get student IDs based on target type
+    if (data.targetType === 'classroom') {
+      const classroomId = document.getElementById('pfClassroomId').value;
+      data.classroomId = classroomId;
+      // Fetch students in classroom
+      const studentsSnap = await getDocs(
+        query(collection(db, 'students'), where('classroomId', '==', classroomId))
+      );
+      data.studentIds = studentsSnap.docs.map(d => d.id);
+    } else if (data.targetType === 'students') {
+      const selected = Array.from(document.getElementById('pfStudentIds').selectedOptions);
+      data.studentIds = selected.map(opt => opt.value);
+    } else {
+      // All students
+      const allStudentsSnap = await getDocs(
+        query(collection(db, 'users'), where('role', '==', 'student'))
+      );
+      data.studentIds = allStudentsSnap.docs.map(d => d.id);
+    }
+    
+    const portfolioId = await createPortfolioTemplate(data);
+    
+    msg.innerHTML = '<span style="color:#27ae60;">✅ Portfolio created!</span>';
+    setTimeout(() => {
+      document.getElementById('createPortfolioModal').remove();
+      location.reload();
+    }, 1000);
+    
+  } catch (err) {
+    console.error('Create portfolio error:', err);
+    msg.innerHTML = `<span style="color:#e74c3c;">Error: ${err.message}</span>`;
+  }
+}
+function renderStudentSectionInput(section, entry, portfolioId, studentId) {
+  const existingContent = entry?.content || '';
+  const existingFile = entry?.fileUrl || '';
+  
+  if (section.type === 'upload' || section.type === 'media') {
+    return `
+      <div class="section-input-area" data-section-id="${section.id}">
+        ${existingFile ? `
+          <div class="student-response">
+            <div class="upload-preview">
+              ${renderFilePreview(existingFile, entry?.fileName || '')}
+            </div>
+            <p style="margin-top:12px;color:#666;">You can upload a new file to replace this one.</p>
+          </div>
+        ` : ''}
+        
+        <div class="upload-area" onclick="document.getElementById('file-${section.id}').click()">
+          <input type="file" id="file-${section.id}" style="display:none;" 
+                 accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx"
+                 onchange="handleSectionFileUpload(this, '${portfolioId}', '${section.id}', '${studentId}')">
+          <div style="font-size:32px;margin-bottom:8px;">📎</div>
+          <p>${section.placeholder || 'Click to upload a file'}</p>
+          <small>Images, videos, PDFs, documents</small>
+        </div>
+        <div id="upload-progress-${section.id}"></div>
+      </div>
+    `;
+  }
+  
+  // Default text/reflection input
+  return `
+    <div class="section-input-area" data-section-id="${section.id}">
+      ${existingContent ? `
+        <div class="student-response">
+          <p>${escapeHtml(existingContent)}</p>
+        </div>
+      ` : ''}
+      
+      <textarea 
+        id="section-input-${section.id}" 
+        placeholder="${section.placeholder || 'Write your response here...'}"
+        onblur="autoSaveSection('${portfolioId}', '${section.id}', '${studentId}', this.value)"
+      >${escapeHtml(existingContent)}</textarea>
+      
+      <div class="section-actions">
+        <span id="save-status-${section.id}" style="font-size:12px;color:#888;"></span>
+        <button class="btn small" onclick="saveSectionContent('${portfolioId}', '${section.id}', '${studentId}')">
+          Save
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+
+async function loadStudentPortfolioEntries(portfolioId, studentId) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'portfolio_entries'),
+      where('portfolioId', '==', portfolioId),
+      where('studentId', '==', studentId)
+    )
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadPortfolioSections(portfolioId) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'portfolio_sections'),
+      where('portfolioId', '==', portfolioId),
+      orderBy('order', 'asc')
+    )
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+
+async function loadPortfoliosForUser(userId, role) {
+  let portfolios = [];
+  
+  if (role === 'student') {
+    // Get student's classroom
+    const studentDoc = await getDoc(doc(db, 'students', userId));
+    const studentData = studentDoc.data();
+    const classroomId = studentData?.classroomId || '';
+    
+    // Query portfolios assigned to this student
+    const q1 = query(
+      collection(db, 'portfolios'),
+      where('studentIds', 'array-contains', userId)
+    );
+    
+    // Query portfolios for student's classroom
+    const q2 = query(
+      collection(db, 'portfolios'),
+      where('classroomId', '==', classroomId)
+    );
+    
+    // Query public/all portfolios
+    const q3 = query(
+      collection(db, 'portfolios'),
+      where('targetType', '==', 'all')
+    );
+    
+    const [snap1, snap2, snap3] = await Promise.all([
+      getDocs(q1), getDocs(q2), getDocs(q3)
+    ]);
+    
+    // Deduplicate
+    const portfolioMap = new Map();
+    [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(doc => {
+      if (!portfolioMap.has(doc.id)) {
+        portfolioMap.set(doc.id, { id: doc.id, ...doc.data() });
+      }
+    });
+    
+    portfolios = Array.from(portfolioMap.values());
+    
+    // Load completion status for each portfolio
+    for (const p of portfolios) {
+      p.completionStatus = await getStudentPortfolioCompletion(p.id, userId);
+    }
+    
+  } else if (role === 'tutor') {
+    // Tutor sees portfolios they created
+    const q = query(
+      collection(db, 'portfolios'),
+      where('createdBy', '==', userId)
+    );
+    const snap = await getDocs(q);
+    portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+  } else if (role === 'parent') {
+    // Parent sees all portfolios (or filter by their children)
+    const snap = await getDocs(collection(db, 'portfolios'));
+    portfolios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+  
+  // Sort by createdAt descending
+  portfolios.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  
+  return portfolios;
+}
+
+
+async function createPortfolioTemplate(data) {
+  const portfolioRef = doc(collection(db, 'portfolios'));
+  
+  const portfolioData = {
+    title: data.title,
+    description: data.description || '',
+    type: data.type, // 'project', 'subject', 'stem', 'custom'
+    subject: data.subject || '',
+    gradeLevel: data.gradeLevel || '',
+    emoji: data.emoji || '📁',
+    coverImageUrl: data.coverImageUrl || '',
+    createdBy: auth.currentUser.uid,
+    createdByRole: data.role, // 'tutor' or 'parent'
+    createdByName: data.createdByName || '',
+    
+    // Target settings
+    targetType: data.targetType || 'all', // 'all', 'classroom', 'student', 'multiple'
+    classroomId: data.classroomId || null,
+    classroomName: data.classroomName || '',
+    studentIds: data.studentIds || [],
+    studentNames: data.studentNames || [],
+    
+    // Template settings
+    isTemplate: data.isTemplate || false,
+    allowStudentUploads: data.allowStudentUploads !== false,
+    allowComments: data.allowComments || false,
+    
+    // Status
+    status: 'published', // 'draft', 'published', 'archived'
+    dueDate: data.dueDate || null,
+    
+    // Metadata
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    
+    // Stats (updated as students complete)
+    totalStudents: data.studentIds?.length || 0,
+    completedCount: 0
+  };
+  
+  await setDoc(portfolioRef, portfolioData);
+  
+  // Create default sections if provided
+  if (data.sections && Array.isArray(data.sections)) {
+    const batch = writeBatch(db);
+    for (const section of data.sections) {
+      const sectionRef = doc(collection(db, 'portfolio_sections'));
+      batch.set(sectionRef, {
+        portfolioId: portfolioRef.id,
+        title: section.title,
+        description: section.description || '',
+        type: section.type || 'text', // 'text', 'upload', 'reflection', 'milestone', 'media'
+        order: section.order || 0,
+        required: section.required !== false,
+        placeholder: section.placeholder || '',
+        hints: section.hints || '',
+        createdAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
+  }
+  
+  return portfolioRef.id;
+}
+
+
 
 
 window.joinClassByCode = async function() {
