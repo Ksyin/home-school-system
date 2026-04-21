@@ -5179,7 +5179,6 @@ function renderParentChildrenPage(children) {
   return `<section class="card panel"><h3>Your Children</h3>${children.length ? cards : '<div class="empty">No children linked</div>'}</section>`;
 }
 
-// Add section builder functions
 window.addSectionToBuilder = function() {
   if (!window.portfolioSections) window.portfolioSections = [];
   
@@ -5195,9 +5194,10 @@ window.addSectionToBuilder = function() {
   renderSectionBuilder();
 };
 
+
 window.removeSectionFromBuilder = function(index) {
+  if (!window.portfolioSections) return;
   window.portfolioSections.splice(index, 1);
-  // Reorder
   window.portfolioSections.forEach((s, i) => s.order = i);
   renderSectionBuilder();
 };
@@ -5207,36 +5207,33 @@ function renderSectionBuilder() {
   if (!container) return;
   
   if (!window.portfolioSections || window.portfolioSections.length === 0) {
-    container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">No sections yet. Click "Add Section" to start building your portfolio.</p>';
+    container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">No sections yet. Click "Add New Section" to start building your portfolio.</p>';
     return;
   }
   
   container.innerHTML = window.portfolioSections.map((section, index) => `
-    <div class="section-item">
-      <div class="section-item-header">
+    <div class="section-item" style="background:white;border-radius:8px;padding:16px;margin-bottom:12px;border:1px solid #e0e0e0;">
+      <div class="section-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <span><strong>Section ${index + 1}</strong></span>
         <button type="button" class="btn small danger" onclick="removeSectionFromBuilder(${index})">✕</button>
       </div>
       <div style="display:grid;gap:8px;">
         <input type="text" placeholder="Section Title" value="${escapeHtml(section.title || '')}" 
-               onchange="window.portfolioSections[${index}].title = this.value">
+               onchange="window.portfolioSections[${index}].title = this.value" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
         <input type="text" placeholder="Description (optional)" value="${escapeHtml(section.description || '')}"
-               onchange="window.portfolioSections[${index}].description = this.value">
-        <select onchange="window.portfolioSections[${index}].type = this.value; toggleSectionTypeHint(${index}, this.value)">
+               onchange="window.portfolioSections[${index}].description = this.value" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
+        <select onchange="window.portfolioSections[${index}].type = this.value" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
           <option value="text" ${section.type === 'text' ? 'selected' : ''}>📝 Text Response</option>
           <option value="upload" ${section.type === 'upload' ? 'selected' : ''}>📎 File Upload</option>
           <option value="reflection" ${section.type === 'reflection' ? 'selected' : ''}>🤔 Reflection</option>
           <option value="media" ${section.type === 'media' ? 'selected' : ''}>🎥 Media (Video/Audio)</option>
         </select>
         <input type="text" placeholder="Placeholder text / Hint" value="${escapeHtml(section.placeholder || '')}"
-               onchange="window.portfolioSections[${index}].placeholder = this.value">
-        <label>
+               onchange="window.portfolioSections[${index}].placeholder = this.value" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
+        <label style="display:flex;align-items:center;gap:8px;">
           <input type="checkbox" ${section.required !== false ? 'checked' : ''} 
                  onchange="window.portfolioSections[${index}].required = this.checked"> Required
         </label>
-        ${section.type === 'upload' || section.type === 'media' ? `
-          <small style="color:#666;">📎 Students will be able to upload files for this section</small>
-        ` : ''}
       </div>
     </div>
   `).join('');
@@ -5244,6 +5241,40 @@ function renderSectionBuilder() {
 
 window.toggleSectionTypeHint = function(index, type) {
   // Just for UI feedback - the actual type is already updated
+};
+
+
+// Save Link Function
+window.saveSectionLink = async function(portfolioId, sectionId, studentId) {
+  const linkUrl = document.getElementById(`link-url-${sectionId}`)?.value.trim();
+  const linkTitle = document.getElementById(`link-title-${sectionId}`)?.value.trim();
+  
+  if (!linkUrl) {
+    alert('Please enter a valid URL');
+    return;
+  }
+  
+  try {
+    await savePortfolioEntry(portfolioId, sectionId, studentId, {
+      externalLinkUrl: linkUrl,
+      externalLinkTitle: linkTitle || 'View Link',
+      studentName: auth.currentUser?.displayName || 'Student'
+    });
+    
+    alert('✅ Link saved!');
+  } catch (err) {
+    alert('Error saving link: ' + err.message);
+  }
+};
+
+// Close Portfolio View
+window.closePortfolioView = function() {
+  location.reload();
+};
+
+// Edit Portfolio
+window.editPortfolio = function(portfolioId) {
+  alert('Edit portfolio feature coming soon! Portfolio ID: ' + portfolioId);
 };
 
 
@@ -8429,6 +8460,7 @@ ${p.externalLinkUrl ? `
 function renderPortfolioView(portfolio, sections, entries, role, studentId) {
   const isStudent = role === 'student';
   const hasTemplate = portfolio.templateUrl || portfolio.templateType;
+  const hasSections = sections && sections.length > 0;
 
   let templateHtml = '';
   if (hasTemplate) {
@@ -8446,7 +8478,7 @@ function renderPortfolioView(portfolio, sections, entries, role, studentId) {
       </div>`;
   }
 
-  const sectionsHtml = sections.length > 0 
+  const sectionsHtml = hasSections 
     ? sections.map((section, index) => {
         const entry = entries.find(e => e.sectionId === section.id);
         return `
@@ -8472,8 +8504,13 @@ function renderPortfolioView(portfolio, sections, entries, role, studentId) {
     : `<div class="empty-state" style="text-align:center;padding:60px 20px;">
          <div style="font-size:48px;">📋</div>
          <h3>No sections yet</h3>
-         <p>This portfolio was created with a template only.<br>
-            ${isStudent ? 'Your tutor will add sections soon.' : 'You can add sections from the tutor dashboard.'}</p>
+         <p>${hasTemplate ? 'This portfolio has a template but no sections defined.' : 'This portfolio has no sections defined.'}<br>
+            ${isStudent ? 'Your tutor will add sections soon.' : 'You can edit this portfolio to add sections.'}</p>
+         ${!isStudent ? `
+           <button class="btn" style="margin-top:20px;" onclick="editPortfolio('${portfolio.id}')">
+             ✏️ Edit Portfolio to Add Sections
+           </button>
+         ` : ''}
        </div>`;
 
   return `
@@ -8481,33 +8518,58 @@ function renderPortfolioView(portfolio, sections, entries, role, studentId) {
       <div class="back-button" onclick="closePortfolioView()" style="cursor:pointer;color:#3498db;margin-bottom:20px;">← Back to All Portfolios</div>
       
       <div class="portfolio-view-header">
-        <h2>${escapeHtml(portfolio.title)}</h2>
+        <h2>
+          ${escapeHtml(portfolio.emoji || '📁')} ${escapeHtml(portfolio.title)}
+        </h2>
         <p>${escapeHtml(portfolio.description || '')}</p>
-        ${templateHtml}
+        ${portfolio.subject ? `<span class="badge">📚 ${escapeHtml(portfolio.subject)}</span>` : ''}
+        ${portfolio.gradeLevel ? `<span class="badge">🎓 ${escapeHtml(portfolio.gradeLevel)}</span>` : ''}
+        ${portfolio.dueDate ? `<span class="badge warn">📅 Due: ${fmtDate(portfolio.dueDate)}</span>` : ''}
       </div>
+      
+      ${templateHtml}
 
       <div class="portfolio-sections-container">
         ${sectionsHtml}
       </div>
 
-      ${isStudent && sections.length > 0 ? `
+      ${isStudent && hasSections ? `
         <div style="text-align:center;margin:40px 0;">
           <button class="btn large" onclick="submitPortfolio('${portfolio.id}')">✅ Submit Complete Portfolio</button>
+        </div>` : ''}
+        
+      ${!isStudent && hasSections ? `
+        <div style="text-align:center;margin:40px 0;">
+          <button class="btn ghost" onclick="editPortfolio('${portfolio.id}')">✏️ Edit Portfolio Sections</button>
+          <button class="btn ghost" onclick="viewAllSubmissions('${portfolio.id}')">📊 View All Submissions</button>
         </div>` : ''}
     </div>
   `;
 }
 function renderViewOnlySection(section, entry, portfolioId) {
   if (!entry) {
-    return `<p style="color:#999;margin-left:44px;">No response yet</p>`;
+    return `
+      <div class="student-response-view" style="margin-left:44px;">
+        <p style="color:#999;font-style:italic;">No response yet</p>
+      </div>
+    `;
   }
   
   return `
-    <div class="student-response-view">
-      ${entry.content ? `<p>${escapeHtml(entry.content)}</p>` : ''}
-      ${entry.fileUrl ? renderFilePreview(entry.fileUrl, entry.fileName) : ''}
-      <div style="margin-top:12px;font-size:12px;color:#888;">
-        Last updated: ${fmtDate(entry.updatedAt)}
+    <div class="student-response-view" style="margin-left:44px;">
+      <div class="student-response" style="background:#f8f9fa;border-radius:12px;padding:16px;">
+        ${entry.content ? `<p style="margin:0 0 12px 0;white-space:pre-wrap;">${escapeHtml(entry.content)}</p>` : ''}
+        ${entry.fileUrl ? renderFilePreview(entry.fileUrl, entry.fileName) : ''}
+        ${entry.externalLinkUrl ? `
+          <div style="margin-top:12px;">
+            <a href="${entry.externalLinkUrl}" target="_blank" class="btn small ghost">
+              🔗 ${escapeHtml(entry.externalLinkTitle || 'View Link')}
+            </a>
+          </div>
+        ` : ''}
+        <div style="margin-top:12px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;padding-top:12px;">
+          Last updated: ${fmtDate(entry.updatedAt || entry.createdAt)}
+        </div>
       </div>
     </div>
   `;
@@ -8518,6 +8580,16 @@ function renderViewOnlySection(section, entry, portfolioId) {
 window.showCreatePortfolioModal = function(role, userId, userName) {
   const old = document.getElementById('createPortfolioModal');
   if (old) old.remove();
+
+  // Initialize default section
+  window.portfolioSections = [{
+    title: 'Introduction',
+    description: 'Introduce your project and goals',
+    type: 'text',
+    required: true,
+    order: 0,
+    placeholder: 'Write your introduction here...'
+  }];
 
   const modal = document.createElement('div');
   modal.id = 'createPortfolioModal';
@@ -8536,7 +8608,7 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
             <input type="hidden" id="pfCreatedByRole" value="${role}">
             <input type="hidden" id="pfCreatedByName" value="${escapeHtml(userName)}">
 
-            <!-- NEW: Content Mode Selection -->
+            <!-- Content Mode Selection -->
             <div class="form-row">
               <label><strong>How do you want to provide content?</strong></label>
               <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:8px;">
@@ -8578,15 +8650,14 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
 
             <!-- SECTIONS BUILDER (shown by default) -->
             <div id="sectionsBuilderSection">
-              <div class="section-builder">
-                <h4>📋 Portfolio Sections</h4>
-                <p style="color:#666;margin-bottom:12px;">Students will fill these sections one by one.</p>
+              <div class="section-builder" style="margin-top:20px;padding:16px;background:#f8f9fa;border-radius:12px;">
+                <h4 style="margin:0 0 8px 0;">📋 Portfolio Sections</h4>
+                <p style="color:#666;margin-bottom:16px;">Students will fill these sections one by one.</p>
                 <div id="sectionsList"></div>
-                <button type="button" class="add-section-btn" onclick="addSectionToBuilder()">➕ Add New Section</button>
+                <button type="button" class="add-section-btn" onclick="addSectionToBuilder()" style="width:100%;padding:12px;border:1px dashed #3498db;background:white;border-radius:8px;color:#3498db;cursor:pointer;margin-top:12px;">➕ Add New Section</button>
               </div>
             </div>
 
-            <!-- Existing fields (Portfolio Type, Subject, Target, etc.) -->
             <div class="form-row">
               <label>Portfolio Type *</label>
               <select id="pfType" required>
@@ -8607,7 +8678,7 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
               <input id="pfGradeLevel" type="text" placeholder="e.g., Grade 7">
             </div>
 
-            <!-- Target Students Section (keep your existing logic) -->
+            <!-- Target Students Section -->
             <div class="form-row">
               <label>Assign To *</label>
               <select id="pfTargetType">
@@ -8617,7 +8688,6 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
               </select>
             </div>
 
-            <!-- Classroom and Student selectors (your existing code) -->
             <div class="form-row" id="pfClassroomRow" style="display:none;">
               <label>Select Classroom</label>
               <select id="pfClassroomId"></select>
@@ -8662,22 +8732,13 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
     });
   });
 
-  // Initialize default section (your existing logic)
-  window.portfolioSections = [{
-    title: 'Introduction',
-    description: 'Introduce your project and goals',
-    type: 'text',
-    required: true,
-    order: 0
-  }];
-  if (typeof renderSectionBuilder === 'function') renderSectionBuilder();
+  // Render initial sections
+  renderSectionBuilder();
 
-  // Load classrooms and students (your existing function)
-  if (typeof loadClassroomAndStudentOptions === 'function') {
-    loadClassroomAndStudentOptions(userId);
-  }
+  // Load classrooms and students
+  loadClassroomAndStudentOptions(userId);
 
-  // Target type toggle (your existing logic)
+  // Target type toggle
   const targetSelect = document.getElementById('pfTargetType');
   if (targetSelect) {
     targetSelect.addEventListener('change', (e) => {
@@ -8692,7 +8753,6 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
     await handleCreatePortfolio();
   });
 };
-
 async function loadClassroomAndStudentOptions(tutorId) {
   try {
     // Load classrooms
@@ -8774,21 +8834,18 @@ window.viewAllSubmissions = async function(portfolioId) {
   }
 };
 
-// ============================================
-// UPDATED: handleCreatePortfolio - Supports both Template and Sections
-// ============================================
 async function handleCreatePortfolio() {
   const msg = document.getElementById('pfMsg');
   msg.innerHTML = '<span style="color:#3498db;">Creating portfolio...</span>';
 
   try {
-    const contentMode = document.querySelector('input[name="contentMode"]:checked').value;
+    const contentMode = document.querySelector('input[name="contentMode"]:checked')?.value || 'sections';
     let templateData = {};
 
     if (contentMode === 'template') {
       const fileInput = document.getElementById('pfTemplateFile');
-      const linkUrl = document.getElementById('pfTemplateLink').value.trim();
-      const linkTitle = document.getElementById('pfTemplateLinkTitle').value.trim() || 'Template';
+      const linkUrl = document.getElementById('pfTemplateLink')?.value.trim();
+      const linkTitle = document.getElementById('pfTemplateLinkTitle')?.value.trim() || 'Template';
 
       if (fileInput && fileInput.files[0]) {
         const file = fileInput.files[0];
@@ -8809,14 +8866,14 @@ async function handleCreatePortfolio() {
       }
     }
 
-    // === Target Students Logic (kept from your original) ===
-    const targetType = document.getElementById('pfTargetType').value;
+    // === Target Students Logic ===
+    const targetType = document.getElementById('pfTargetType')?.value || 'all';
     let studentIds = [];
     let classroomId = null;
     let classroomName = '';
 
     if (targetType === 'classroom') {
-      classroomId = document.getElementById('pfClassroomId').value;
+      classroomId = document.getElementById('pfClassroomId')?.value;
       if (!classroomId) throw new Error('Please select a classroom');
       const classroomDoc = await getDoc(doc(db, 'classrooms', classroomId));
       if (classroomDoc.exists()) {
@@ -8825,7 +8882,7 @@ async function handleCreatePortfolio() {
         studentIds = data.studentIds || [];
       }
     } else if (targetType === 'students') {
-      const selected = Array.from(document.getElementById('pfStudentIds').selectedOptions || []);
+      const selected = Array.from(document.getElementById('pfStudentIds')?.selectedOptions || []);
       studentIds = selected.map(opt => opt.value);
       if (studentIds.length === 0) throw new Error('Please select at least one student');
     } else {
@@ -8836,21 +8893,22 @@ async function handleCreatePortfolio() {
 
     // === Portfolio Data ===
     const portfolioData = {
-      title: document.getElementById('pfTitle').value.trim(),
-      description: document.getElementById('pfDescription').value.trim(),
-      type: document.getElementById('pfType').value,
-      subject: document.getElementById('pfSubject').value.trim(),
-      gradeLevel: document.getElementById('pfGradeLevel').value.trim(),
-      dueDate: document.getElementById('pfDueDate').value || null,
+      title: document.getElementById('pfTitle')?.value.trim() || '',
+      description: document.getElementById('pfDescription')?.value.trim() || '',
+      type: document.getElementById('pfType')?.value || 'custom',
+      subject: document.getElementById('pfSubject')?.value.trim() || '',
+      gradeLevel: document.getElementById('pfGradeLevel')?.value.trim() || '',
+      dueDate: document.getElementById('pfDueDate')?.value || null,
+      emoji: getDefaultEmoji(document.getElementById('pfType')?.value || 'custom'),
       contentMode: contentMode,
-      ...templateData,                    // ← Template data added here
+      ...templateData,
       targetType: targetType,
       classroomId: classroomId,
       classroomName: classroomName,
       studentIds: studentIds,
       createdBy: auth.currentUser?.uid,
-      createdByRole: document.getElementById('pfCreatedByRole').value,
-      createdByName: document.getElementById('pfCreatedByName').value,
+      createdByRole: document.getElementById('pfCreatedByRole')?.value || 'tutor',
+      createdByName: document.getElementById('pfCreatedByName')?.value || 'Tutor',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status: 'published'
@@ -8860,6 +8918,7 @@ async function handleCreatePortfolio() {
 
     const portfolioRef = doc(collection(db, 'portfolios'));
     await setDoc(portfolioRef, portfolioData);
+    console.log(`✅ Created portfolio: ${portfolioRef.id}`);
 
     // Create sections only if using custom sections mode
     if (contentMode === 'sections' && window.portfolioSections && window.portfolioSections.length > 0) {
@@ -8872,11 +8931,13 @@ async function handleCreatePortfolio() {
           description: section.description || '',
           type: section.type || 'text',
           required: section.required !== false,
+          placeholder: section.placeholder || '',
           order: index,
           createdAt: serverTimestamp()
         });
       });
       await batch.commit();
+      console.log(`✅ Saved ${window.portfolioSections.length} sections for portfolio ${portfolioRef.id}`);
     }
 
     // Notify students
@@ -8894,28 +8955,33 @@ async function handleCreatePortfolio() {
         });
       }
       await batch.commit();
+      console.log(`✅ Notified ${studentIds.length} students`);
     }
 
     msg.innerHTML = `<span style="color:#27ae60;">✅ Portfolio created successfully for ${studentIds.length} student(s)!</span>`;
     
+    // Clear sections array
+    window.portfolioSections = [];
+    
     setTimeout(() => {
-      document.getElementById('createPortfolioModal').remove();
+      document.getElementById('createPortfolioModal')?.remove();
       location.reload();
     }, 1500);
 
   } catch (err) {
-    console.error('Create portfolio error:', err);
+    console.error('❌ Create portfolio error:', err);
     msg.innerHTML = `<span style="color:#e74c3c;">❌ ${err.message}</span>`;
   }
 }
 function renderStudentSectionInput(section, entry, portfolioId, studentId) {
   const existingContent = entry?.content || '';
   const existingFile = entry?.fileUrl || '';
+  const existingLink = entry?.externalLinkUrl || '';
   const sectionId = section.id;
   
   if (section.type === 'upload' || section.type === 'media') {
     return `
-      <div class="section-input-area" data-section-id="${sectionId}">
+      <div class="section-input-area" data-section-id="${sectionId}" style="margin-left:44px;">
         ${existingFile ? `
           <div class="student-response">
             <div class="upload-preview">
@@ -8929,7 +8995,8 @@ function renderStudentSectionInput(section, entry, portfolioId, studentId) {
         ` : ''}
         
         <div class="upload-area" id="upload-area-${sectionId}" 
-             onclick="document.getElementById('file-${sectionId}').click()">
+             onclick="document.getElementById('file-${sectionId}').click()"
+             style="border:2px dashed #ddd;border-radius:12px;padding:24px;text-align:center;cursor:pointer;margin-top:12px;">
           <input type="file" id="file-${sectionId}" style="display:none;" 
                  accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov"
                  onchange="handleSectionFileUpload(this, '${portfolioId}', '${sectionId}', '${studentId}')">
@@ -8938,13 +9005,27 @@ function renderStudentSectionInput(section, entry, portfolioId, studentId) {
           <small>Images, videos, PDFs, documents (Max 50MB)</small>
         </div>
         <div id="upload-progress-${sectionId}" style="margin-top:12px;"></div>
+        
+        <!-- External Link Option -->
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e0e0e0;">
+          <label style="font-weight:500;margin-bottom:8px;display:block;">🔗 Or add an external link</label>
+          <input type="url" id="link-url-${sectionId}" placeholder="https://..." 
+                 value="${escapeHtml(entry?.externalLinkUrl || '')}"
+                 style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;">
+          <input type="text" id="link-title-${sectionId}" placeholder="Link title (e.g. My Video)" 
+                 value="${escapeHtml(entry?.externalLinkTitle || '')}"
+                 style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;">
+          <button class="btn small" onclick="saveSectionLink('${portfolioId}', '${sectionId}', '${studentId}')">
+            💾 Save Link
+          </button>
+        </div>
       </div>
     `;
   }
   
   // Text/Reflection input with auto-save
   return `
-    <div class="section-input-area" data-section-id="${sectionId}">
+    <div class="section-input-area" data-section-id="${sectionId}" style="margin-left:44px;">
       <textarea 
         id="section-input-${sectionId}" 
         class="portfolio-textarea"
@@ -8953,9 +9034,10 @@ function renderStudentSectionInput(section, entry, portfolioId, studentId) {
         data-section-id="${sectionId}"
         data-student-id="${studentId}"
         rows="6"
+        style="width:100%;padding:14px;border:1px solid #ddd;border-radius:12px;font-size:14px;resize:vertical;min-height:100px;"
       >${escapeHtml(existingContent)}</textarea>
       
-      <div class="section-actions">
+      <div class="section-actions" style="margin-top:16px;display:flex;justify-content:flex-end;align-items:center;gap:12px;">
         <span id="save-status-${sectionId}" style="font-size:12px;color:#888;"></span>
         <button class="btn small" onclick="saveSectionContent('${portfolioId}', '${sectionId}', '${studentId}')">
           💾 Save
@@ -8964,7 +9046,6 @@ function renderStudentSectionInput(section, entry, portfolioId, studentId) {
     </div>
   `;
 }
-
 async function loadStudentPortfolioEntries(portfolioId, studentId) {
   try {
     const snap = await getDocs(
@@ -8980,26 +9061,46 @@ async function loadStudentPortfolioEntries(portfolioId, studentId) {
     return [];
   }
 }
-
 async function loadPortfolioSections(portfolioId) {
   try {
     console.log(`📂 Loading sections for portfolio: ${portfolioId}`);
     
-    const snap = await getDocs(
-      query(
-        collection(db, 'portfolio_sections'),
-        where('portfolioId', '==', portfolioId),
-        orderBy('order', 'asc')
-      )
-    );
+    // FIRST ATTEMPT: Try with orderBy (requires index)
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'portfolio_sections'),
+          where('portfolioId', '==', portfolioId),
+          orderBy('order', 'asc')
+        )
+      );
+      
+      const sections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log(`✅ Loaded ${sections.length} sections with orderBy for portfolio ${portfolioId}`);
+      return sections;
+      
+    } catch (indexErr) {
+      // Index doesn't exist yet - fall back to client-side sorting
+      console.warn('⚠️ Index not ready, using client-side sort:', indexErr.message);
+      
+      const simpleSnap = await getDocs(
+        query(
+          collection(db, 'portfolio_sections'),
+          where('portfolioId', '==', portfolioId)
+        )
+      );
+      
+      const sections = simpleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Sort client-side by order field
+      sections.sort((a, b) => (a.order || 0) - (b.order || 0));
+      
+      console.log(`✅ Loaded ${sections.length} sections with client-side sort for portfolio ${portfolioId}`);
+      return sections;
+    }
     
-    const sections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    console.log(`✅ Loaded ${sections.length} sections for portfolio ${portfolioId}`);
-    
-    return sections;
   } catch (err) {
     console.error('❌ Error loading portfolio sections:', err);
-    // Fallback: return empty array instead of crashing
     return [];
   }
 }
