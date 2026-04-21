@@ -5222,11 +5222,11 @@ function renderSectionBuilder() {
                onchange="window.portfolioSections[${index}].title = this.value">
         <input type="text" placeholder="Description (optional)" value="${escapeHtml(section.description || '')}"
                onchange="window.portfolioSections[${index}].description = this.value">
-        <select onchange="window.portfolioSections[${index}].type = this.value">
+        <select onchange="window.portfolioSections[${index}].type = this.value; toggleSectionTypeHint(${index}, this.value)">
           <option value="text" ${section.type === 'text' ? 'selected' : ''}>📝 Text Response</option>
           <option value="upload" ${section.type === 'upload' ? 'selected' : ''}>📎 File Upload</option>
           <option value="reflection" ${section.type === 'reflection' ? 'selected' : ''}>🤔 Reflection</option>
-          <option value="media" ${section.type === 'media' ? 'selected' : ''}>🎥 Media</option>
+          <option value="media" ${section.type === 'media' ? 'selected' : ''}>🎥 Media (Video/Audio)</option>
         </select>
         <input type="text" placeholder="Placeholder text / Hint" value="${escapeHtml(section.placeholder || '')}"
                onchange="window.portfolioSections[${index}].placeholder = this.value">
@@ -5234,10 +5234,17 @@ function renderSectionBuilder() {
           <input type="checkbox" ${section.required !== false ? 'checked' : ''} 
                  onchange="window.portfolioSections[${index}].required = this.checked"> Required
         </label>
+        ${section.type === 'upload' || section.type === 'media' ? `
+          <small style="color:#666;">📎 Students will be able to upload files for this section</small>
+        ` : ''}
       </div>
     </div>
   `).join('');
 }
+
+window.toggleSectionTypeHint = function(index, type) {
+  // Just for UI feedback - the actual type is already updated
+};
 
 
 async function bootParentPortfolioPage() {
@@ -7672,7 +7679,6 @@ function calculateProgress(total, completed) {
 // ============================================
 // EXPOSE TO WINDOW
 // ============================================
-
 window.openPortfolio = async function(portfolioId) {
   const bundle = await requireAuth();
   if (!bundle) return;
@@ -7702,45 +7708,117 @@ window.openPortfolio = async function(portfolioId) {
     const content = document.getElementById('page-content');
     content.innerHTML = renderPortfolioView(portfolio, sections, entries, profile.role, user.uid);
     
+    // Attach auto-save to all textareas AFTER rendering
+    // This must be inside the try block to have access to 'entries'
+    setTimeout(() => {
+      document.querySelectorAll('.portfolio-textarea').forEach(textarea => {
+        const textareaPortfolioId = textarea.dataset.portfolioId || portfolioId;
+        const sectionId = textarea.dataset.sectionId;
+        const studentId = textarea.dataset.studentId || user.uid;
+        
+        // Load existing content from entries
+        const existingEntry = entries.find(e => e.sectionId === sectionId);
+        if (existingEntry?.content) {
+          textarea.value = existingEntry.content;
+        }
+        
+        // Add input event for auto-save
+        textarea.addEventListener('input', (e) => {
+          autoSaveSection(textareaPortfolioId, sectionId, studentId, e.target.value);
+        });
+      });
+      
+      // Also attach event listeners to any file upload inputs
+      document.querySelectorAll('input[type="file"][id^="file-"]').forEach(fileInput => {
+        // These already have onchange handlers from renderStudentSectionInput
+        console.log('File input ready:', fileInput.id);
+      });
+      
+    }, 100);
+    
   } catch (err) {
     console.error('Open portfolio error:', err);
     alert('Error opening portfolio: ' + err.message);
   }
 };
 
-window.closePortfolioView = function() {
-  location.reload(); // Simple refresh to go back to grid
-};
+// Debounced auto-save
+let autoSaveTimeouts = {};
 
 window.autoSaveSection = function(portfolioId, sectionId, studentId, content) {
-  // Debounced save
-  if (window.saveTimeout) clearTimeout(window.saveTimeout);
-  window.saveTimeout = setTimeout(async () => {
-    await savePortfolioEntry(portfolioId, sectionId, studentId, {
-      content,
-      studentName: auth.currentUser?.displayName || 'Student'
-    });
-    document.getElementById(`save-status-${sectionId}`).textContent = '✓ Saved';
-    setTimeout(() => {
-      const el = document.getElementById(`save-status-${sectionId}`);
-      if (el) el.textContent = '';
-    }, 2000);
-  }, 1000);
+  // Clear existing timeout for this section
+  if (autoSaveTimeouts[sectionId]) {
+    clearTimeout(autoSaveTimeouts[sectionId]);
+  }
+  
+  const statusEl = document.getElementById(`save-status-${sectionId}`);
+  if (statusEl) {
+    statusEl.textContent = '⏳ Saving...';
+    statusEl.style.color = '#3498db';
+  }
+  
+  // Set new timeout
+  autoSaveTimeouts[sectionId] = setTimeout(async () => {
+    try {
+      await savePortfolioEntry(portfolioId, sectionId, studentId, {
+        content,
+        studentName: auth.currentUser?.displayName || 'Student'
+      });
+      
+      if (statusEl) {
+        statusEl.textContent = '✓ Saved';
+        statusEl.style.color = '#27ae60';
+        setTimeout(() => {
+          if (statusEl) statusEl.textContent = '';
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Auto-save error:', err);
+      if (statusEl) {
+        statusEl.textContent = '⚠️ Error';
+        statusEl.style.color = '#e74c3c';
+      }
+    }
+  }, 1500);
 };
 
 window.saveSectionContent = async function(portfolioId, sectionId, studentId) {
   const textarea = document.getElementById(`section-input-${sectionId}`);
-  if (!textarea) return;
+  if (!textarea) {
+    console.error('Textarea not found');
+    return;
+  }
   
-  await savePortfolioEntry(portfolioId, sectionId, studentId, {
-    content: textarea.value,
-    studentName: auth.currentUser?.displayName || 'Student'
-  });
+  const statusEl = document.getElementById(`save-status-${sectionId}`);
+  if (statusEl) {
+    statusEl.textContent = '⏳ Saving...';
+    statusEl.style.color = '#3498db';
+  }
   
-  const status = document.getElementById(`save-status-${sectionId}`);
-  if (status) {
-    status.textContent = '✓ Saved!';
-    setTimeout(() => status.textContent = '', 2000);
+  try {
+    await savePortfolioEntry(portfolioId, sectionId, studentId, {
+      content: textarea.value,
+      studentName: auth.currentUser?.displayName || 'Student'
+    });
+    
+    if (statusEl) {
+      statusEl.textContent = '✓ Saved!';
+      statusEl.style.color = '#27ae60';
+      setTimeout(() => {
+        if (statusEl) statusEl.textContent = '';
+      }, 2000);
+    }
+    
+    // Update section completion status
+    updateSectionCompletionStatus(sectionId, true);
+    
+  } catch (err) {
+    console.error('Save error:', err);
+    if (statusEl) {
+      statusEl.textContent = '❌ Error saving';
+      statusEl.style.color = '#e74c3c';
+    }
+    alert('Error saving: ' + err.message);
   }
 };
 
@@ -7749,11 +7827,38 @@ window.handleSectionFileUpload = async function(input, portfolioId, sectionId, s
   if (!file) return;
   
   const progressDiv = document.getElementById(`upload-progress-${sectionId}`);
-  progressDiv.innerHTML = '<span style="color:#3498db;">Uploading...</span>';
+  const uploadArea = document.getElementById(`upload-area-${sectionId}`);
+  
+  if (progressDiv) {
+    progressDiv.innerHTML = '<span style="color:#3498db;">📤 Uploading... 0%</span>';
+  }
   
   try {
+    // Check file size (50MB limit)
+    if (file.size > 50 * 1024 * 1024) {
+      throw new Error('File too large. Maximum size is 50MB.');
+    }
+    
+    // Simulate progress
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      progress += 10;
+      if (progress <= 90) {
+        if (progressDiv) {
+          progressDiv.innerHTML = `<span style="color:#3498db;">📤 Uploading... ${progress}%</span>`;
+        }
+      }
+    }, 200);
+    
     const upload = await uploadFile(file, `portfolio/${portfolioId}/${sectionId}/${studentId}`);
     
+    clearInterval(progressInterval);
+    
+    if (progressDiv) {
+      progressDiv.innerHTML = '<span style="color:#27ae60;">✅ Upload complete!</span>';
+    }
+    
+    // Save the entry
     await savePortfolioEntry(portfolioId, sectionId, studentId, {
       fileUrl: upload.url,
       fileName: upload.name,
@@ -7761,17 +7866,53 @@ window.handleSectionFileUpload = async function(input, portfolioId, sectionId, s
       studentName: auth.currentUser?.displayName || 'Student'
     });
     
-    progressDiv.innerHTML = '<span style="color:#27ae60;">✓ Uploaded!</span>';
+    // Update section completion status
+    updateSectionCompletionStatus(sectionId, true);
     
     // Refresh the section display
     setTimeout(() => {
-      openPortfolio(portfolioId);
+      const currentPortfolio = window.currentPortfolioView;
+      if (currentPortfolio) {
+        openPortfolio(portfolioId);
+      }
     }, 500);
     
   } catch (err) {
-    progressDiv.innerHTML = `<span style="color:#e74c3c;">Error: ${err.message}</span>`;
+    console.error('Upload error:', err);
+    if (progressDiv) {
+      progressDiv.innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
+    }
   }
 };
+
+window.deleteSectionFile = async function(portfolioId, sectionId, studentId) {
+  if (!confirm('Remove this file? This cannot be undone.')) return;
+  
+  try {
+    await savePortfolioEntry(portfolioId, sectionId, studentId, {
+      fileUrl: '',
+      fileName: '',
+      fileType: '',
+      studentName: auth.currentUser?.displayName || 'Student'
+    });
+    
+    // Refresh
+    openPortfolio(portfolioId);
+  } catch (err) {
+    alert('Error removing file: ' + err.message);
+  }
+};
+
+function updateSectionCompletionStatus(sectionId, isCompleted) {
+  const sectionCard = document.querySelector(`.portfolio-section-card[data-section-id="${sectionId}"]`);
+  if (sectionCard) {
+    if (isCompleted) {
+      sectionCard.classList.add('completed');
+      const numberEl = sectionCard.querySelector('.section-number');
+      if (numberEl) numberEl.classList.add('completed');
+    }
+  }
+}
 
 window.submitPortfolio = async function(portfolioId) {
   try {
@@ -8822,56 +8963,77 @@ async function handleCreatePortfolio() {
 function renderStudentSectionInput(section, entry, portfolioId, studentId) {
   const existingContent = entry?.content || '';
   const existingFile = entry?.fileUrl || '';
+  const sectionId = section.id;
   
   if (section.type === 'upload' || section.type === 'media') {
     return `
-      <div class="section-input-area" data-section-id="${section.id}">
+      <div class="section-input-area" data-section-id="${sectionId}">
         ${existingFile ? `
           <div class="student-response">
             <div class="upload-preview">
               ${renderFilePreview(existingFile, entry?.fileName || '')}
+              <button class="btn small danger" style="margin-top:8px;" 
+                onclick="deleteSectionFile('${portfolioId}', '${sectionId}', '${studentId}')">
+                🗑️ Remove File
+              </button>
             </div>
-            <p style="margin-top:12px;color:#666;">You can upload a new file to replace this one.</p>
           </div>
         ` : ''}
         
-        <div class="upload-area" onclick="document.getElementById('file-${section.id}').click()">
-          <input type="file" id="file-${section.id}" style="display:none;" 
-                 accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx"
-                 onchange="handleSectionFileUpload(this, '${portfolioId}', '${section.id}', '${studentId}')">
+        <div class="upload-area" id="upload-area-${sectionId}" 
+             onclick="document.getElementById('file-${sectionId}').click()">
+          <input type="file" id="file-${sectionId}" style="display:none;" 
+                 accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov"
+                 onchange="handleSectionFileUpload(this, '${portfolioId}', '${sectionId}', '${studentId}')">
           <div style="font-size:32px;margin-bottom:8px;">📎</div>
           <p>${section.placeholder || 'Click to upload a file'}</p>
-          <small>Images, videos, PDFs, documents</small>
+          <small>Images, videos, PDFs, documents (Max 50MB)</small>
         </div>
-        <div id="upload-progress-${section.id}"></div>
+        <div id="upload-progress-${sectionId}" style="margin-top:12px;"></div>
       </div>
     `;
   }
   
-  // Default text/reflection input
+  // Text/Reflection input with auto-save - CRITICAL: Add data attributes
   return `
-    <div class="section-input-area" data-section-id="${section.id}">
-      ${existingContent ? `
-        <div class="student-response">
-          <p>${escapeHtml(existingContent)}</p>
-        </div>
-      ` : ''}
-      
+    <div class="section-input-area" data-section-id="${sectionId}">
       <textarea 
-        id="section-input-${section.id}" 
+        id="section-input-${sectionId}" 
+        class="portfolio-textarea"
         placeholder="${section.placeholder || 'Write your response here...'}"
-        onblur="autoSaveSection('${portfolioId}', '${section.id}', '${studentId}', this.value)"
+        data-portfolio-id="${portfolioId}"
+        data-section-id="${sectionId}"
+        data-student-id="${studentId}"
+        rows="6"
       >${escapeHtml(existingContent)}</textarea>
       
       <div class="section-actions">
-        <span id="save-status-${section.id}" style="font-size:12px;color:#888;"></span>
-        <button class="btn small" onclick="saveSectionContent('${portfolioId}', '${section.id}', '${studentId}')">
-          Save
+        <span id="save-status-${sectionId}" style="font-size:12px;color:#888;"></span>
+        <button class="btn small" onclick="saveSectionContent('${portfolioId}', '${sectionId}', '${studentId}')">
+          💾 Save
         </button>
       </div>
     </div>
   `;
 }
+window.closePortfolioView = function() {
+  // Clear the current view state
+  window.currentPortfolioView = null;
+  
+  // Re-render the portfolio grid instead of full page reload
+  const bundle = requireAuth().then(bundle => {
+    if (bundle) {
+      const { user, profile } = bundle;
+      loadPortfoliosForUser(user.uid, profile.role).then(portfolios => {
+        const content = document.getElementById('page-content');
+        content.innerHTML = renderPortfolioGrid(portfolios, profile.role, profile);
+      });
+    }
+  }).catch(() => {
+    // Fallback to reload if something fails
+    location.reload();
+  });
+};
 
 async function loadStudentPortfolioEntries(portfolioId, studentId) {
   try {
