@@ -7678,7 +7678,6 @@ function calculateProgress(total, completed) {
 
 // ============================================
 // EXPOSE TO WINDOW
-// ============================================
 window.openPortfolio = async function(portfolioId) {
   const bundle = await requireAuth();
   if (!bundle) return;
@@ -7686,7 +7685,9 @@ window.openPortfolio = async function(portfolioId) {
   const { user, profile } = bundle;
   
   try {
-    // Load portfolio data
+    console.log(`🔍 Opening portfolio ${portfolioId} as ${profile.role}`);
+    
+    // Load portfolio
     const portfolioDoc = await getDoc(doc(db, 'portfolios', portfolioId));
     if (!portfolioDoc.exists()) {
       alert('Portfolio not found');
@@ -7694,50 +7695,49 @@ window.openPortfolio = async function(portfolioId) {
     }
     
     const portfolio = { id: portfolioDoc.id, ...portfolioDoc.data() };
-    const sections = await loadPortfolioSections(portfolioId);
+    console.log('📄 Portfolio data:', portfolio);
     
+    // Load sections
+    const sections = await loadPortfolioSections(portfolioId);
+    console.log(`📋 Sections loaded: ${sections.length}`);
+    
+    // Load student entries (if student)
     let entries = [];
     if (profile.role === 'student') {
       entries = await loadStudentPortfolioEntries(portfolioId, user.uid);
+      console.log(`📝 Student entries loaded: ${entries.length}`);
     }
     
-    // Store current view state
+    // Store current view
     window.currentPortfolioView = { portfolio, sections, entries };
     
-    // Render the view
+    // Render
     const content = document.getElementById('page-content');
     content.innerHTML = renderPortfolioView(portfolio, sections, entries, profile.role, user.uid);
     
-    // Attach auto-save to all textareas AFTER rendering
-    // This must be inside the try block to have access to 'entries'
-    setTimeout(() => {
-      document.querySelectorAll('.portfolio-textarea').forEach(textarea => {
-        const textareaPortfolioId = textarea.dataset.portfolioId || portfolioId;
-        const sectionId = textarea.dataset.sectionId;
-        const studentId = textarea.dataset.studentId || user.uid;
-        
-        // Load existing content from entries
-        const existingEntry = entries.find(e => e.sectionId === sectionId);
-        if (existingEntry?.content) {
-          textarea.value = existingEntry.content;
-        }
-        
-        // Add input event for auto-save
-        textarea.addEventListener('input', (e) => {
-          autoSaveSection(textareaPortfolioId, sectionId, studentId, e.target.value);
+    console.log('✅ Portfolio view rendered successfully');
+    
+    // Auto-save setup for students
+    if (profile.role === 'student') {
+      setTimeout(() => {
+        document.querySelectorAll('.portfolio-textarea').forEach(textarea => {
+          const sectionId = textarea.dataset.sectionId;
+          const studentId = textarea.dataset.studentId || user.uid;
+          
+          const existingEntry = entries.find(e => e.sectionId === sectionId);
+          if (existingEntry?.content) {
+            textarea.value = existingEntry.content;
+          }
+          
+          textarea.addEventListener('input', (e) => {
+            autoSaveSection(portfolioId, sectionId, studentId, e.target.value);
+          });
         });
-      });
-      
-      // Also attach event listeners to any file upload inputs
-      document.querySelectorAll('input[type="file"][id^="file-"]').forEach(fileInput => {
-        // These already have onchange handlers from renderStudentSectionInput
-        console.log('File input ready:', fileInput.id);
-      });
-      
-    }, 100);
+      }, 100);
+    }
     
   } catch (err) {
-    console.error('Open portfolio error:', err);
+    console.error('❌ Open portfolio error:', err);
     alert('Error opening portfolio: ' + err.message);
   }
 };
@@ -8426,12 +8426,9 @@ ${p.externalLinkUrl ? `
     </script>
   `;
 }
-// ============================================
-// UPDATED: renderPortfolioView - Shows Template + Fillable Sections for Students
-// ============================================
 function renderPortfolioView(portfolio, sections, entries, role, studentId) {
   const isStudent = role === 'student';
-  const hasTemplate = portfolio.templateUrl;
+  const hasTemplate = portfolio.templateUrl || portfolio.templateType;
 
   let templateHtml = '';
   if (hasTemplate) {
@@ -8449,27 +8446,35 @@ function renderPortfolioView(portfolio, sections, entries, role, studentId) {
       </div>`;
   }
 
-  const sectionsHtml = sections.map((section, index) => {
-    const entry = entries.find(e => e.sectionId === section.id);
-    return `
-      <div class="portfolio-section-card ${entry ? 'completed' : ''}" data-section-id="${section.id}">
-        <div class="section-header">
-          <div class="section-number ${entry ? 'completed' : ''}">${index + 1}</div>
-          <div class="section-title-area">
-            <div class="section-title">
-              ${escapeHtml(section.title)}
-              ${section.required ? '<span class="section-required">* Required</span>' : ''}
+  const sectionsHtml = sections.length > 0 
+    ? sections.map((section, index) => {
+        const entry = entries.find(e => e.sectionId === section.id);
+        return `
+          <div class="portfolio-section-card ${entry ? 'completed' : ''}" data-section-id="${section.id}">
+            <div class="section-header">
+              <div class="section-number ${entry ? 'completed' : ''}">${index + 1}</div>
+              <div class="section-title-area">
+                <div class="section-title">
+                  ${escapeHtml(section.title)}
+                  <span class="section-type-badge">${getSectionTypeIcon(section.type || 'text')} ${getSectionTypeLabel(section.type || 'text')}</span>
+                  ${section.required ? '<span class="section-required">* Required</span>' : ''}
+                </div>
+                ${section.description ? `<p class="section-description">${escapeHtml(section.description)}</p>` : ''}
+              </div>
             </div>
-            ${section.description ? `<p class="section-description">${escapeHtml(section.description)}</p>` : ''}
-          </div>
-        </div>
-        <div class="section-content">
-          ${isStudent 
-            ? renderStudentSectionInput(section, entry, portfolio.id, studentId) 
-            : renderViewOnlySection(section, entry, portfolio.id)}
-        </div>
-      </div>`;
-  }).join('');
+            <div class="section-content">
+              ${isStudent 
+                ? renderStudentSectionInput(section, entry, portfolio.id, studentId) 
+                : renderViewOnlySection(section, entry, portfolio.id)}
+            </div>
+          </div>`;
+      }).join('')
+    : `<div class="empty-state" style="text-align:center;padding:60px 20px;">
+         <div style="font-size:48px;">📋</div>
+         <h3>No sections yet</h3>
+         <p>This portfolio was created with a template only.<br>
+            ${isStudent ? 'Your tutor will add sections soon.' : 'You can add sections from the tutor dashboard.'}</p>
+       </div>`;
 
   return `
     <div class="portfolio-view-container">
@@ -8482,7 +8487,7 @@ function renderPortfolioView(portfolio, sections, entries, role, studentId) {
       </div>
 
       <div class="portfolio-sections-container">
-        ${sectionsHtml || '<p class="empty">This portfolio has no sections yet.</p>'}
+        ${sectionsHtml}
       </div>
 
       ${isStudent && sections.length > 0 ? `
@@ -8978,6 +8983,8 @@ async function loadStudentPortfolioEntries(portfolioId, studentId) {
 
 async function loadPortfolioSections(portfolioId) {
   try {
+    console.log(`📂 Loading sections for portfolio: ${portfolioId}`);
+    
     const snap = await getDocs(
       query(
         collection(db, 'portfolio_sections'),
@@ -8985,13 +8992,17 @@ async function loadPortfolioSections(portfolioId) {
         orderBy('order', 'asc')
       )
     );
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    const sections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log(`✅ Loaded ${sections.length} sections for portfolio ${portfolioId}`);
+    
+    return sections;
   } catch (err) {
-    console.error('Error loading sections:', err);
+    console.error('❌ Error loading portfolio sections:', err);
+    // Fallback: return empty array instead of crashing
     return [];
   }
 }
-
 async function loadPortfoliosForUser(userId, role) {
   let portfolios = [];
   
