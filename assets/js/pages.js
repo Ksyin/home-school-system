@@ -8426,210 +8426,69 @@ ${p.externalLinkUrl ? `
     </script>
   `;
 }
+// ============================================
+// UPDATED: renderPortfolioView - Shows Template + Fillable Sections for Students
+// ============================================
 function renderPortfolioView(portfolio, sections, entries, role, studentId) {
   const isStudent = role === 'student';
-  const canEdit = role === 'tutor' || role === 'parent';
-  
-  // Map entries by sectionId for quick lookup
-  const entryMap = new Map();
-  entries.forEach(e => entryMap.set(e.sectionId, e));
-  
+  const hasTemplate = portfolio.templateUrl;
+
+  let templateHtml = '';
+  if (hasTemplate) {
+    templateHtml = `
+      <div style="background:#f0f7ff; border-radius:16px; padding:24px; margin-bottom:32px; text-align:center; border:2px solid #3498db;">
+        <h3>📎 Provided Template</h3>
+        ${portfolio.templateType === 'file' 
+          ? renderFilePreview(portfolio.templateUrl, portfolio.templateName || 'Template') 
+          : `
+            <a href="${portfolio.templateUrl}" target="_blank" class="btn" style="font-size:18px;padding:12px 24px;">
+              🔗 Open Template: ${escapeHtml(portfolio.templateName || 'View Template')}
+            </a>
+          `}
+        <p style="margin-top:16px;color:#555;">Use this template as reference while completing the sections below.</p>
+      </div>`;
+  }
+
   const sectionsHtml = sections.map((section, index) => {
-    const entry = entryMap.get(section.id);
-    const isCompleted = !!entry;
-    const sectionType = section.type || 'text';
-    
+    const entry = entries.find(e => e.sectionId === section.id);
     return `
-      <div class="portfolio-section-card ${isCompleted ? 'completed' : ''}" data-section-id="${section.id}">
+      <div class="portfolio-section-card ${entry ? 'completed' : ''}" data-section-id="${section.id}">
         <div class="section-header">
-          <div class="section-number ${isCompleted ? 'completed' : ''}">${index + 1}</div>
+          <div class="section-number ${entry ? 'completed' : ''}">${index + 1}</div>
           <div class="section-title-area">
             <div class="section-title">
               ${escapeHtml(section.title)}
-              <span class="section-type-badge">${getSectionTypeIcon(sectionType)} ${getSectionTypeLabel(sectionType)}</span>
-              ${section.required ? '<span class="section-required">*Required</span>' : ''}
+              ${section.required ? '<span class="section-required">* Required</span>' : ''}
             </div>
             ${section.description ? `<p class="section-description">${escapeHtml(section.description)}</p>` : ''}
-            ${section.hints ? `<p class="section-hint" style="font-size:12px;color:#888;margin-top:4px;">💡 ${escapeHtml(section.hints)}</p>` : ''}
           </div>
         </div>
-        
         <div class="section-content">
-          ${isStudent ? renderStudentSectionInput(section, entry, portfolio.id, studentId) : 
-                      renderViewOnlySection(section, entry, portfolio.id)}
+          ${isStudent 
+            ? renderStudentSectionInput(section, entry, portfolio.id, studentId) 
+            : renderViewOnlySection(section, entry, portfolio.id)}
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
-  
-  const progress = calculateProgress(sections.length, entries.length);
-  
+
   return `
-    <style>
-      .portfolio-view-container {
-        max-width: 1000px;
-        margin: 0 auto;
-      }
-      
-      .back-button {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: #666;
-        cursor: pointer;
-        margin-bottom: 20px;
-        padding: 8px 0;
-      }
-      
-      .back-button:hover {
-        color: #3498db;
-      }
-      
-      .portfolio-view-header {
-        background: white;
-        border-radius: 20px;
-        padding: 28px;
-        margin-bottom: 24px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      }
-      
-      .portfolio-title-section {
-        display: flex;
-        align-items: flex-start;
-        gap: 20px;
-      }
-      
-      .portfolio-icon-large {
-        font-size: 56px;
-        width: 80px;
-        height: 80px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: ${getPortfolioGradient(portfolio.type)};
-        border-radius: 20px;
-      }
-      
-      .portfolio-info {
-        flex: 1;
-      }
-      
-      .portfolio-info h2 {
-        margin: 0 0 8px 0;
-        font-size: 28px;
-      }
-      
-      .portfolio-meta-info {
-        display: flex;
-        gap: 20px;
-        flex-wrap: wrap;
-        margin-top: 16px;
-      }
-      
-      .meta-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: #666;
-        font-size: 14px;
-      }
-      
-      .progress-overview {
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #f0f0f0;
-      }
-      
-      .progress-bar-large {
-        height: 10px;
-        background: #e0e0e0;
-        border-radius: 5px;
-        overflow: hidden;
-        margin: 12px 0 8px;
-      }
-      
-      .progress-fill-large {
-        height: 100%;
-        background: linear-gradient(90deg, #3498db, #2ecc71);
-        border-radius: 5px;
-      }
-      
-      .student-response-view {
-        background: #f8f9fa;
-        border-radius: 12px;
-        padding: 16px;
-      }
-      
-      .student-response-view p {
-        margin: 0 0 12px 0;
-        line-height: 1.6;
-      }
-      
-      .portfolio-actions-bar {
-        display: flex;
-        gap: 12px;
-        margin-top: 20px;
-        flex-wrap: wrap;
-      }
-    </style>
-    
     <div class="portfolio-view-container">
-      <div class="back-button" onclick="closePortfolioView()">
-        ← Back to Portfolios
-      </div>
+      <div class="back-button" onclick="closePortfolioView()" style="cursor:pointer;color:#3498db;margin-bottom:20px;">← Back to All Portfolios</div>
       
       <div class="portfolio-view-header">
-        <div class="portfolio-title-section">
-          <div class="portfolio-icon-large">
-            ${portfolio.emoji || getDefaultEmoji(portfolio.type)}
-          </div>
-          <div class="portfolio-info">
-            <span class="portfolio-type-badge ${portfolio.type}">${getTypeLabel(portfolio.type)}</span>
-            <h2>${escapeHtml(portfolio.title)}</h2>
-            <p style="color:#666;margin:8px 0;">${escapeHtml(portfolio.description || '')}</p>
-            
-            <div class="portfolio-meta-info">
-              ${portfolio.subject ? `<span class="meta-item">📚 ${escapeHtml(portfolio.subject)}</span>` : ''}
-              ${portfolio.gradeLevel ? `<span class="meta-item">🎓 Grade ${escapeHtml(portfolio.gradeLevel)}</span>` : ''}
-              <span class="meta-item">👤 Created by ${escapeHtml(portfolio.createdByName || 'Teacher')}</span>
-              ${portfolio.dueDate ? `<span class="meta-item">📅 Due ${fmtDate(portfolio.dueDate)}</span>` : ''}
-            </div>
-            
-            ${isStudent ? `
-              <div class="progress-overview">
-                <div style="display:flex;justify-content:space-between;">
-                  <span><strong>Your Progress</strong></span>
-                  <span>${entries.length}/${sections.length} sections • ${progress}%</span>
-                </div>
-                <div class="progress-bar-large">
-                  <div class="progress-fill-large" style="width:${progress}%;"></div>
-                </div>
-              </div>
-            ` : ''}
-          </div>
-        </div>
-        
-        ${canEdit ? `
-          <div class="portfolio-actions-bar">
-            <button class="btn ghost" onclick="editPortfolio('${portfolio.id}')">✏️ Edit</button>
-            <button class="btn ghost" onclick="manageSections('${portfolio.id}')">📋 Manage Sections</button>
-            <button class="btn" onclick="viewAllSubmissions('${portfolio.id}')">📊 View Submissions</button>
-          </div>
-        ` : ''}
+        <h2>${escapeHtml(portfolio.title)}</h2>
+        <p>${escapeHtml(portfolio.description || '')}</p>
+        ${templateHtml}
       </div>
-      
+
       <div class="portfolio-sections-container">
-        ${sectionsHtml || '<p class="empty">No sections yet. Click "Manage Sections" to add some.</p>'}
+        ${sectionsHtml || '<p class="empty">This portfolio has no sections yet.</p>'}
       </div>
-      
+
       ${isStudent && sections.length > 0 ? `
-        <div style="margin-top:32px;text-align:center;">
-          <button class="btn large" onclick="submitPortfolio('${portfolio.id}')">
-            ✅ Submit Portfolio
-          </button>
-          <p style="color:#666;margin-top:12px;">You can continue editing after submitting</p>
-        </div>
-      ` : ''}
+        <div style="text-align:center;margin:40px 0;">
+          <button class="btn large" onclick="submitPortfolio('${portfolio.id}')">✅ Submit Complete Portfolio</button>
+        </div>` : ''}
     </div>
   `;
 }
@@ -8648,16 +8507,19 @@ function renderViewOnlySection(section, entry, portfolioId) {
     </div>
   `;
 }
+// ============================================
+// UPDATED: showCreatePortfolioModal - Supports Template Upload OR Custom Sections
+// ============================================
 window.showCreatePortfolioModal = function(role, userId, userName) {
   const old = document.getElementById('createPortfolioModal');
   if (old) old.remove();
-  
+
   const modal = document.createElement('div');
   modal.id = 'createPortfolioModal';
   modal.className = 'create-portfolio-modal';
   modal.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target.classList.contains('modal-overlay'))this.parentElement.remove()">
-      <div class="modal-box" style="max-width:750px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
+      <div class="modal-box" style="max-width:780px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h3>📁 Create New Portfolio</h3>
           <button class="btn danger" onclick="document.getElementById('createPortfolioModal').remove()">✕</button>
@@ -8668,17 +8530,58 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
             <input type="hidden" id="pfCreatedBy" value="${userId}">
             <input type="hidden" id="pfCreatedByRole" value="${role}">
             <input type="hidden" id="pfCreatedByName" value="${escapeHtml(userName)}">
-            
+
+            <!-- NEW: Content Mode Selection -->
+            <div class="form-row">
+              <label><strong>How do you want to provide content?</strong></label>
+              <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:8px;">
+                <label style="cursor:pointer;font-weight:500;">
+                  <input type="radio" name="contentMode" value="sections" checked> 
+                  Build with Custom Sections
+                </label>
+                <label style="cursor:pointer;font-weight:500;">
+                  <input type="radio" name="contentMode" value="template"> 
+                  Upload Template / Link (PDF, Doc, Excel, Web, etc.)
+                </label>
+              </div>
+            </div>
+
             <div class="form-row">
               <label>Portfolio Title *</label>
-              <input id="pfTitle" type="text" required placeholder="e.g., My Science Fair Project">
+              <input id="pfTitle" type="text" required placeholder="e.g., My Science Fair Project or Photosynthesis Project">
             </div>
-            
+
             <div class="form-row">
               <label>Description</label>
-              <textarea id="pfDescription" rows="3" placeholder="Describe what this portfolio is about..."></textarea>
+              <textarea id="pfDescription" rows="3" placeholder="Brief description of what students should do..."></textarea>
             </div>
-            
+
+            <!-- TEMPLATE SECTION (hidden by default) -->
+            <div id="templateSection" style="display:none; background:#f8f9fa; padding:16px; border-radius:12px; margin:16px 0;">
+              <h4 style="margin:0 0 12px 0;">📎 Template Upload / Link</h4>
+              <div class="form-row">
+                <label>Upload Template File (PDF, DOC, XLS, PPT, Images...)</label>
+                <input id="pfTemplateFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*,.mp4">
+              </div>
+              <div style="text-align:center;margin:12px 0;color:#666;">— OR —</div>
+              <div class="form-row">
+                <label>🔗 Template Link (Google Docs, Sutori, Canva, Website, etc.)</label>
+                <input id="pfTemplateLink" type="url" placeholder="https://docs.google.com/...">
+                <input id="pfTemplateLinkTitle" type="text" placeholder="Link title (e.g. Sutori Template)" style="margin-top:8px;">
+              </div>
+            </div>
+
+            <!-- SECTIONS BUILDER (shown by default) -->
+            <div id="sectionsBuilderSection">
+              <div class="section-builder">
+                <h4>📋 Portfolio Sections</h4>
+                <p style="color:#666;margin-bottom:12px;">Students will fill these sections one by one.</p>
+                <div id="sectionsList"></div>
+                <button type="button" class="add-section-btn" onclick="addSectionToBuilder()">➕ Add New Section</button>
+              </div>
+            </div>
+
+            <!-- Existing fields (Portfolio Type, Subject, Target, etc.) -->
             <div class="form-row">
               <label>Portfolio Type *</label>
               <select id="pfType" required>
@@ -8688,83 +8591,42 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
                 <option value="custom">✨ Custom Portfolio</option>
               </select>
             </div>
-            
+
             <div class="form-row">
               <label>Subject (optional)</label>
-              <input id="pfSubject" type="text" placeholder="e.g., Science, Math, History">
+              <input id="pfSubject" type="text" placeholder="e.g., Science, Mathematics">
             </div>
-            
+
             <div class="form-row">
               <label>Grade Level (optional)</label>
-              <input id="pfGradeLevel" type="text" placeholder="e.g., 5, 8, 10">
+              <input id="pfGradeLevel" type="text" placeholder="e.g., Grade 7">
             </div>
-            
+
+            <!-- Target Students Section (keep your existing logic) -->
             <div class="form-row">
-              <label>Cover Emoji</label>
-              <input id="pfEmoji" type="text" placeholder="📁" maxlength="2" value="📁">
-            </div>
-            
-            <!-- EXTERNAL LINK (Sutori, Google Docs, etc.) -->
-            <div class="form-row">
-              <label>🔗 External Template Link (Optional)</label>
-              <input id="pfExternalLinkTitle" type="text" placeholder="Link Title (e.g., Sutori Template, Google Doc)">
-              <input id="pfExternalLinkUrl" type="url" placeholder="https://..." style="margin-top:8px;">
-              <small style="color:#666;">Paste a Sutori, Google Docs, or any external template link</small>
-            </div>
-            
-            <div class="form-row">
-              <label>Assign To Students *</label>
+              <label>Assign To *</label>
               <select id="pfTargetType">
                 <option value="all">All Students</option>
                 <option value="classroom">Specific Classroom</option>
-                <option value="students">Select Individual Students</option>
+                <option value="students">Specific Students</option>
               </select>
             </div>
-            
+
+            <!-- Classroom and Student selectors (your existing code) -->
             <div class="form-row" id="pfClassroomRow" style="display:none;">
               <label>Select Classroom</label>
               <select id="pfClassroomId"></select>
             </div>
-            
             <div class="form-row" id="pfStudentsRow" style="display:none;">
-              <label>Select Students (Hold Ctrl/Cmd to select multiple)</label>
-              <select id="pfStudentIds" multiple size="6" style="width:100%;padding:8px;"></select>
-              <small>Selected students will see this portfolio in their dashboard</small>
+              <label>Select Students (Ctrl/Cmd to select multiple)</label>
+              <select id="pfStudentIds" multiple size="6" style="width:100%;"></select>
             </div>
-            
+
             <div class="form-row">
               <label>Due Date (optional)</label>
               <input id="pfDueDate" type="date">
             </div>
-            
-            <div class="form-row">
-              <label>
-                <input type="checkbox" id="pfAllowUploads" checked> Allow students to upload files
-              </label>
-            </div>
-            
-            <div class="form-row">
-              <label>
-                <input type="checkbox" id="pfAllowComments"> Allow comments on entries
-              </label>
-            </div>
-            
-            <div class="form-row">
-              <label>
-                <input type="checkbox" id="pfAllowExternalLinks" checked> Allow students to add external links
-              </label>
-            </div>
-            
-            <!-- Section Builder -->
-            <div class="section-builder">
-              <h4 style="margin:0 0 16px 0;">📋 Portfolio Sections</h4>
-              <p style="color:#666;margin-bottom:12px;">Add sections for students to complete. Each section can be text, file upload, or reflection.</p>
-              <div id="sectionsList"></div>
-              <button type="button" class="add-section-btn" onclick="addSectionToBuilder()">
-                ➕ Add Section
-              </button>
-            </div>
-            
+
             <div class="form-actions" style="margin-top:24px;">
               <button type="button" class="btn ghost" onclick="document.getElementById('createPortfolioModal').remove()">Cancel</button>
               <button type="submit" class="btn">Create Portfolio</button>
@@ -8775,29 +8637,50 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
-  
-  // Load classrooms and students
-  loadClassroomAndStudentOptions(userId);
-  
-  // Target type toggle
-  document.getElementById('pfTargetType').addEventListener('change', (e) => {
-    document.getElementById('pfClassroomRow').style.display = e.target.value === 'classroom' ? 'block' : 'none';
-    document.getElementById('pfStudentsRow').style.display = e.target.value === 'students' ? 'block' : 'none';
+
+  // === Toggle between Template and Sections ===
+  const radios = modal.querySelectorAll('input[name="contentMode"]');
+  const templateSec = document.getElementById('templateSection');
+  const sectionsSec = document.getElementById('sectionsBuilderSection');
+
+  radios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (radio.value === 'template') {
+        templateSec.style.display = 'block';
+        sectionsSec.style.display = 'none';
+      } else {
+        templateSec.style.display = 'none';
+        sectionsSec.style.display = 'block';
+      }
+    });
   });
-  
-  // Initialize with default sections
+
+  // Initialize default section (your existing logic)
   window.portfolioSections = [{
     title: 'Introduction',
-    description: 'Introduce your project and what you hope to learn',
+    description: 'Introduce your project and goals',
     type: 'text',
     required: true,
-    order: 0,
-    placeholder: 'Write your introduction here...'
+    order: 0
   }];
-  renderSectionBuilder();
-  
+  if (typeof renderSectionBuilder === 'function') renderSectionBuilder();
+
+  // Load classrooms and students (your existing function)
+  if (typeof loadClassroomAndStudentOptions === 'function') {
+    loadClassroomAndStudentOptions(userId);
+  }
+
+  // Target type toggle (your existing logic)
+  const targetSelect = document.getElementById('pfTargetType');
+  if (targetSelect) {
+    targetSelect.addEventListener('change', (e) => {
+      document.getElementById('pfClassroomRow').style.display = e.target.value === 'classroom' ? 'block' : 'none';
+      document.getElementById('pfStudentsRow').style.display = e.target.value === 'students' ? 'block' : 'none';
+    });
+  }
+
   // Form submit
   document.getElementById('createPortfolioForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -8886,78 +8769,138 @@ window.viewAllSubmissions = async function(portfolioId) {
   }
 };
 
+// ============================================
+// UPDATED: handleCreatePortfolio - Supports both Template and Sections
+// ============================================
 async function handleCreatePortfolio() {
   const msg = document.getElementById('pfMsg');
   msg.innerHTML = '<span style="color:#3498db;">Creating portfolio...</span>';
-  
+
   try {
+    const contentMode = document.querySelector('input[name="contentMode"]:checked').value;
+    let templateData = {};
+
+    if (contentMode === 'template') {
+      const fileInput = document.getElementById('pfTemplateFile');
+      const linkUrl = document.getElementById('pfTemplateLink').value.trim();
+      const linkTitle = document.getElementById('pfTemplateLinkTitle').value.trim() || 'Template';
+
+      if (fileInput && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const upload = await uploadFile(file, `portfolio-templates`);
+        templateData = {
+          templateType: 'file',
+          templateUrl: upload.url,
+          templateName: upload.name
+        };
+      } else if (linkUrl) {
+        templateData = {
+          templateType: 'link',
+          templateUrl: linkUrl,
+          templateName: linkTitle
+        };
+      } else {
+        throw new Error('Please upload a template file or provide a valid link');
+      }
+    }
+
+    // === Target Students Logic (kept from your original) ===
     const targetType = document.getElementById('pfTargetType').value;
     let studentIds = [];
     let classroomId = null;
     let classroomName = '';
-    
+
     if (targetType === 'classroom') {
       classroomId = document.getElementById('pfClassroomId').value;
-      if (!classroomId) {
-        msg.innerHTML = '<span style="color:#e74c3c;">Please select a classroom</span>';
-        return;
-      }
-      // Get classroom students
+      if (!classroomId) throw new Error('Please select a classroom');
       const classroomDoc = await getDoc(doc(db, 'classrooms', classroomId));
-      const classroom = classroomDoc.data();
-      classroomName = classroom?.name || '';
-      studentIds = classroom?.studentIds || [];
-    } else if (targetType === 'students') {
-      const selected = Array.from(document.getElementById('pfStudentIds').selectedOptions);
-      studentIds = selected.map(opt => opt.value);
-      if (studentIds.length === 0) {
-        msg.innerHTML = '<span style="color:#e74c3c;">Please select at least one student</span>';
-        return;
+      if (classroomDoc.exists()) {
+        const data = classroomDoc.data();
+        classroomName = data.name || '';
+        studentIds = data.studentIds || [];
       }
+    } else if (targetType === 'students') {
+      const selected = Array.from(document.getElementById('pfStudentIds').selectedOptions || []);
+      studentIds = selected.map(opt => opt.value);
+      if (studentIds.length === 0) throw new Error('Please select at least one student');
     } else {
-      // All students
+      // all students
       const allStudents = await loadAllStudents();
       studentIds = allStudents.map(s => s.id);
     }
-    
-    const data = {
+
+    // === Portfolio Data ===
+    const portfolioData = {
       title: document.getElementById('pfTitle').value.trim(),
       description: document.getElementById('pfDescription').value.trim(),
       type: document.getElementById('pfType').value,
       subject: document.getElementById('pfSubject').value.trim(),
       gradeLevel: document.getElementById('pfGradeLevel').value.trim(),
-      emoji: document.getElementById('pfEmoji').value || '📁',
+      dueDate: document.getElementById('pfDueDate').value || null,
+      contentMode: contentMode,
+      ...templateData,                    // ← Template data added here
       targetType: targetType,
       classroomId: classroomId,
       classroomName: classroomName,
       studentIds: studentIds,
-      externalLinkTitle: document.getElementById('pfExternalLinkTitle')?.value || '',
-      externalLinkUrl: document.getElementById('pfExternalLinkUrl')?.value || '',
-      dueDate: document.getElementById('pfDueDate').value || null,
-      allowStudentUploads: document.getElementById('pfAllowUploads').checked,
-      allowComments: document.getElementById('pfAllowComments').checked,
-      allowExternalLinks: document.getElementById('pfAllowExternalLinks')?.checked !== false,
-      role: document.getElementById('pfCreatedByRole').value,
+      createdBy: auth.currentUser?.uid,
+      createdByRole: document.getElementById('pfCreatedByRole').value,
       createdByName: document.getElementById('pfCreatedByName').value,
-      sections: window.portfolioSections || []
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: 'published'
     };
-    
-    if (!data.title) {
-      msg.innerHTML = '<span style="color:#e74c3c;">Please enter a title</span>';
-      return;
+
+    if (!portfolioData.title) throw new Error('Portfolio title is required');
+
+    const portfolioRef = doc(collection(db, 'portfolios'));
+    await setDoc(portfolioRef, portfolioData);
+
+    // Create sections only if using custom sections mode
+    if (contentMode === 'sections' && window.portfolioSections && window.portfolioSections.length > 0) {
+      const batch = writeBatch(db);
+      window.portfolioSections.forEach((section, index) => {
+        const sectionRef = doc(collection(db, 'portfolio_sections'));
+        batch.set(sectionRef, {
+          portfolioId: portfolioRef.id,
+          title: section.title || 'Untitled Section',
+          description: section.description || '',
+          type: section.type || 'text',
+          required: section.required !== false,
+          order: index,
+          createdAt: serverTimestamp()
+        });
+      });
+      await batch.commit();
     }
+
+    // Notify students
+    if (studentIds.length > 0) {
+      const batch = writeBatch(db);
+      for (const sid of studentIds) {
+        batch.set(doc(collection(db, 'notifications')), {
+          studentId: sid,
+          title: '📁 New Portfolio Assigned',
+          message: `New portfolio: "${portfolioData.title}" has been assigned to you.`,
+          type: 'portfolio',
+          portfolioId: portfolioRef.id,
+          read: false,
+          createdAt: serverTimestamp()
+        });
+      }
+      await batch.commit();
+    }
+
+    msg.innerHTML = `<span style="color:#27ae60;">✅ Portfolio created successfully for ${studentIds.length} student(s)!</span>`;
     
-    const portfolioId = await createPortfolioTemplate(data);
-    
-    msg.innerHTML = `<span style="color:#27ae60;">✅ Portfolio created and assigned to ${studentIds.length} student(s)!</span>`;
     setTimeout(() => {
       document.getElementById('createPortfolioModal').remove();
       location.reload();
     }, 1500);
-    
+
   } catch (err) {
     console.error('Create portfolio error:', err);
-    msg.innerHTML = `<span style="color:#e74c3c;">Error: ${err.message}</span>`;
+    msg.innerHTML = `<span style="color:#e74c3c;">❌ ${err.message}</span>`;
   }
 }
 function renderStudentSectionInput(section, entry, portfolioId, studentId) {
