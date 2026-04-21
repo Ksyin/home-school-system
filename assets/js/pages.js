@@ -5179,7 +5179,6 @@ function renderParentChildrenPage(children) {
   return `<section class="card panel"><h3>Your Children</h3>${children.length ? cards : '<div class="empty">No children linked</div>'}</section>`;
 }
 
-// Add section builder functions
 window.addSectionToBuilder = function() {
   if (!window.portfolioSections) window.portfolioSections = [];
   
@@ -5195,6 +5194,23 @@ window.addSectionToBuilder = function() {
   renderSectionBuilder();
 };
 
+window.showFileUploadSection = function() {
+  if (!window.portfolioSections) window.portfolioSections = [];
+  
+  window.portfolioSections.push({
+    title: 'File Upload',
+    description: 'Upload your work file here',
+    type: 'upload',
+    required: true,
+    order: window.portfolioSections.length,
+    placeholder: 'Click to upload your file'
+  });
+  
+  renderSectionBuilder();
+};
+
+
+
 window.removeSectionFromBuilder = function(index) {
   window.portfolioSections.splice(index, 1);
   // Reorder
@@ -5202,48 +5218,97 @@ window.removeSectionFromBuilder = function(index) {
   renderSectionBuilder();
 };
 
+window.moveSectionUp = function(index) {
+  if (index > 0) {
+    [window.portfolioSections[index - 1], window.portfolioSections[index]] = 
+    [window.portfolioSections[index], window.portfolioSections[index - 1]];
+    window.portfolioSections.forEach((s, i) => s.order = i);
+    renderSectionBuilder();
+  }
+};
+
+window.moveSectionDown = function(index) {
+  if (index < window.portfolioSections.length - 1) {
+    [window.portfolioSections[index], window.portfolioSections[index + 1]] = 
+    [window.portfolioSections[index + 1], window.portfolioSections[index]];
+    window.portfolioSections.forEach((s, i) => s.order = i);
+    renderSectionBuilder();
+  }
+};
+
+
 function renderSectionBuilder() {
   const container = document.getElementById('sectionsList');
   if (!container) return;
   
   if (!window.portfolioSections || window.portfolioSections.length === 0) {
-    container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">No sections yet. Click "Add Section" to start building your portfolio.</p>';
+    container.innerHTML = `
+      <div class="empty-sections-state" style="text-align:center;padding:30px;background:#f8f9fa;border-radius:12px;">
+        <p style="color:#999;margin-bottom:16px;">No sections yet. Choose how you want to build this portfolio:</p>
+        <div style="display:flex;gap:12px;justify-content:center;">
+          <button type="button" class="btn" onclick="addSectionToBuilder()">
+            ➕ Add Section Manually
+          </button>
+          <button type="button" class="btn ghost" onclick="showFileUploadSection()">
+            📎 Upload Single File
+          </button>
+        </div>
+        <p style="color:#666;font-size:12px;margin-top:16px;">Sections are what students will complete. You can add text responses, file uploads, or reflections.</p>
+      </div>
+    `;
     return;
   }
   
-  container.innerHTML = window.portfolioSections.map((section, index) => `
-    <div class="section-item">
-      <div class="section-item-header">
-        <span><strong>Section ${index + 1}</strong></span>
-        <button type="button" class="btn small danger" onclick="removeSectionFromBuilder(${index})">✕</button>
-      </div>
-      <div style="display:grid;gap:8px;">
-        <input type="text" placeholder="Section Title" value="${escapeHtml(section.title || '')}" 
-               onchange="window.portfolioSections[${index}].title = this.value">
-        <input type="text" placeholder="Description (optional)" value="${escapeHtml(section.description || '')}"
-               onchange="window.portfolioSections[${index}].description = this.value">
-        <select onchange="window.portfolioSections[${index}].type = this.value; toggleSectionTypeHint(${index}, this.value)">
-          <option value="text" ${section.type === 'text' ? 'selected' : ''}>📝 Text Response</option>
-          <option value="upload" ${section.type === 'upload' ? 'selected' : ''}>📎 File Upload</option>
-          <option value="reflection" ${section.type === 'reflection' ? 'selected' : ''}>🤔 Reflection</option>
-          <option value="media" ${section.type === 'media' ? 'selected' : ''}>🎥 Media (Video/Audio)</option>
-        </select>
-        <input type="text" placeholder="Placeholder text / Hint" value="${escapeHtml(section.placeholder || '')}"
-               onchange="window.portfolioSections[${index}].placeholder = this.value">
-        <label>
-          <input type="checkbox" ${section.required !== false ? 'checked' : ''} 
-                 onchange="window.portfolioSections[${index}].required = this.checked"> Required
-        </label>
-        ${section.type === 'upload' || section.type === 'media' ? `
-          <small style="color:#666;">📎 Students will be able to upload files for this section</small>
-        ` : ''}
-      </div>
+  container.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn small" onclick="addSectionToBuilder()">
+        ➕ Add Section
+      </button>
+      <button type="button" class="btn small ghost" onclick="showFileUploadSection()">
+        📎 Add File Upload Section
+      </button>
+      <span style="margin-left:auto;color:#666;font-size:13px;">${window.portfolioSections.length} section(s)</span>
     </div>
-  `).join('');
+    ${window.portfolioSections.map((section, index) => `
+      <div class="section-item" style="background:white;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #e0e0e0;">
+        <div class="section-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span><strong>Section ${index + 1}</strong> <span style="color:#666;font-size:12px;">(${getSectionTypeLabel(section.type)})</span></span>
+          <div style="display:flex;gap:8px;">
+            ${index > 0 ? `<button type="button" class="btn small ghost" onclick="moveSectionUp(${index})">↑</button>` : ''}
+            ${index < window.portfolioSections.length - 1 ? `<button type="button" class="btn small ghost" onclick="moveSectionDown(${index})">↓</button>` : ''}
+            <button type="button" class="btn small danger" onclick="removeSectionFromBuilder(${index})">✕</button>
+          </div>
+        </div>
+        <div style="display:grid;gap:10px;">
+          <input type="text" placeholder="Section Title *" value="${escapeHtml(section.title || '')}" 
+                 onchange="window.portfolioSections[${index}].title = this.value" style="padding:10px;border:1px solid #ddd;border-radius:6px;">
+          <input type="text" placeholder="Description / Instructions (optional)" value="${escapeHtml(section.description || '')}"
+                 onchange="window.portfolioSections[${index}].description = this.value" style="padding:10px;border:1px solid #ddd;border-radius:6px;">
+          <select onchange="window.portfolioSections[${index}].type = this.value; renderSectionBuilder()" style="padding:10px;border:1px solid #ddd;border-radius:6px;">
+            <option value="text" ${section.type === 'text' ? 'selected' : ''}>📝 Text Response</option>
+            <option value="upload" ${section.type === 'upload' ? 'selected' : ''}>📎 File Upload</option>
+            <option value="reflection" ${section.type === 'reflection' ? 'selected' : ''}>🤔 Reflection</option>
+            <option value="media" ${section.type === 'media' ? 'selected' : ''}>🎥 Media (Video/Audio)</option>
+          </select>
+          <input type="text" placeholder="Placeholder text / Hint" value="${escapeHtml(section.placeholder || '')}"
+                 onchange="window.portfolioSections[${index}].placeholder = this.value" style="padding:10px;border:1px solid #ddd;border-radius:6px;">
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" ${section.required !== false ? 'checked' : ''} 
+                   onchange="window.portfolioSections[${index}].required = this.checked"> Required section
+          </label>
+          ${section.type === 'upload' || section.type === 'media' ? `
+            <small style="color:#3498db;">📎 Students will upload files for this section</small>
+          ` : ''}
+        </div>
+      </div>
+    `).join('')}
+  `;
 }
 
+
 window.toggleSectionTypeHint = function(index, type) {
-  // Just for UI feedback - the actual type is already updated
+  // Re-render to show hints
+  renderSectionBuilder();
 };
 
 
@@ -7676,116 +7741,166 @@ function calculateProgress(total, completed) {
   return Math.round((completed / total) * 100);
 }
 
-// ============================================
-// EXPOSE TO WINDOW
-// ============================================
 window.openPortfolio = async function(portfolioId) {
+  console.log('📁 Opening portfolio:', portfolioId);
+  
   const bundle = await requireAuth();
-  if (!bundle) return;
+  if (!bundle) {
+    console.error('No auth bundle');
+    return;
+  }
   
   const { user, profile } = bundle;
   
   try {
+    // Show loading state
+    const content = document.getElementById('page-content');
+    content.innerHTML = `
+      <div style="text-align:center;padding:60px;">
+        <div style="font-size:32px;margin-bottom:16px;">📁</div>
+        <p>Loading portfolio...</p>
+      </div>
+    `;
+    
     // Load portfolio data
     const portfolioDoc = await getDoc(doc(db, 'portfolios', portfolioId));
     if (!portfolioDoc.exists()) {
       alert('Portfolio not found');
+      closePortfolioView();
       return;
     }
     
     const portfolio = { id: portfolioDoc.id, ...portfolioDoc.data() };
-    const sections = await loadPortfolioSections(portfolioId);
+    console.log('📁 Portfolio loaded:', portfolio.title);
     
+    // Load sections
+    const sections = await loadPortfolioSections(portfolioId);
+    console.log(`📁 Loaded ${sections.length} sections`);
+    
+    // Load student entries if student
     let entries = [];
     if (profile.role === 'student') {
       entries = await loadStudentPortfolioEntries(portfolioId, user.uid);
+      console.log(`📁 Loaded ${entries.length} existing entries`);
     }
     
     // Store current view state
     window.currentPortfolioView = { portfolio, sections, entries };
     
     // Render the view
-    const content = document.getElementById('page-content');
     content.innerHTML = renderPortfolioView(portfolio, sections, entries, profile.role, user.uid);
     
-    // Attach auto-save to all textareas AFTER rendering
-    // This must be inside the try block to have access to 'entries'
+    // Attach event listeners AFTER rendering
     setTimeout(() => {
-      document.querySelectorAll('.portfolio-textarea').forEach(textarea => {
-        const textareaPortfolioId = textarea.dataset.portfolioId || portfolioId;
-        const sectionId = textarea.dataset.sectionId;
-        const studentId = textarea.dataset.studentId || user.uid;
-        
-        // Load existing content from entries
-        const existingEntry = entries.find(e => e.sectionId === sectionId);
-        if (existingEntry?.content) {
-          textarea.value = existingEntry.content;
-        }
-        
-        // Add input event for auto-save
-        textarea.addEventListener('input', (e) => {
-          autoSaveSection(textareaPortfolioId, sectionId, studentId, e.target.value);
-        });
-      });
-      
-      // Also attach event listeners to any file upload inputs
-      document.querySelectorAll('input[type="file"][id^="file-"]').forEach(fileInput => {
-        // These already have onchange handlers from renderStudentSectionInput
-        console.log('File input ready:', fileInput.id);
-      });
-      
+      attachPortfolioViewListeners(portfolioId, user.uid, entries, sections);
     }, 100);
     
   } catch (err) {
     console.error('Open portfolio error:', err);
-    alert('Error opening portfolio: ' + err.message);
+    document.getElementById('page-content').innerHTML = `
+      <div class="card panel error">
+        <h3>Error Opening Portfolio</h3>
+        <p>${err.message}</p>
+        <button class="btn" onclick="closePortfolioView()">Go Back</button>
+      </div>
+    `;
   }
 };
 
+function attachPortfolioViewListeners(portfolioId, studentId, entries, sections) {
+  console.log('🔧 Attaching portfolio view listeners...');
+  
+  // Create entry map for quick lookup
+  const entryMap = new Map();
+  entries.forEach(e => entryMap.set(e.sectionId, e));
+  
+  // Attach to all textareas
+  document.querySelectorAll('.portfolio-textarea').forEach(textarea => {
+    const sectionId = textarea.dataset.sectionId;
+    const existingEntry = entryMap.get(sectionId);
+    
+    // Set initial value
+    if (existingEntry?.content) {
+      textarea.value = existingEntry.content;
+    }
+    
+    // Add input event for auto-save
+    textarea.addEventListener('input', (e) => {
+      autoSaveSection(portfolioId, sectionId, studentId, e.target.value);
+    });
+    
+    console.log(`✅ Attached auto-save to section: ${sectionId}`);
+  });
+  
+  // Attach to save buttons
+  document.querySelectorAll('[onclick^="saveSectionContent"]').forEach(btn => {
+    const match = btn.getAttribute('onclick').match(/'([^']+)','([^']+)','([^']+)'/);
+    if (match) {
+      const [_, pfId, secId, stuId] = match;
+      btn.onclick = (e) => {
+        e.preventDefault();
+        saveSectionContent(pfId, secId, stuId);
+      };
+    }
+  });
+  
+  // Attach to file inputs
+  document.querySelectorAll('input[type="file"][id^="file-"]').forEach(fileInput => {
+    const sectionId = fileInput.id.replace('file-', '');
+    const existingEntry = entryMap.get(sectionId);
+    
+    // Store the onchange handler properly
+    fileInput.onchange = function(e) {
+      handleSectionFileUpload(this, portfolioId, sectionId, studentId);
+    };
+    
+    console.log(`✅ Attached file upload to section: ${sectionId}`);
+  });
+  
+  // Attach delete file buttons
+  document.querySelectorAll('[onclick^="deleteSectionFile"]').forEach(btn => {
+    const match = btn.getAttribute('onclick').match(/'([^']+)','([^']+)','([^']+)'/);
+    if (match) {
+      const [_, pfId, secId, stuId] = match;
+      btn.onclick = (e) => {
+        e.preventDefault();
+        deleteSectionFile(pfId, secId, stuId);
+      };
+    }
+  });
+  
+  // Update completion status indicators
+  sections.forEach(section => {
+    const entry = entryMap.get(section.id);
+    if (entry) {
+      updateSectionCompletionStatus(section.id, true);
+    }
+  });
+  
+  console.log('✅ All portfolio view listeners attached');
+}
+
+
 // Debounced auto-save
-let autoSaveTimeouts = {};
 
 window.autoSaveSection = function(portfolioId, sectionId, studentId, content) {
   // Clear existing timeout for this section
-  if (autoSaveTimeouts[sectionId]) {
-    clearTimeout(autoSaveTimeouts[sectionId]);
+  if (window.autoSaveTimeouts && window.autoSaveTimeouts[sectionId]) {
+    clearTimeout(window.autoSaveTimeouts[sectionId]);
   }
+  
+  if (!window.autoSaveTimeouts) window.autoSaveTimeouts = {};
   
   const statusEl = document.getElementById(`save-status-${sectionId}`);
   if (statusEl) {
     statusEl.textContent = '⏳ Saving...';
     statusEl.style.color = '#3498db';
   }
-  
-  // Set new timeout
-  autoSaveTimeouts[sectionId] = setTimeout(async () => {
-    try {
-      await savePortfolioEntry(portfolioId, sectionId, studentId, {
-        content,
-        studentName: auth.currentUser?.displayName || 'Student'
-      });
-      
-      if (statusEl) {
-        statusEl.textContent = '✓ Saved';
-        statusEl.style.color = '#27ae60';
-        setTimeout(() => {
-          if (statusEl) statusEl.textContent = '';
-        }, 2000);
-      }
-    } catch (err) {
-      console.error('Auto-save error:', err);
-      if (statusEl) {
-        statusEl.textContent = '⚠️ Error';
-        statusEl.style.color = '#e74c3c';
-      }
-    }
-  }, 1500);
-};
-
+}
 window.saveSectionContent = async function(portfolioId, sectionId, studentId) {
   const textarea = document.getElementById(`section-input-${sectionId}`);
   if (!textarea) {
-    console.error('Textarea not found');
+    console.error('Textarea not found:', sectionId);
     return;
   }
   
@@ -7809,8 +7924,8 @@ window.saveSectionContent = async function(portfolioId, sectionId, studentId) {
       }, 2000);
     }
     
-    // Update section completion status
     updateSectionCompletionStatus(sectionId, true);
+    console.log(`✅ Saved section: ${sectionId}`);
     
   } catch (err) {
     console.error('Save error:', err);
@@ -7822,12 +7937,67 @@ window.saveSectionContent = async function(portfolioId, sectionId, studentId) {
   }
 };
 
+function renderStudentSectionInput(section, entry, portfolioId, studentId) {
+  const existingContent = entry?.content || '';
+  const existingFile = entry?.fileUrl || '';
+  const sectionId = section.id;
+  
+  if (section.type === 'upload' || section.type === 'media') {
+    return `
+      <div class="section-input-area" data-section-id="${sectionId}">
+        ${existingFile ? `
+          <div class="student-response">
+            <div class="upload-preview">
+              ${renderFilePreview(existingFile, entry?.fileName || '')}
+              <button class="btn small danger" style="margin-top:8px;" 
+                onclick="deleteSectionFile('${portfolioId}', '${sectionId}', '${studentId}')">
+                🗑️ Remove File
+              </button>
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="upload-area" id="upload-area-${sectionId}" 
+             onclick="document.getElementById('file-${sectionId}').click()">
+          <input type="file" id="file-${sectionId}" style="display:none;" 
+                 accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov"
+                 onchange="handleSectionFileUpload(this, '${portfolioId}', '${sectionId}', '${studentId}')">
+          <div style="font-size:32px;margin-bottom:8px;">📎</div>
+          <p>${section.placeholder || 'Click to upload a file'}</p>
+          <small>Images, videos, PDFs, documents (Max 50MB)</small>
+        </div>
+        <div id="upload-progress-${sectionId}" style="margin-top:12px;"></div>
+      </div>
+    `;
+  }
+  
+  // Text/Reflection input with auto-save
+  return `
+    <div class="section-input-area" data-section-id="${sectionId}">
+      <textarea 
+        id="section-input-${sectionId}" 
+        class="portfolio-textarea"
+        placeholder="${section.placeholder || 'Write your response here...'}"
+        data-portfolio-id="${portfolioId}"
+        data-section-id="${sectionId}"
+        data-student-id="${studentId}"
+        rows="6"
+      >${escapeHtml(existingContent)}</textarea>
+      
+      <div class="section-actions">
+        <span id="save-status-${sectionId}" style="font-size:12px;color:#888;"></span>
+        <button class="btn small" onclick="saveSectionContent('${portfolioId}', '${sectionId}', '${studentId}')">
+          💾 Save
+        </button>
+      </div>
+    </div>
+  `;
+}
 window.handleSectionFileUpload = async function(input, portfolioId, sectionId, studentId) {
   const file = input.files[0];
   if (!file) return;
   
   const progressDiv = document.getElementById(`upload-progress-${sectionId}`);
-  const uploadArea = document.getElementById(`upload-area-${sectionId}`);
   
   if (progressDiv) {
     progressDiv.innerHTML = '<span style="color:#3498db;">📤 Uploading... 0%</span>';
@@ -7866,15 +8036,11 @@ window.handleSectionFileUpload = async function(input, portfolioId, sectionId, s
       studentName: auth.currentUser?.displayName || 'Student'
     });
     
-    // Update section completion status
     updateSectionCompletionStatus(sectionId, true);
     
     // Refresh the section display
     setTimeout(() => {
-      const currentPortfolio = window.currentPortfolioView;
-      if (currentPortfolio) {
-        openPortfolio(portfolioId);
-      }
+      openPortfolio(portfolioId);
     }, 500);
     
   } catch (err) {
@@ -7896,7 +8062,6 @@ window.deleteSectionFile = async function(portfolioId, sectionId, studentId) {
       studentName: auth.currentUser?.displayName || 'Student'
     });
     
-    // Refresh
     openPortfolio(portfolioId);
   } catch (err) {
     alert('Error removing file: ' + err.message);
@@ -7909,12 +8074,17 @@ function updateSectionCompletionStatus(sectionId, isCompleted) {
     if (isCompleted) {
       sectionCard.classList.add('completed');
       const numberEl = sectionCard.querySelector('.section-number');
-      if (numberEl) numberEl.classList.add('completed');
+      if (numberEl) {
+        numberEl.classList.add('completed');
+        numberEl.textContent = '✓';
+      }
     }
   }
 }
 
 window.submitPortfolio = async function(portfolioId) {
+  if (!confirm('Submit this portfolio? You can still edit after submitting.')) return;
+  
   try {
     await updateDoc(doc(db, 'portfolios', portfolioId), {
       [`submissions.${auth.currentUser.uid}`]: {
@@ -7924,10 +8094,14 @@ window.submitPortfolio = async function(portfolioId) {
     });
     
     alert('✅ Portfolio submitted successfully!');
+    closePortfolioView();
   } catch (err) {
     alert('Error submitting: ' + err.message);
   }
 };
+
+
+
 
 function renderPortfolioGrid(portfolios, role, profile) {
   const canCreate = role === 'tutor' || role === 'parent';
@@ -8689,6 +8863,9 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
               </select>
             </div>
             
+
+
+            
             <div class="form-row">
               <label>Subject (optional)</label>
               <input id="pfSubject" type="text" placeholder="e.g., Science, Math, History">
@@ -8703,6 +8880,8 @@ window.showCreatePortfolioModal = function(role, userId, userName) {
               <label>Cover Emoji</label>
               <input id="pfEmoji" type="text" placeholder="📁" maxlength="2" value="📁">
             </div>
+
+            
             
             <!-- EXTERNAL LINK (Sutori, Google Docs, etc.) -->
             <div class="form-row">
@@ -9017,20 +9196,18 @@ function renderStudentSectionInput(section, entry, portfolioId, studentId) {
   `;
 }
 window.closePortfolioView = function() {
-  // Clear the current view state
   window.currentPortfolioView = null;
   
-  // Re-render the portfolio grid instead of full page reload
-  const bundle = requireAuth().then(bundle => {
+  requireAuth().then(bundle => {
     if (bundle) {
       const { user, profile } = bundle;
       loadPortfoliosForUser(user.uid, profile.role).then(portfolios => {
         const content = document.getElementById('page-content');
         content.innerHTML = renderPortfolioGrid(portfolios, profile.role, profile);
+        attachPortfolioEventListeners();
       });
     }
   }).catch(() => {
-    // Fallback to reload if something fails
     location.reload();
   });
 };
