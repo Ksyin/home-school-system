@@ -22,7 +22,7 @@
 
 /* Left side gradient upgrade */
 .auth-aside {
-  background: linear-gradient(135deg, #0a1f44, #1e3a8a);
+  background: linear-gradient(135deg, #0a1f44, #8DBE4F);
   position: relative;
 }
 
@@ -92,9 +92,9 @@
 }
 
 .modern-outline {
-  border: 2px solid #2563eb;
+  border: 2px solid #8DBE4F;
   background: transparent;
-  color: #2563eb;
+  color: #8DBE4F;
   transition: all .25s ease;
 }
 
