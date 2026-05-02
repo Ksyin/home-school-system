@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>living-learning - Smart Learning Platform</title>
+    <title>The Living Learning - Smart Learning Platform</title>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <!-- Modern Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -11,44 +11,79 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
     <style>
         /* ===================================
-           LANDING PAGE - PREMIUM MODERN THEME
+           LANDING PAGE - LIVING ORGANIC THEME
            =================================== */
         :root {
-            --gradient-primary: linear-gradient(135deg, #43e97b 0%, #8DBE4F 100%);
-            --gradient-secondary: linear-gradient(135deg, #5C2E14 0%, #805A3B 100%);
-            --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            --gradient-success: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            --gradient-warm: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            --gradient-dark: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            /* Primary Organic Colors */
+            --sage-green: #7B9B6A;
+            --forest-green: #4A6741;
+            --deep-forest: #2D4A27;
+            --moss: #8B9D6B;
+            --olive: #6B7B4A;
             
-            --forest: #4A782C;
-            --leaf: #8DBE4F;
-            --earth-dark: #5C2E14;
-            --earth-clay: #805A3B;
-            --ochre: #D19036;
-            --crimson: #A3262A;
-            --deep-green: #1D3111;
-            --bg-cream: #F9F8F4;
+            /* Earth Tones */
+            --warm-earth: #8B6914;
+            --terracotta: #C67B4B;
+            --clay: #B8855C;
+            --sand: #D4B896;
+            --cream: #F5F0E8;
+            
+            /* Accent Colors */
+            --golden-hour: #E8A849;
+            --sunlight: #F4C873;
+            --harvest: #D4956B;
+            --autumn-leaf: #C17B3B;
+            --wheat: #E8D5B7;
+            
+            /* Greens - Life & Growth */
+            --fresh-green: #6B8E4E;
+            --leaf-green: #8DBE4F;
+            --emerald: #5B8C5A;
+            --sage: #9CAF88;
+            --mint: #B5C9A8;
+            
+            /* Browns - Earth & Foundation */
+            --rich-brown: #5C3D2E;
+            --warm-brown: #6B4B3B;
+            --cocoa: #8B6B4B;
+            --cedar: #A0522D;
+            --bark: #4A3728;
+            
+            /* Gradients */
+            --gradient-living: linear-gradient(135deg, #6B8E4E 0%, #8DBE4F 40%, #E8A849 100%);
+            --gradient-earth: linear-gradient(135deg, #4A3728 0%, #6B4B3B 50%, #8B6914 100%);
+            --gradient-growth: linear-gradient(135deg, #7B9B6A 0%, #8DBE4F 50%, #D4B896 100%);
+            --gradient-sunlight: linear-gradient(135deg, #E8A849 0%, #F4C873 50%, #F5F0E8 100%);
+            --gradient-nature: linear-gradient(135deg, #4A6741 0%, #7B9B6A 50%, #9CAF88 100%);
+            
+            /* UI Colors */
+            --bg-cream: #FDFBF7;
             --surface-light: #FFFFFF;
-            --text-primary: #2B2A28;
-            --text-muted: #6B625A;
+            --surface-warm: #F9F6F0;
+            --text-primary: #2B2A24;
+            --text-muted: #6B6355;
+            --text-light: #8B8375;
             --border-soft: #E8E3D7;
+            --border-warm: #DDD5C5;
             
-            --primary: #4A782C;
-            --primary-dark: #8DBE4F;
-            --accent: #5C2E14;
-            --success: #D19036;
-            --warning: #5C2E14;
-            --danger: #f56565;
+            /* Shadows with warm tones */
+            --shadow-sm: 0 2px 8px rgba(74, 55, 40, 0.06);
+            --shadow-md: 0 8px 30px rgba(74, 55, 40, 0.1);
+            --shadow-lg: 0 20px 60px rgba(74, 55, 40, 0.12);
+            --shadow-xl: 0 30px 80px rgba(74, 55, 40, 0.15);
+            --shadow-brand: 0 12px 40px rgba(107, 142, 78, 0.25);
+            
+            --primary: #6B8E4E;
+            --primary-dark: #4A6741;
+            --primary-light: #8DBE4F;
+            --accent: #E8A849;
+            --accent-dark: #D4956B;
+            --success: #5B8C5A;
+            --warning: #E8A849;
+            --danger: #C17B3B;
             
             --font-serif: 'Playfair Display', Georgia, serif;
             --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-            
-            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-            --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.12);
-            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.15);
-            --shadow-xl: 0 30px 80px rgba(0, 0, 0, 0.2);
-            --shadow-brand: 0 12px 40px rgba(102, 126, 234, 0.3);
         }
 
         * {
@@ -65,26 +100,27 @@
         }
 
         /* ============================================
-           MODERN NAVIGATION - GLASS MORPHISM
+           MODERN NAVIGATION - WARM GLASS MORPHISM
            ============================================ */
         .nav-bar {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(253, 251, 247, 0.9);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             z-index: 1000;
             padding: 0;
-            border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+            border-bottom: 1px solid rgba(107, 142, 78, 0.15);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 30px rgba(74, 55, 40, 0.06);
         }
 
         .nav-bar.scrolled {
-            background: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            background: rgba(253, 251, 247, 0.98);
+            box-shadow: 0 10px 40px rgba(74, 55, 40, 0.12);
+            border-bottom: 1px solid rgba(107, 142, 78, 0.25);
         }
 
         .nav-inner {
@@ -100,49 +136,50 @@
         .brand {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
             margin: 0;
             cursor: pointer;
             transition: transform 0.3s ease;
+            text-decoration: none;
         }
 
         .brand:hover {
-            transform: scale(1.02);
+            transform: scale(1.03);
         }
 
         .brand-logo {
             position: relative;
-            width: 56px;
-            height: 56px;
+            width: 52px;
+            height: 52px;
+            flex-shrink: 0;
         }
 
         .brand-logo img {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: drop-shadow(0 4px 12px rgba(102, 126, 234, 0.3));
+            filter: drop-shadow(0 4px 12px rgba(107, 142, 78, 0.35));
             animation: logoFloat 3s ease-in-out infinite;
         }
 
         @keyframes logoFloat {
             0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-6px); }
+            50% { transform: translateY(-5px); }
         }
 
         .brand-logo::after {
             content: '';
             position: absolute;
-            inset: -8px;
+            inset: -6px;
             border-radius: 50%;
-            background: var(--gradient-primary);
-            opacity: 0.1;
+            background: radial-gradient(circle, rgba(141, 190, 79, 0.2), rgba(232, 168, 73, 0.1), transparent);
             z-index: -1;
-            animation: pulse 2s ease-in-out infinite;
+            animation: glowPulse 3s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.1; }
-            50% { transform: scale(1.1); opacity: 0.2; }
+        @keyframes glowPulse {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.15); opacity: 1; }
         }
 
         .brand-text {
@@ -151,29 +188,29 @@
         }
 
         .brand-text h1 {
-            font-size: 28px;
+            font-size: 26px;
             margin: 0;
-            line-height: 1.2;
+            line-height: 1.1;
             font-weight: 800;
             letter-spacing: -0.5px;
             font-family: var(--font-serif);
-            background: var(--gradient-primary);
+            background: linear-gradient(135deg, #4A6741 0%, #6B8E4E 40%, #8DBE4F 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .brand-text span {
-            font-size: 11px;
-            color: var(--text-muted);
-            letter-spacing: 1px;
+            font-size: 10px;
+            color: #8B8375;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
             font-weight: 500;
         }
 
         .nav-links {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
         }
 
@@ -189,18 +226,18 @@
         }
 
         .nav-link:hover {
-            background: rgba(102, 126, 234, 0.08);
-            color: var(--primary);
+            background: rgba(141, 190, 79, 0.1);
+            color: var(--forest-green);
         }
 
         .nav-link.active {
-            background: rgba(102, 126, 234, 0.12);
-            color: var(--primary);
+            background: rgba(141, 190, 79, 0.15);
+            color: var(--forest-green);
             font-weight: 600;
         }
 
         .nav-btn {
-            padding: 12px 28px;
+            padding: 12px 26px;
             border-radius: 50px;
             font-weight: 600;
             font-size: 0.95rem;
@@ -218,27 +255,28 @@
             color: var(--primary);
         }
         .btn-login:hover {
-            background: var(--primary);
-            color: white;
+            background: rgba(107, 142, 78, 0.08);
+            color: var(--forest-green);
+            border-color: var(--forest-green);
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 8px 25px rgba(107, 142, 78, 0.2);
         }
 
         .btn-get-started {
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             border: none;
             color: white;
-            box-shadow: 0 8px 25px rgba(102, 234, 109, 0.4);
-            animation: glowPulse 2s ease-in-out infinite;
+            box-shadow: 0 8px 25px rgba(107, 142, 78, 0.35);
+            animation: buttonGlow 3s ease-in-out infinite;
         }
         .btn-get-started:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 35px rgba(11, 123, 30, 0.5);
+            box-shadow: 0 12px 35px rgba(107, 142, 78, 0.45);
         }
 
-        @keyframes glowPulse {
-            0%, 100% { box-shadow: 0 8px 25px rgba(15, 130, 35, 0.4); }
-            50% { box-shadow: 0 12px 40px rgba(118, 75, 162, 0.6); }
+        @keyframes buttonGlow {
+            0%, 100% { box-shadow: 0 8px 25px rgba(107, 142, 78, 0.35); }
+            50% { box-shadow: 0 12px 40px rgba(232, 168, 73, 0.4); }
         }
 
         /* Mobile Menu */
@@ -253,18 +291,18 @@
         }
 
         /* ============================================
-           HERO SECTION - DYNAMIC & ENGAGING
+           HERO SECTION - ORGANIC & ALIVE
            ============================================ */
         .hero {
             min-height: 100vh;
-            background: linear-gradient(160deg, #F9F8F4 0%, #F1EDE4 30%, #E8E1D3 70%, #D5CEC0 100%);
-            color: #2B2A28;
+            background: linear-gradient(160deg, #FDFBF7 0%, #F5F0E8 25%, #EDE6D8 60%, #E8E1D3 100%);
+            color: var(--text-primary);
             position: relative;
             overflow: hidden;
             padding-top: 80px;
         }
 
-        /* Animated Background */
+        /* Animated Background - Organic Orbs */
         .hero-bg {
             position: absolute;
             inset: 0;
@@ -274,63 +312,81 @@
         .hero-bg-orb {
             position: absolute;
             border-radius: 50%;
-            filter: blur(80px);
-            opacity: 0.3;
-            animation: orbFloat 20s ease-in-out infinite;
+            filter: blur(100px);
+            opacity: 0.25;
+            animation: orbFloat 25s ease-in-out infinite;
         }
 
         .orb-1 {
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(102, 126, 234, 0.4), transparent);
-            top: -10%;
-            left: -5%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(141, 190, 79, 0.5), rgba(107, 142, 78, 0.2), transparent);
+            top: -15%;
+            left: -8%;
             animation-delay: 0s;
         }
 
         .orb-2 {
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(240, 147, 251, 0.3), transparent);
-            top: 50%;
-            right: -5%;
-            animation-delay: -7s;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(232, 168, 73, 0.4), rgba(212, 149, 107, 0.2), transparent);
+            top: 45%;
+            right: -10%;
+            animation-delay: -8s;
         }
 
         .orb-3 {
-            width: 350px;
-            height: 350px;
-            background: radial-gradient(circle, rgba(79, 172, 254, 0.3), transparent);
-            bottom: -10%;
-            left: 30%;
-            animation-delay: -14s;
+            width: 450px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(155, 175, 136, 0.35), rgba(141, 190, 79, 0.15), transparent);
+            bottom: -15%;
+            left: 25%;
+            animation-delay: -16s;
         }
 
         .orb-4 {
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(67, 233, 123, 0.25), transparent);
-            top: 30%;
-            left: 50%;
-            animation-delay: -3s;
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, rgba(244, 200, 115, 0.3), rgba(232, 213, 183, 0.15), transparent);
+            top: 25%;
+            left: 55%;
+            animation-delay: -4s;
         }
 
         @keyframes orbFloat {
             0%, 100% { transform: translate(0, 0) scale(1); }
-            25% { transform: translate(30px, -30px) scale(1.1); }
-            50% { transform: translate(-20px, 40px) scale(0.95); }
-            75% { transform: translate(-40px, -20px) scale(1.05); }
+            25% { transform: translate(40px, -40px) scale(1.08); }
+            50% { transform: translate(-30px, 50px) scale(0.95); }
+            75% { transform: translate(-50px, -30px) scale(1.05); }
         }
 
-        /* Grid Pattern */
+        /* Organic Grid Pattern */
         .hero-grid-pattern {
             position: absolute;
             inset: 0;
             background-image: 
-                linear-gradient(rgba(102, 126, 234, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(102, 126, 234, 0.03) 1px, transparent 1px);
-            background-size: 60px 60px;
-            opacity: 0.5;
+                radial-gradient(circle at 20% 30%, rgba(141, 190, 79, 0.04) 1px, transparent 1px),
+                radial-gradient(circle at 60% 70%, rgba(232, 168, 73, 0.04) 1px, transparent 1px),
+                radial-gradient(circle at 80% 20%, rgba(107, 142, 78, 0.03) 1px, transparent 1px);
+            background-size: 80px 80px, 60px 60px, 70px 70px;
+            opacity: 0.6;
+        }
+
+        /* Leaf Pattern Overlay */
+        .leaf-pattern {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(45deg, rgba(141, 190, 79, 0.03) 25%, transparent 25%),
+                linear-gradient(-45deg, rgba(141, 190, 79, 0.03) 25%, transparent 25%);
+            background-size: 40px 40px;
+            opacity: 0.3;
+            animation: patternShift 30s linear infinite;
+        }
+
+        @keyframes patternShift {
+            from { background-position: 0 0; }
+            to { background-position: 100px 100px; }
         }
 
         .hero-content {
@@ -359,14 +415,14 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.75);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(141, 190, 79, 0.3);
             padding: 8px 20px;
             border-radius: 50px;
             font-size: 0.9rem;
             font-weight: 600;
-            color: var(--primary);
+            color: var(--forest-green);
             margin-bottom: 28px;
             animation: fadeInUp 1s ease 0.1s forwards;
             opacity: 0;
@@ -375,9 +431,14 @@
         .hero-badge .dot {
             width: 8px;
             height: 8px;
-            background: var(--success);
+            background: #8DBE4F;
             border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes dotPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(141, 190, 79, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(141, 190, 79, 0); }
         }
 
         .hero-text h1 {
@@ -387,7 +448,7 @@
             letter-spacing: -2px;
             margin-bottom: 24px;
             font-family: var(--font-serif);
-            background: linear-gradient(135deg, #5b8472 0%, #1fa485 60%, #4ba265 100%);
+            background: linear-gradient(135deg, #4A3728 0%, #4A6741 35%, #6B8E4E 65%, #8DBE4F 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -428,13 +489,13 @@
         }
 
         .btn-primary-hero {
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             color: white;
-            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.5);
+            box-shadow: 0 12px 35px rgba(107, 142, 78, 0.45);
         }
         .btn-primary-hero:hover {
             transform: translateY(-4px);
-            box-shadow: 0 20px 50px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 20px 50px rgba(107, 142, 78, 0.55);
         }
 
         .btn-secondary-hero {
@@ -443,9 +504,11 @@
             color: var(--primary);
         }
         .btn-secondary-hero:hover {
-            background: rgba(102, 126, 234, 0.05);
+            background: rgba(141, 190, 79, 0.06);
             transform: translateY(-4px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+            box-shadow: 0 10px 30px rgba(107, 142, 78, 0.2);
+            border-color: var(--forest-green);
+            color: var(--forest-green);
         }
 
         /* Trust Badges */
@@ -468,7 +531,7 @@
         }
 
         .trust-item i {
-            color: var(--success);
+            color: #8DBE4F;
             font-size: 1.1rem;
         }
 
@@ -476,19 +539,20 @@
         .hero-visual {
             animation: fadeInUp 1s ease 0.3s forwards;
             opacity: 0;
+            position: relative;
         }
 
         .video-wrapper {
             position: relative;
-            border-radius: 24px;
+            border-radius: 28px;
             overflow: hidden;
-            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.2);
-            border: 3px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 40px 80px rgba(74, 55, 40, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.6);
         }
 
         .video-wrapper video {
             width: 100%;
-            border-radius: 24px;
+            border-radius: 28px;
             object-fit: cover;
             display: block;
         }
@@ -497,77 +561,70 @@
             content: '';
             position: absolute;
             inset: -3px;
-            border-radius: 27px;
-            background: var(--gradient-primary);
+            border-radius: 31px;
+            background: var(--gradient-living);
             z-index: -1;
-            opacity: 0.3;
+            opacity: 0.2;
         }
 
-        .video-overlay {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 8px;
-        }
-
-        .video-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: white;
-            opacity: 0.5;
-        }
-
-        .video-dot.active {
-            opacity: 1;
-            background: var(--primary);
-        }
-
-        /* Floating Cards */
+        /* Floating Cards with warm tones */
         .floating-card {
             position: absolute;
-            background: rgb(68, 63, 31);
+            background: white;
             border-radius: 16px;
-            padding: 16px 20px;
-            box-shadow: var(--shadow-md);
+            padding: 14px 18px;
+            box-shadow: 0 8px 30px rgba(74, 55, 40, 0.12);
             display: flex;
             align-items: center;
             gap: 12px;
             animation: floatCard 6s ease-in-out infinite;
+            border: 1px solid rgba(141, 190, 79, 0.1);
         }
 
         .floating-card-1 {
-            top: 10%;
-            left: -30px;
+            top: 8%;
+            left: -25px;
             animation-delay: 0s;
         }
 
         .floating-card-2 {
-            bottom: 20%;
+            bottom: 18%;
             right: -20px;
             animation-delay: -2s;
         }
 
         .floating-card-3 {
-            top: 50%;
-            left: 60%;
+            top: 45%;
+            left: 55%;
             animation-delay: -4s;
         }
 
         @keyframes floatCard {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-15px); }
+            50% { transform: translateY(-12px); }
         }
 
         .floating-card .icon-circle {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 18px;
+        }
+
+        .icon-green-nature { 
+            background: linear-gradient(135deg, rgba(141, 190, 79, 0.2), rgba(107, 142, 78, 0.15)); 
+            color: #6B8E4E; 
+        }
+        .icon-golden { 
+            background: linear-gradient(135deg, rgba(232, 168, 73, 0.2), rgba(212, 149, 107, 0.15)); 
+            color: #D4956B; 
+        }
+        .icon-earth { 
+            background: linear-gradient(135deg, rgba(139, 105, 20, 0.15), rgba(107, 75, 59, 0.12)); 
+            color: #6B4B3B; 
         }
 
         /* ============================================
@@ -575,8 +632,8 @@
            ============================================ */
         .stats-bar {
             background: white;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            padding: 24px 0;
+            border-bottom: 1px solid rgba(141, 190, 79, 0.1);
+            padding: 28px 0;
         }
 
         .stats-bar-inner {
@@ -590,14 +647,29 @@
 
         .stat-item {
             text-align: center;
-            padding: 16px;
+            padding: 20px;
+            position: relative;
+        }
+
+        .stat-item::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 20%;
+            height: 60%;
+            width: 1px;
+            background: linear-gradient(to bottom, transparent, rgba(141, 190, 79, 0.2), transparent);
+        }
+
+        .stat-item:last-child::after {
+            display: none;
         }
 
         .stat-value {
             font-size: 2.8rem;
             font-weight: 800;
             font-family: var(--font-serif);
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -632,21 +704,22 @@
 
         .section-tag {
             display: inline-block;
-            background: rgba(102, 126, 234, 0.1);
-            color: var(--primary);
+            background: rgba(141, 190, 79, 0.12);
+            color: var(--forest-green);
             padding: 8px 20px;
             border-radius: 50px;
             font-weight: 600;
             font-size: 0.85rem;
             margin-bottom: 20px;
             letter-spacing: 0.5px;
+            border: 1px solid rgba(141, 190, 79, 0.2);
         }
 
         .section-title {
             font-size: 3.2rem;
             font-weight: 800;
             font-family: var(--font-serif);
-            color: #2c3e50;
+            color: #2D2A24;
             margin-bottom: 16px;
             letter-spacing: -1px;
         }
@@ -666,7 +739,7 @@
 
         .feature-card {
             background: white;
-            border: 1px solid rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(141, 190, 79, 0.1);
             border-radius: 24px;
             padding: 40px 28px;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -682,9 +755,10 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             transform: scaleX(0);
             transition: transform 0.4s ease;
+            border-radius: 24px 24px 0 0;
         }
 
         .feature-card:hover::before {
@@ -693,8 +767,8 @@
 
         .feature-card:hover {
             transform: translateY(-12px);
-            box-shadow: var(--shadow-xl);
-            border-color: transparent;
+            box-shadow: 0 28px 55px rgba(74, 55, 40, 0.12);
+            border-color: rgba(141, 190, 79, 0.3);
         }
 
         .feature-icon {
@@ -704,7 +778,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
+            font-size: 30px;
             margin-bottom: 24px;
             transition: transform 0.4s ease;
         }
@@ -713,18 +787,19 @@
             transform: scale(1.1) rotate(-5deg);
         }
 
-        .icon-purple { background: linear-gradient(135deg, #667eea20, #764ba220); color: #667eea; }
-        .icon-pink { background: linear-gradient(135deg, #f093fb20, #f5576c20); color: #f093fb; }
-        .icon-blue { background: linear-gradient(135deg, #4facfe20, #00f2fe20); color: #4facfe; }
-        .icon-green { background: linear-gradient(135deg, #43e97b20, #38f9d720); color: #43e97b; }
-        .icon-orange { background: linear-gradient(135deg, #fa709a20, #fee14020); color: #fa709a; }
-        .icon-indigo { background: linear-gradient(135deg, #a18cd120, #fbc2eb20); color: #a18cd1; }
+        /* Feature Icon Colors */
+        .icon-sage { background: linear-gradient(135deg, rgba(123, 155, 106, 0.2), rgba(141, 190, 79, 0.15)); color: #7B9B6A; }
+        .icon-forest { background: linear-gradient(135deg, rgba(74, 103, 65, 0.2), rgba(107, 142, 78, 0.15)); color: #4A6741; }
+        .icon-leaf { background: linear-gradient(135deg, rgba(141, 190, 79, 0.2), rgba(180, 200, 150, 0.15)); color: #8DBE4F; }
+        .icon-earth { background: linear-gradient(135deg, rgba(139, 105, 20, 0.15), rgba(107, 75, 59, 0.12)); color: #6B4B3B; }
+        .icon-golden { background: linear-gradient(135deg, rgba(232, 168, 73, 0.2), rgba(212, 149, 107, 0.15)); color: #D4956B; }
+        .icon-clay { background: linear-gradient(135deg, rgba(200, 155, 120, 0.2), rgba(180, 130, 90, 0.15)); color: #B8855C; }
 
         .feature-card h3 {
             font-size: 1.4rem;
             font-weight: 700;
             margin-bottom: 12px;
-            color: #2c3e50;
+            color: #2D2A24;
         }
 
         .feature-card p {
@@ -738,7 +813,7 @@
            ============================================ */
         .how-it-works {
             padding: 120px 0;
-            background: #f8f9fc;
+            background: #F9F6F0;
         }
 
         .steps-grid {
@@ -755,7 +830,7 @@
             left: 20%;
             right: 20%;
             height: 2px;
-            background: linear-gradient(to right, transparent, var(--primary), transparent);
+            background: linear-gradient(to right, transparent, #8DBE4F, #E8A849, #8DBE4F, transparent);
             z-index: 0;
         }
 
@@ -767,21 +842,22 @@
             position: relative;
             z-index: 1;
             transition: all 0.4s ease;
-            box-shadow: var(--shadow-sm);
+            box-shadow: 0 4px 20px rgba(74, 55, 40, 0.06);
+            border: 1px solid rgba(141, 190, 79, 0.1);
         }
 
         .step-card:hover {
             transform: translateY(-8px);
-            box-shadow: var(--shadow-lg);
+            box-shadow: 0 20px 50px rgba(74, 55, 40, 0.12);
         }
 
         .step-number {
-            width: 60px;
-            height: 60px;
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             color: white;
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             font-weight: 800;
             display: flex;
             align-items: center;
@@ -789,13 +865,14 @@
             margin: 0 auto 24px;
             position: relative;
             z-index: 2;
+            box-shadow: 0 8px 20px rgba(107, 142, 78, 0.3);
         }
 
         .step-card h3 {
             font-size: 1.3rem;
             font-weight: 700;
             margin-bottom: 12px;
-            color: #2c3e50;
+            color: #2D2A24;
         }
 
         .step-card p {
@@ -818,26 +895,28 @@
         }
 
         .testimonial-card {
-            background: #f8f9fc;
+            background: #FDFBF7;
             border-radius: 24px;
             padding: 32px;
             transition: all 0.4s ease;
+            border: 1px solid rgba(141, 190, 79, 0.08);
         }
 
         .testimonial-card:hover {
             background: white;
-            box-shadow: var(--shadow-md);
+            box-shadow: 0 16px 40px rgba(74, 55, 40, 0.1);
+            border-color: rgba(141, 190, 79, 0.2);
         }
 
         .testimonial-stars {
-            color: #f6c23e;
+            color: #E8A849;
             font-size: 1.1rem;
             margin-bottom: 16px;
         }
 
         .testimonial-text {
             font-size: 1.05rem;
-            color: #4a5568;
+            color: #5C4F3F;
             line-height: 1.7;
             margin-bottom: 20px;
             font-style: italic;
@@ -853,7 +932,7 @@
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -865,6 +944,7 @@
         .author-info h4 {
             font-weight: 700;
             margin-bottom: 2px;
+            color: #2D2A24;
         }
 
         .author-info span {
@@ -872,12 +952,12 @@
             color: var(--text-muted);
         }
 
-        /* ============================================
-           CTA SECTION
-           ============================================ */
+        /* ============================================ */
+        /* CTA SECTION */
+        /* ============================================ */
         .cta-section {
             padding: 120px 0;
-            background: linear-gradient(135deg, #667eea15, #764ba215);
+            background: linear-gradient(135deg, rgba(141, 190, 79, 0.08), rgba(232, 168, 73, 0.08));
         }
 
         .cta-card {
@@ -885,9 +965,10 @@
             border-radius: 32px;
             padding: 80px 60px;
             text-align: center;
-            box-shadow: var(--shadow-lg);
+            box-shadow: 0 20px 60px rgba(74, 55, 40, 0.1);
             position: relative;
             overflow: hidden;
+            border: 1px solid rgba(141, 190, 79, 0.15);
         }
 
         .cta-card::before {
@@ -897,8 +978,8 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(102, 126, 234, 0.05), transparent 70%);
-            animation: rotate 20s linear infinite;
+            background: radial-gradient(circle, rgba(141, 190, 79, 0.04), rgba(232, 168, 73, 0.03), transparent 70%);
+            animation: rotate 25s linear infinite;
         }
 
         @keyframes rotate {
@@ -912,6 +993,7 @@
             font-family: var(--font-serif);
             margin-bottom: 16px;
             position: relative;
+            color: #2D2A24;
         }
 
         .cta-card p {
@@ -926,12 +1008,12 @@
             font-size: 1.15rem;
             font-weight: 700;
             border-radius: 50px;
-            background: var(--gradient-primary);
+            background: var(--gradient-living);
             color: white;
             border: none;
             cursor: pointer;
             transition: all 0.4s ease;
-            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 12px 35px rgba(107, 142, 78, 0.4);
             text-decoration: none;
             display: inline-flex;
             align-items: center;
@@ -941,15 +1023,15 @@
 
         .btn-cta:hover {
             transform: translateY(-4px);
-            box-shadow: 0 20px 50px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 20px 50px rgba(107, 142, 78, 0.55);
         }
 
-        /* ============================================
-           FOOTER
-           ============================================ */
+        /* ============================================ */
+        /* FOOTER */
+        /* ============================================ */
         .footer {
-            background: #1a1a2e;
-            color: #a0aec0;
+            background: #2D2A24;
+            color: #B8B0A5;
             padding: 80px 0 40px;
         }
 
@@ -968,7 +1050,7 @@
         }
 
         .footer-brand img {
-            height: 44px;
+            height: 42px;
             width: auto;
         }
 
@@ -979,14 +1061,16 @@
         }
 
         .footer h4 {
-            color: white;
+            color: #E8D5B7;
             font-weight: 600;
             margin-bottom: 20px;
             font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .footer a {
-            color: #a0aec0;
+            color: #B8B0A5;
             text-decoration: none;
             display: block;
             margin-bottom: 12px;
@@ -995,19 +1079,19 @@
         }
 
         .footer a:hover {
-            color: white;
+            color: #8DBE4F;
         }
 
         .footer-bottom {
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
             padding-top: 24px;
             text-align: center;
             font-size: 0.85rem;
         }
 
-        /* ============================================
-           RESPONSIVE
-           ============================================ */
+        /* ============================================ */
+        /* RESPONSIVE */
+        /* ============================================ */
         @media (max-width: 1200px) {
             .hero-text h1 { font-size: 3.5rem; }
             .feature-grid, .testimonial-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1021,6 +1105,7 @@
             .trust-badges { justify-content: center; }
             .feature-grid, .steps-grid, .testimonial-grid { grid-template-columns: 1fr; }
             .footer-grid { grid-template-columns: 1fr; }
+            .stats-bar-inner { grid-template-columns: repeat(2, 1fr); }
             
             .mobile-menu-toggle { display: block; }
             .nav-links { 
@@ -1032,12 +1117,13 @@
                 background: white;
                 flex-direction: column;
                 padding: 20px;
-                box-shadow: var(--shadow-lg);
+                box-shadow: 0 20px 40px rgba(74, 55, 40, 0.15);
+                border-radius: 0 0 16px 16px;
             }
             .nav-links.open { display: flex; }
             
-            .stats-bar-inner { grid-template-columns: repeat(2, 1fr); }
             .steps-grid::before { display: none; }
+            .stat-item::after { display: none; }
         }
 
         @media (max-width: 600px) {
@@ -1051,21 +1137,21 @@
 </head>
 <body>
 
-<!-- ============================================
-     MODERN NAVIGATION BAR
-     ============================================ -->
+<!-- ============================================ -->
+<!-- MODERN NAVIGATION BAR - ORGANIC STYLE -->
+<!-- ============================================ -->
 <nav class="nav-bar" id="navbar">
     <div class="nav-inner">
         <!-- Brand -->
         <a href="/" class="brand">
             <div class="brand-logo">
                 <img src="https://res.cloudinary.com/djqqcepe8/image/upload/v1777435705/logo_qwqxkb.png" 
-                     alt="HomeSchool Logo"
-                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;width:56px;height:56px;border-radius:16px;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:white;font-size:24px;font-weight:800;&quot;>H</div>'">
+                     alt="The Living Learning Logo"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;width:52px;height:52px;border-radius:50%;background:var(--gradient-living);display:flex;align-items:center;justify-content:center;color:white;font-size:22px;font-weight:800;box-shadow:0 8px 20px rgba(107,142,78,0.3);&quot;>🌿</div>'">
             </div>
             <div class="brand-text">
-                <h1>Living-learning</h1>
-                <span>Smart Learning</span>
+                <h1>The Living Learning</h1>
+                <span>Growth Through Education</span>
             </div>
         </a>
 
@@ -1079,20 +1165,20 @@
             <a href="#features" class="nav-link">Features</a>
             <a href="#how-it-works" class="nav-link">How It Works</a>
             <a href="#testimonials" class="nav-link">Testimonials</a>
-            <a href="#pricing" class="nav-link">Pricing</a>
+            <a href="#pricing" class="nav-link">Community</a>
             <a href="/login.html" class="nav-btn btn-login">
                 <i class="fas fa-sign-in-alt"></i> Login
             </a>
             <a href="/register.html" class="nav-btn btn-get-started">
-                <i class="fas fa-rocket"></i> Get Started Free
+                <i class="fas fa-leaf"></i> Get Started Free
             </a>
         </div>
     </div>
 </nav>
 
-<!-- ============================================
-     HERO SECTION
-     ============================================ -->
+<!-- ============================================ -->
+<!-- HERO SECTION - ORGANIC & ALIVE -->
+<!-- ============================================ -->
 <section class="hero">
     <!-- Animated Background -->
     <div class="hero-bg">
@@ -1101,6 +1187,7 @@
         <div class="hero-bg-orb orb-3"></div>
         <div class="hero-bg-orb orb-4"></div>
         <div class="hero-grid-pattern"></div>
+        <div class="leaf-pattern"></div>
     </div>
 
     <div class="hero-content">
@@ -1108,19 +1195,19 @@
         <div class="hero-text">
             <div class="hero-badge">
                 <span class="dot"></span>
-                Trusted by 10,000+ families worldwide
+                Nurturing Growth • Cultivating Knowledge
             </div>
             
             <h1>Learning that connects.<br>Growth that lasts.</h1>
             
             <p>
                 A modern platform where tutors, students, and parents collaborate in real time. 
-                Structured lessons, meaningful feedback, and visible progress — all in one beautiful place.
+                Structured lessons, meaningful feedback, and visible progress — all in one thriving ecosystem.
             </p>
             
             <div class="cta-buttons">
                 <a href="/register.html" class="btn-hero btn-primary-hero">
-                    <i class="fas fa-rocket"></i> Start Teaching & Learning Today
+                    <i class="fas fa-leaf"></i> Start Teaching & Learning Today
                 </a>
                 <a href="/login.html" class="btn-hero btn-secondary-hero">
                     <i class="fas fa-play-circle"></i> Watch Demo
@@ -1135,7 +1222,7 @@
                     <i class="fas fa-check-circle"></i> No credit card needed
                 </div>
                 <div class="trust-item">
-                    <i class="fas fa-headset"></i> 24/7 Support
+                    <i class="fas fa-heart"></i> Built with care
                 </div>
             </div>
         </div>
@@ -1150,32 +1237,32 @@
                 
                 <!-- Floating Cards -->
                 <div class="floating-card floating-card-1">
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #667eea20, #764ba220); color: #667eea;">
-                        <i class="fas fa-chart-line"></i>
+                    <div class="icon-circle icon-green-nature">
+                        <i class="fas fa-seedling"></i>
                     </div>
                     <div>
-                        <strong>98%</strong>
-                        <small style="display:block;color:#666;">Success Rate</small>
+                        <strong style="color:#4A6741;">98% Growth</strong>
+                        <small style="display:block;color:#8B8375;">Success Rate</small>
                     </div>
                 </div>
                 
                 <div class="floating-card floating-card-2">
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #43e97b20, #38f9d720); color: #43e97b;">
+                    <div class="icon-circle icon-golden">
                         <i class="fas fa-star"></i>
                     </div>
                     <div>
-                        <strong>4.9/5</strong>
-                        <small style="display:block;color:#666;">Rating</small>
+                        <strong style="color:#8B6914;">4.9/5</strong>
+                        <small style="display:block;color:#8B8375;">Parent Rating</small>
                     </div>
                 </div>
 
                 <div class="floating-card floating-card-3">
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #f093fb20, #f5576c20); color: #f093fb;">
+                    <div class="icon-circle icon-earth">
                         <i class="fas fa-users"></i>
                     </div>
                     <div>
-                        <strong>10K+</strong>
-                        <small style="display:block;color:#666;">Active Users</small>
+                        <strong style="color:#5C3D2E;">10K+</strong>
+                        <small style="display:block;color:#8B8375;">Active Families</small>
                     </div>
                 </div>
             </div>
@@ -1183,149 +1270,149 @@
     </div>
 </section>
 
-<!-- ============================================
-     STATS BAR
-     ============================================ -->
+<!-- ============================================ -->
+<!-- STATS BAR -->
+<!-- ============================================ -->
 <section class="stats-bar">
     <div class="stats-bar-inner">
         <div class="stat-item" data-aos="fade-up">
             <div class="stat-value">10,000+</div>
-            <div class="stat-label">Active Students</div>
+            <div class="stat-label">Growing Learners</div>
         </div>
         <div class="stat-item" data-aos="fade-up" data-aos-delay="100">
             <div class="stat-value">5,000+</div>
-            <div class="stat-label">Expert Tutors</div>
+            <div class="stat-label">Dedicated Tutors</div>
         </div>
         <div class="stat-item" data-aos="fade-up" data-aos-delay="200">
             <div class="stat-value">50,000+</div>
-            <div class="stat-label">Lessons Delivered</div>
+            <div class="stat-label">Lessons Nurtured</div>
         </div>
         <div class="stat-item" data-aos="fade-up" data-aos-delay="300">
             <div class="stat-value">98%</div>
-            <div class="stat-label">Satisfaction Rate</div>
+            <div class="stat-label">Family Satisfaction</div>
         </div>
     </div>
 </section>
 
-<!-- ============================================
-     FEATURES SECTION
-     ============================================ -->
+<!-- ============================================ -->
+<!-- FEATURES SECTION -->
+<!-- ============================================ -->
 <section id="features" class="features">
     <div class="section-container">
         <div class="section-header" data-aos="fade-up">
-            <span class="section-tag">✨ Features</span>
-            <h2 class="section-title">Everything you need for better learning</h2>
-            <p class="section-subtitle">Powerful tools designed for real homeschooling success</p>
+            <span class="section-tag">🌿 Our Ecosystem</span>
+            <h2 class="section-title">Everything you need to cultivate learning</h2>
+            <p class="section-subtitle">Natural tools designed for authentic educational growth</p>
         </div>
 
         <div class="feature-grid">
             <div class="feature-card" data-aos="fade-up" data-aos-delay="0">
-                <div class="feature-icon icon-purple">
+                <div class="feature-icon icon-sage">
                     <i class="fas fa-book-open"></i>
                 </div>
-                <h3>Smart Lesson Planning</h3>
-                <p>Create rich lesson plans with objectives, materials, and attachments. Publish instantly for your students with one click.</p>
+                <h3>Living Lesson Plans</h3>
+                <p>Create dynamic, evolving lesson plans with objectives, materials, and attachments that grow with your students.</p>
             </div>
 
             <div class="feature-card" data-aos="fade-up" data-aos-delay="100">
-                <div class="feature-icon icon-pink">
+                <div class="feature-icon icon-forest">
                     <i class="fas fa-pencil-alt"></i>
                 </div>
-                <h3>Assignments & Submissions</h3>
-                <p>Assign work, receive submissions with files, and give timely feedback in one seamless workflow.</p>
+                <h3>Rooted Assignments</h3>
+                <p>Plant seeds of knowledge with assignments that students nurture through submissions and receive nurturing feedback.</p>
             </div>
 
             <div class="feature-card" data-aos="fade-up" data-aos-delay="200">
-                <div class="feature-icon icon-blue">
-                    <i class="fas fa-chart-bar"></i>
+                <div class="feature-icon icon-leaf">
+                    <i class="fas fa-chart-line"></i>
                 </div>
-                <h3>Progress Tracking</h3>
-                <p>Beautiful portfolios, detailed reports, and real-time insights into every learner's journey.</p>
+                <h3>Growth Tracking</h3>
+                <p>Watch learning flourish with beautiful portfolios, comprehensive reports, and real-time growth insights.</p>
             </div>
 
             <div class="feature-card" data-aos="fade-up" data-aos-delay="300">
-                <div class="feature-icon icon-green">
-                    <i class="fas fa-user-friends"></i>
+                <div class="feature-icon icon-earth">
+                    <i class="fas fa-users"></i>
                 </div>
-                <h3>Parent Portal</h3>
-                <p>Parents can view their child's work, portfolio, and academic growth anytime, anywhere.</p>
+                <h3>Family Roots</h3>
+                <p>Parents stay deeply connected to their child's educational journey with complete visibility and engagement.</p>
             </div>
 
             <div class="feature-card" data-aos="fade-up" data-aos-delay="400">
-                <div class="feature-icon icon-orange">
+                <div class="feature-icon icon-golden">
                     <i class="fas fa-comments"></i>
                 </div>
-                <h3>Real-time Communication</h3>
-                <p>Direct messaging between tutors, students, and parents — no more missed updates or confusion.</p>
+                <h3>Natural Communication</h3>
+                <p>Organic messaging flows between tutors, students, and parents — nurturing understanding and connection.</p>
             </div>
 
             <div class="feature-card" data-aos="fade-up" data-aos-delay="500">
-                <div class="feature-icon icon-indigo">
+                <div class="feature-icon icon-clay">
                     <i class="fas fa-chalkboard-teacher"></i>
                 </div>
-                <h3>Classroom Management</h3>
-                <p>Organize students into virtual classrooms and deliver targeted resources effortlessly.</p>
+                <h3>Learning Gardens</h3>
+                <p>Cultivate virtual classrooms where each student can bloom with personalized resources and attention.</p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ============================================
-     HOW IT WORKS
-     ============================================ -->
+<!-- ============================================ -->
+<!-- HOW IT WORKS -->
+<!-- ============================================ -->
 <section id="how-it-works" class="how-it-works">
     <div class="section-container">
         <div class="section-header" data-aos="fade-up">
-            <span class="section-tag">🚀 How It Works</span>
-            <h2 class="section-title">Start learning in 3 simple steps</h2>
-            <p class="section-subtitle">Getting started is easy — no technical skills required</p>
+            <span class="section-tag">🌱 Getting Started</span>
+            <h2 class="section-title">Plant the seeds of learning in 3 steps</h2>
+            <p class="section-subtitle">Simple, natural, and nurturing — just like growth should be</p>
         </div>
 
         <div class="steps-grid">
             <div class="step-card" data-aos="fade-up" data-aos-delay="0">
                 <div class="step-number">1</div>
-                <h3>Create Your Account</h3>
-                <p>Sign up as a tutor, student, or parent in under 60 seconds. No credit card required.</p>
+                <h3>Plant Your Roots</h3>
+                <p>Create your free account as a tutor, student, or parent in under 60 seconds. No credit card needed.</p>
             </div>
 
             <div class="step-card" data-aos="fade-up" data-aos-delay="150">
                 <div class="step-number">2</div>
-                <h3>Set Up Your Space</h3>
-                <p>Create classrooms, add students, and start building your learning environment.</p>
+                <h3>Tend Your Garden</h3>
+                <p>Set up classrooms, invite students, and cultivate your learning environment with care.</p>
             </div>
 
             <div class="step-card" data-aos="fade-up" data-aos-delay="300">
                 <div class="step-number">3</div>
-                <h3>Start Learning & Growing</h3>
-                <p>Assign lessons, track progress, and watch your students thrive with data-driven insights.</p>
+                <h3>Watch Them Bloom</h3>
+                <p>Nurture growth with lessons, track progress, and celebrate every milestone of achievement.</p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ============================================
-     TESTIMONIALS
-     ============================================ -->
+<!-- ============================================ -->
+<!-- TESTIMONIALS -->
+<!-- ============================================ -->
 <section id="testimonials" class="testimonials">
     <div class="section-container">
         <div class="section-header" data-aos="fade-up">
-            <span class="section-tag">💬 Testimonials</span>
-            <h2 class="section-title">Loved by families & educators</h2>
-            <p class="section-subtitle">Hear from our community of learners</p>
+            <span class="section-tag">💚 Growing Together</span>
+            <h2 class="section-title">Rooted in community love</h2>
+            <p class="section-subtitle">Hear from our thriving ecosystem of learners</p>
         </div>
 
         <div class="testimonial-grid">
             <div class="testimonial-card" data-aos="fade-up" data-aos-delay="0">
                 <div class="testimonial-stars">★★★★★</div>
                 <p class="testimonial-text">
-                    "HomeSchool transformed how we manage our homeschooling. The lesson planning is intuitive, 
-                    and my kids love the portfolio feature that showcases their work beautifully."
+                    "The Living Learning transformed our homeschooling journey. The organic approach to lesson planning 
+                    and the beautiful portfolio system helps us see our children bloom every day."
                 </p>
                 <div class="testimonial-author">
                     <div class="author-avatar">S</div>
                     <div class="author-info">
                         <h4>Sarah Mitchell</h4>
-                        <span>Homeschooling Parent</span>
+                        <span>Homeschooling Parent of 3</span>
                     </div>
                 </div>
             </div>
@@ -1333,14 +1420,14 @@
             <div class="testimonial-card" data-aos="fade-up" data-aos-delay="150">
                 <div class="testimonial-stars">★★★★★</div>
                 <p class="testimonial-text">
-                    "As a private tutor, I've tried many platforms. HomeSchool stands out with its clean interface, 
-                    powerful assignment tracking, and the ability to communicate directly with parents."
+                    "As a tutor, I've found my teaching home. The platform feels alive — it grows with my students 
+                    and helps me nurture their unique learning paths with genuine connection."
                 </p>
                 <div class="testimonial-author">
                     <div class="author-avatar">J</div>
                     <div class="author-info">
                         <h4>James Rodriguez</h4>
-                        <span>Private Tutor</span>
+                        <span>Private Tutor & Mentor</span>
                     </div>
                 </div>
             </div>
@@ -1348,14 +1435,14 @@
             <div class="testimonial-card" data-aos="fade-up" data-aos-delay="300">
                 <div class="testimonial-stars">★★★★★</div>
                 <p class="testimonial-text">
-                    "The progress tracking is incredible. I can see exactly how my child is doing across all subjects. 
-                    The parent portal gives me peace of mind and keeps me connected to their education."
+                    "Watching my children's progress through the parent portal gives me goosebumps. It's like watching 
+                    a garden grow — you see every milestone, every achievement, every moment of growth."
                 </p>
                 <div class="testimonial-author">
                     <div class="author-avatar">E</div>
                     <div class="author-info">
                         <h4>Emily Chen</h4>
-                        <span>Parent of 2 students</span>
+                        <span>Parent & Education Advocate</span>
                     </div>
                 </div>
             </div>
@@ -1363,38 +1450,38 @@
     </div>
 </section>
 
-<!-- ============================================
-     CTA SECTION
-     ============================================ -->
+<!-- ============================================ -->
+<!-- CTA SECTION -->
+<!-- ============================================ -->
 <section class="cta-section" id="pricing">
     <div class="section-container">
         <div class="cta-card" data-aos="zoom-in">
-            <h2>Ready to transform learning?</h2>
-            <p>Join thousands of families and educators building better learning experiences. Start free, upgrade anytime.</p>
+            <h2>Ready to nurture growth?</h2>
+            <p>Join our thriving community of families and educators cultivating authentic learning experiences. Start free, grow together.</p>
             <a href="/register.html" class="btn-cta">
-                <i class="fas fa-rocket"></i> Create Your Free Account
+                <i class="fas fa-seedling"></i> Plant Your Roots — Free
             </a>
             <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem;">
-                <i class="fas fa-check-circle" style="color:#48bb78;"></i> 
+                <i class="fas fa-heart" style="color:#8DBE4F;"></i> 
                 No credit card required • Takes less than 60 seconds • Free forever plan available
             </p>
         </div>
     </div>
 </section>
 
-<!-- ============================================
-     FOOTER
-     ============================================ -->
+<!-- ============================================ -->
+<!-- FOOTER -->
+<!-- ============================================ -->
 <footer class="footer">
     <div class="section-container">
         <div class="footer-grid">
             <div>
                 <div class="footer-brand">
                     <img src="https://res.cloudinary.com/djqqcepe8/image/upload/v1777435705/logo_qwqxkb.png" 
-                         alt="HomeSchool Logo" style="height:40px;">
-                    <h3>HomeSchool</h3>
+                         alt="The Living Learning Logo" style="height:38px;">
+                    <h3>The Living Learning</h3>
                 </div>
-                <p style="margin-bottom:20px;">Smarter learning. Connected growth. Empowering homeschooling families worldwide.</p>
+                <p style="margin-bottom:20px;">Nurturing growth. Cultivating knowledge. Growing stronger together.</p>
                 <div style="display:flex;gap:16px;font-size:1.2rem;">
                     <a href="#"><i class="fab fa-twitter"></i></a>
                     <a href="#"><i class="fab fa-facebook"></i></a>
@@ -1404,12 +1491,12 @@
             </div>
 
             <div>
-                <h4>Product</h4>
+                <h4>Our Garden</h4>
                 <a href="#">Features</a>
-                <a href="#">Pricing</a>
                 <a href="#">For Tutors</a>
                 <a href="#">For Parents</a>
                 <a href="#">For Students</a>
+                <a href="#">Community</a>
             </div>
 
             <div>
@@ -1417,14 +1504,14 @@
                 <a href="#">Blog</a>
                 <a href="#">Help Center</a>
                 <a href="#">Tutorials</a>
-                <a href="#">API Docs</a>
-                <a href="#">Community</a>
+                <a href="#">Guides</a>
+                <a href="#">FAQ</a>
             </div>
 
             <div>
-                <h4>Company</h4>
-                <a href="#">About Us</a>
-                <a href="#">Careers</a>
+                <h4>About</h4>
+                <a href="#">Our Story</a>
+                <a href="#">Mission</a>
                 <a href="#">Contact</a>
                 <a href="#">Privacy Policy</a>
                 <a href="#">Terms of Service</a>
@@ -1432,17 +1519,17 @@
         </div>
 
         <div class="footer-bottom">
-            <p>&copy; 2026 HomeSchool. All rights reserved. Made with ❤️ for learners everywhere.</p>
+            <p>&copy; 2026 The Living Learning. All rights reserved. Nurtured with 🌿 for lifelong learners.</p>
         </div>
     </div>
 </footer>
 
-<!-- ============================================
-     SCRIPTS
-     ============================================ -->
+<!-- ============================================ -->
+<!-- SCRIPTS -->
+<!-- ============================================ -->
 <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
 <script>
-    // Initialize AOS (Animate on Scroll)
+    // Initialize AOS
     AOS.init({
         duration: 800,
         easing: 'ease-out-cubic',
@@ -1475,7 +1562,7 @@
         });
     });
 
-    // Smooth scroll for anchor links
+    // Smooth scroll
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
             e.preventDefault();
@@ -1486,7 +1573,7 @@
         });
     });
 
-    // Active nav link on scroll
+    // Active nav on scroll
     const sections = document.querySelectorAll('section[id]');
     window.addEventListener('scroll', () => {
         let current = '';
@@ -1505,7 +1592,7 @@
         });
     });
 
-    // Counter animation for stats
+    // Counter animation
     function animateCounter(element, target, suffix = '+') {
         let current = 0;
         const increment = target / 100;
@@ -1520,7 +1607,6 @@
         }, 20);
     }
 
-    // Animate stats when visible
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -1541,10 +1627,9 @@
     const statsBar = document.querySelector('.stats-bar');
     if (statsBar) observer.observe(statsBar);
 
-    console.log('🚀 HomeSchool Landing Page Loaded Successfully!');
-    console.log('✨ Modern design with glass morphism, animations, and smooth interactions');
-    console.log('📱 Fully responsive with mobile menu support');
-    console.log('🎨 Premium gradient-based visual system');
+    console.log('🌿 The Living Learning — Landing Page Loaded');
+    console.log('✨ Organic design with nature-inspired gradients');
+    console.log('🌱 Cultivating growth through connected education');
 </script>
 
 </body>
